@@ -2,7 +2,7 @@
 
 <template>
     <div class="card">
-        <h1>test</h1>
+        <h1>test file name</h1>
     </div>
 </template>
 
