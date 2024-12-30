@@ -53,16 +53,17 @@ export default {
 }
 
 .primary-button {
-    background-color: #007bff; /* Example primary color */
+    background-color: #10b981; /* Changed to a green color */
     color: white;
-    padding: 10px 20px;
+    padding: 15px 30px; /* Adjusted to make the button medium-sized */
+    font-size: 22px; /* Standard medium font size for buttons */
     text-decoration: none;
-    border-radius: 5px;
+    border-radius: 10px;
     text-align: center;
     display: inline-block;
 }
 
 .primary-button:hover {
-    background-color: #0056b3;
+    background-color: #0c865d; /* A darker shade of green for hover */
 }
 </style>
