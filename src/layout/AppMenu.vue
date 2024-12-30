@@ -75,16 +75,17 @@ const model = ref([
                             },
                         ],
                     },
-
-                    {
-                        label: "Rates Management",
-                        icon: "pi pi-fw pi-cog",
-                        to: "/Rates/RatePage",
-                    },
                 ],
+            },
+
+            {
+                label: "Rates Management",
+                icon: "pi pi-fw pi-cog",
+                to: "/Rates/RatePage",
             },
         ],
     },
+
     {
         label: "UI Components",
         items: [
