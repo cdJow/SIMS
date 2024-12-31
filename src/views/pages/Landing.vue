@@ -3,6 +3,7 @@ import FeaturesWidget from "@/components/landing/FeaturesWidget.vue";
 import FooterWidget from "@/components/landing/FooterWidget.vue";
 import HeroWidget from "@/components/landing/HeroWidget.vue";
 import HighlightsWidget from "@/components/landing/HighlightsWidget.vue";
+import HotelPriceWidget from "@/components/landing/HotelPriceWidget.vue";
 import PricingWidget from "@/components/landing/PricingWidget.vue";
 import TopbarWidget from "@/components/landing/TopbarWidget.vue";
 </script>
@@ -18,6 +19,7 @@ import TopbarWidget from "@/components/landing/TopbarWidget.vue";
                 <TopbarWidget />
             </div>
             <HeroWidget />
+            <HotelPriceWidget id="HotelPrice" />
             <FeaturesWidget />
             <HighlightsWidget />
             <PricingWidget />

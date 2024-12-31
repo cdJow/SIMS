@@ -103,6 +103,14 @@ function scrollToElement(id) {
             </li>
             <li>
                 <a
+                    @click.prevent="smoothScroll('HotelPrice')"
+                    href="#"
+                    class="px-0 py-4 text-surface-900 dark:text-surface-0 font-medium text-xl"
+                    >Prices</a
+                >
+            </li>
+            <li>
+                <a
                     @click.prevent="smoothScroll('features')"
                     href="#"
                     class="px-0 py-4 text-surface-900 dark:text-surface-0 font-medium text-xl"
