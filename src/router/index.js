@@ -21,9 +21,6 @@ const router = createRouter({
                             "@/views/pages/Inventory/AddItems/ConsumableForm.vue"
                         ),
                 },
-
-                      
-
                 {
                     path: "/Inventory/ViewInventory/ViewItems",
                     name: "View Inventory",
@@ -217,6 +214,13 @@ const router = createRouter({
             name: "login",
             component: () => import("@/views/pages/auth/Login.vue"),
         },
+
+        {
+            path: "/auth/signup",
+            name: "signup",
+            component: () => import("@/views/pages/auth/SignUp.vue"),
+        },
+
         {
             path: "/auth/access",
             name: "accessDenied",
