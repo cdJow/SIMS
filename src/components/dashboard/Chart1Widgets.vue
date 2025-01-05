@@ -14,7 +14,7 @@ function setColorOptions() {
     const documentStyle = getComputedStyle(document.documentElement);
     const textColor = documentStyle.getPropertyValue("--text-color");
     const textColorSecondary = documentStyle.getPropertyValue(
-        "--text-color-secondary",
+        "--text-color-secondary"
     );
     const surfaceBorder = documentStyle.getPropertyValue("--surface-border");
 
@@ -27,11 +27,19 @@ function setColorOptions() {
             "May",
             "June",
             "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
         ],
         datasets: [
             {
                 label: "Room Revenue",
-                data: [1200, 1900, 1700, 2500, 3000, 4000, 4500], // Sample room revenue data
+                data: [
+                    1200, 1900, 1700, 2500, 3000, 4000, 4500, 4200, 3900, 4600,
+                    4800, 5000,
+                ], // Sample room revenue data
                 fill: false,
                 backgroundColor:
                     documentStyle.getPropertyValue("--p-primary-500"),
@@ -40,7 +48,10 @@ function setColorOptions() {
             },
             {
                 label: "Products Revenue",
-                data: [800, 950, 1100, 1300, 1600, 2000, 2400], // Sample service revenue data
+                data: [
+                    800, 950, 1100, 1300, 1600, 2000, 2400, 2300, 2200, 2500,
+                    2700, 3000,
+                ], // Sample service revenue data
                 fill: false,
                 backgroundColor:
                     documentStyle.getPropertyValue("--p-primary-200"),
@@ -91,7 +102,7 @@ function setColorOptions() {
                 },
                 title: {
                     display: true,
-                    text: "Revenue (USD)",
+                    text: "Revenue (PHP)",
                     color: textColorSecondary,
                     font: {
                         size: 14,
@@ -107,7 +118,7 @@ watch(
     () => {
         setColorOptions();
     },
-    { immediate: true },
+    { immediate: true }
 );
 </script>
 <template>
