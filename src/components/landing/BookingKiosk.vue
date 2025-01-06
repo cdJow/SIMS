@@ -291,25 +291,42 @@ function calculatePrice() {
                         required
                     />
                 </div>
+
                 <div class="mb-4">
                     <label class="block mb-2 font-medium">Hours of Stay</label>
                     <div class="grid grid-cols-3 gap-4">
                         <div
                             v-for="option in [
-                                { value: '6', label: '6 Hours' },
-                                { value: '12', label: '12 Hours' },
-                                { value: '24', label: '24 Hours' },
+                                {
+                                    value: '6',
+                                    label: '6 Hours',
+                                    price: selectedRoom?.price6 || 0,
+                                },
+                                {
+                                    value: '12',
+                                    label: '12 Hours',
+                                    price: selectedRoom?.price12 || 0,
+                                },
+                                {
+                                    value: '24',
+                                    label: '24 Hours',
+                                    price: selectedRoom?.price24 || 0,
+                                },
                             ]"
                             :key="option.value"
                             @click="form.hoursOfStay = option.value"
                             :class="[
-                                'border rounded-lg p-4 text-center cursor-pointer',
+                                'border rounded-lg text-center cursor-pointer flex flex-col items-center justify-center gap-2 transition-all',
                                 form.hoursOfStay === option.value
-                                    ? 'bg-[#FF4733] text-white border-[#FF4733]'
-                                    : 'bg-[#FFE5E0] hover:bg-[#FF9987] text-[#FF4733]',
+                                    ? 'bg-[#E74C48] text-white border-[#E74C48]'
+                                    : 'bg-[#FDECEC] text-[#E74C48] hover:bg-[#F7A1A0] hover:border-[#E74C48]',
                             ]"
+                            style="width: 100px; height: 100px"
                         >
                             <p class="text-xl font-bold">{{ option.label }}</p>
+                            <p class="text-sm font-medium">
+                                ₱{{ option.price }}
+                            </p>
                         </div>
                     </div>
                 </div>
