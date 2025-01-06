@@ -293,17 +293,27 @@ function calculatePrice() {
                 </div>
                 <div class="mb-4">
                     <label class="block mb-2 font-medium">Hours of Stay</label>
-                    <select
-                        v-model="form.hoursOfStay"
-                        class="w-full px-4 py-2 border rounded focus:outline-none"
-                        required
-                    >
-                        <option disabled value="">Select hours of stay</option>
-                        <option value="6">6 Hours</option>
-                        <option value="12">12 Hours</option>
-                        <option value="24">24 Hours</option>
-                    </select>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div
+                            v-for="option in [
+                                { value: '6', label: '6 Hours' },
+                                { value: '12', label: '12 Hours' },
+                                { value: '24', label: '24 Hours' },
+                            ]"
+                            :key="option.value"
+                            @click="form.hoursOfStay = option.value"
+                            :class="[
+                                'border rounded-lg p-4 text-center cursor-pointer',
+                                form.hoursOfStay === option.value
+                                    ? 'bg-[#FF4733] text-white border-[#FF4733]'
+                                    : 'bg-[#FFE5E0] hover:bg-[#FF9987] text-[#FF4733]',
+                            ]"
+                        >
+                            <p class="text-xl font-bold">{{ option.label }}</p>
+                        </div>
+                    </div>
                 </div>
+
                 <div class="mb-4">
                     <label>
                         <input
