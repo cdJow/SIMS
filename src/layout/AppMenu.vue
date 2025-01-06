@@ -121,6 +121,22 @@ const model = ref([
     {
         label: "Front Desk",
     },
+
+    {
+        label: "Landing Page",
+        items: [
+            {
+                label: "Landing",
+                icon: "pi pi-fw pi-globe",
+                to: "/landing",
+            },
+            {
+                label: "Login",
+                icon: "pi pi-fw pi-sign-in",
+                to: "/auth/login",
+            },
+        ],
+    },
     {},
 ]);
 </script>
