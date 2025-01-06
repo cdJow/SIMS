@@ -7,7 +7,9 @@ const rooms = ref([
         name: "Cozy Single Room",
         type: "Single Size",
         status: "AVAILABLE",
-        price: 100,
+        price6: 100,
+        price12: 180,
+        price24: 300,
         image: "https://via.placeholder.com/300x200.png?text=Single+Room",
     },
     {
@@ -15,7 +17,9 @@ const rooms = ref([
         name: "Luxury Double Room",
         type: "Double Size",
         status: "AVAILABLE",
-        price: 150,
+        price6: 150,
+        price12: 280,
+        price24: 400,
         image: "https://via.placeholder.com/300x200.png?text=Double+Room",
     },
     {
@@ -23,7 +27,9 @@ const rooms = ref([
         name: "Queen Comfort Room",
         type: "Queen Size",
         status: "AVAILABLE",
-        price: 200,
+        price6: 200,
+        price12: 350,
+        price24: 500,
         image: "https://via.placeholder.com/300x200.png?text=Queen+Room",
     },
     {
@@ -31,7 +37,9 @@ const rooms = ref([
         name: "Elegant Double Room",
         type: "Double Size",
         status: "AVAILABLE",
-        price: 160,
+        price6: 160,
+        price12: 300,
+        price24: 450,
         image: "https://via.placeholder.com/300x200.png?text=Double+Room",
     },
     {
@@ -39,7 +47,9 @@ const rooms = ref([
         name: "Premium Queen Room",
         type: "Queen Size",
         status: "AVAILABLE",
-        price: 220,
+        price6: 220,
+        price12: 400,
+        price24: 600,
         image: "https://via.placeholder.com/300x200.png?text=Premium+Queen+Room",
     },
 ]);
@@ -48,12 +58,15 @@ const searchQuery = ref("");
 const layout = ref("list");
 const options = ref(["list", "grid"]);
 const showBookingForm = ref(false);
+const showBookingSummary = ref(false); // To show the booking summary
 const selectedRoom = ref(null);
 
 const form = ref({
     customerName: "",
     cellphone: "",
+    email: "",
     hoursOfStay: "",
+    confirmation: false, // Added for confirmation checkbox
 });
 
 // Filter rooms to exclude booked ones and match search query
@@ -64,7 +77,7 @@ const filteredRooms = computed(() => {
             room.status === "AVAILABLE" &&
             (room.name.toLowerCase().includes(query) ||
                 room.type.toLowerCase().includes(query) ||
-                room.price.toString().includes(query))
+                room.price6.toString().includes(query))
     );
 });
 
@@ -97,19 +110,30 @@ function handleBooking() {
         }
     }
 
-    // Show success message
-    alert(
-        `Take a Screenshot!\nBooking Successful for ${selectedRoom.value.name}!\nName: ${form.value.customerName}\nCellphone: ${form.value.cellphone}\nHours of Stay: ${form.value.hoursOfStay}`
-    );
-
-    // Reset form and close modal
+    // Show the booking summary
     showBookingForm.value = false;
-    form.value.customerName = "";
-    form.value.cellphone = "";
-    form.value.hoursOfStay = "";
+    showBookingSummary.value = true;
+
+    // Reset form values except selected room
+    form.value.confirmation = false;
+}
+
+function calculatePrice() {
+    switch (form.value.hoursOfStay) {
+        case "6":
+            return selectedRoom.value.price6;
+        case "12":
+            return selectedRoom.value.price12;
+        case "24":
+            return selectedRoom.value.price24;
+        default:
+            return 0;
+    }
 }
 </script>
 
+--- ### Updated Template: 1. Display different prices in the booking summary
+modal based on `hoursOfStay`. ```vue
 <template>
     <div class="p-4 flex flex-col items-center">
         <!-- Search and Layout Options -->
@@ -172,7 +196,7 @@ function handleBooking() {
                                 class="flex flex-col items-end justify-between"
                             >
                                 <div class="text-2xl font-bold">
-                                    ₱{{ room.price }} / 6 Hours
+                                    ₱{{ room.price6 }} / 6 Hours
                                 </div>
                                 <Button
                                     label="Book Now"
@@ -183,114 +207,126 @@ function handleBooking() {
                         </div>
                     </div>
                 </template>
-
-                <!-- Grid View -->
-                <template #grid="slotProps">
-                    <div
-                        class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-                    >
-                        <div
-                            v-for="room in slotProps.items"
-                            :key="room.id"
-                            class="border rounded shadow-md p-4"
-                        >
-                            <img
-                                :src="room.image"
-                                alt="Room Image"
-                                class="w-full h-40 object-cover rounded mb-4"
-                            />
-                            <div class="text-xl font-bold">{{ room.name }}</div>
-                            <div class="text-sm text-gray-600">
-                                {{ room.type }}
-                            </div>
-                            <Tag
-                                :value="room.status"
-                                :severity="getRoomTagColor(room.status)"
-                                class="mt-2"
-                            ></Tag>
-                            <div class="text-2xl font-bold mt-4">
-                                ${{ room.price }} / night
-                            </div>
-                            <Button
-                                label="Book Now"
-                                class="bg-red-500 text-white w-full py-2 rounded mt-4 hover:bg-red-600"
-                                @click="bookRoom(room)"
-                            ></Button>
-                        </div>
-                    </div>
-                </template>
             </DataView>
         </div>
-    </div>
 
-    <!-- Booking Form Modal -->
-    <Dialog
-        v-model:visible="showBookingForm"
-        header="Book Your Stay"
-        :modal="true"
-        :closable="false"
-    >
-        <p class="text-sm text-red-600 mb-4">
-            Notice: Your reservation will be canceled if not checked in within
-            30 minutes of the scheduled time.
-        </p>
-        <!-- Room Details -->
-        <div class="mb-4 border rounded p-4 bg-gray-50">
-            <h3 class="font-bold text-lg">{{ selectedRoom?.name }}</h3>
-            <p class="text-sm text-gray-600">{{ selectedRoom?.type }}</p>
-            <p class="text-xl font-semibold mt-2">
-                ₱{{ selectedRoom?.price }} / 6 Hours
-            </p>
-        </div>
-        <form @submit.prevent="handleBooking">
-            <div class="mb-4">
-                <label class="block mb-2 font-medium">Customer Name</label>
-                <input
-                    type="text"
-                    v-model="form.customerName"
-                    class="w-full px-4 py-2 border rounded focus:outline-none"
-                    placeholder="Enter your name"
-                    required
-                />
+        <!-- Booking Form Modal -->
+        <Dialog
+            v-model:visible="showBookingForm"
+            header="Book Your Stay"
+            :modal="true"
+            :closable="false"
+        >
+            <!-- Room Details -->
+            <div class="mb-4 border rounded p-4 bg-gray-50">
+                <h3 class="font-bold text-lg">{{ selectedRoom?.name }}</h3>
+                <p class="text-sm text-gray-600">{{ selectedRoom?.type }}</p>
+                <p class="text-xl font-semibold mt-2">
+                    6 Hours (₱{{ selectedRoom?.price6 }})
+                </p>
             </div>
-            <div class="mb-4">
-                <label class="block mb-2 font-medium">Cellphone Number</label>
-                <input
-                    type="tel"
-                    v-model="form.cellphone"
-                    class="w-full px-4 py-2 border rounded focus:outline-none"
-                    placeholder="Enter your cellphone number"
-                    required
-                />
-            </div>
-            <div class="mb-4">
-                <label class="block mb-2 font-medium">Hours of Stay</label>
-                <select
-                    v-model="form.hoursOfStay"
-                    class="w-full px-4 py-2 border rounded focus:outline-none"
-                    required
-                >
-                    <option disabled value="">Select hours of stay</option>
-                    <option value="6">6 Hours</option>
-                    <option value="12">12 Hours</option>
-                    <option value="24">24 Hours</option>
-                </select>
-            </div>
-            <div class="flex justify-between gap-4 mt-4">
-                <!-- Confirm Booking Button -->
+            <form @submit.prevent="handleBooking">
+                <div class="mb-4">
+                    <label class="block mb-2 font-medium">Customer Name</label>
+                    <input
+                        type="text"
+                        v-model="form.customerName"
+                        class="w-full px-4 py-2 border rounded focus:outline-none"
+                        placeholder="Enter your name"
+                        required
+                    />
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-2 font-medium"
+                        >Cellphone Number</label
+                    >
+                    <input
+                        type="tel"
+                        v-model="form.cellphone"
+                        class="w-full px-4 py-2 border rounded focus:outline-none"
+                        placeholder="Enter your cellphone number"
+                        required
+                    />
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-2 font-medium">Email Address</label>
+                    <input
+                        type="email"
+                        v-model="form.email"
+                        class="w-full px-4 py-2 border rounded focus:outline-none"
+                        placeholder="Enter your email address"
+                        required
+                    />
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-2 font-medium">Hours of Stay</label>
+                    <select
+                        v-model="form.hoursOfStay"
+                        class="w-full px-4 py-2 border rounded focus:outline-none"
+                        required
+                    >
+                        <option disabled value="">Select hours of stay</option>
+                        <option value="6">6 Hours</option>
+                        <option value="12">12 Hours</option>
+                        <option value="24">24 Hours</option>
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label>
+                        <input
+                            type="checkbox"
+                            v-model="form.confirmation"
+                            class="mr-2"
+                        />
+                        I confirm that the provided details are correct.
+                    </label>
+                </div>
+                <div class="flex justify-between gap-4 mt-4">
+                    <Button
+                        type="submit"
+                        label="Book"
+                        class="flex-1 bg-blue-600 text-white"
+                        :disabled="!form.confirmation"
+                    />
+                    <Button
+                        type="button"
+                        label="Cancel"
+                        class="flex-1 bg-gray-400 text-white"
+                        @click="showBookingForm = false"
+                    />
+                </div>
+            </form>
+        </Dialog>
+
+        <!-- Booking Summary Modal -->
+        <Dialog
+            v-model:visible="showBookingSummary"
+            header="Booking Summary"
+            :modal="true"
+            :closable="false"
+        >
+            <div class="text-center p-4">
+                <p class="text-red-600 font-bold text-lg mb-4">
+                    Take a Screenshot and Show it to the Counter
+                </p>
+                <div class="border rounded p-4 bg-gray-100 mb-4">
+                    <h3 class="font-bold text-xl">{{ selectedRoom?.name }}</h3>
+                    <p>{{ selectedRoom?.type }}</p>
+                    <p>Selected Duration: {{ form.hoursOfStay }} Hours</p>
+                    <p>Total Price: ₱{{ calculatePrice() }}</p>
+                </div>
+                <div class="border rounded p-4 bg-gray-100">
+                    <h4 class="font-bold text-lg mb-2">Your Details</h4>
+                    <p>Name: {{ form.customerName }}</p>
+                    <p>Email: {{ form.email }}</p>
+                    <p>Phone: {{ form.cellphone }}</p>
+                </div>
                 <Button
-                    type="submit"
-                    label="Book"
-                    class="flex-1 bg-blue-600 text-white"
-                />
-                <!-- Cancel Button -->
-                <Button
-                    type="button"
-                    label="Cancel"
-                    class="flex-1 bg-gray-400 text-white"
-                    @click="showBookingForm = false"
+                    label="Close"
+                    class="mt-4 bg-blue-600 text-white"
+                    @click="showBookingSummary = false"
                 />
             </div>
-        </form>
-    </Dialog>
+        </Dialog>
+    </div>
 </template>
