@@ -349,18 +349,18 @@ function calculatePrice() {
                     <p>Total Price: ₱{{ calculatePrice() }}</p>
                 </div>
                 <div class="border rounded p-4 bg-gray-100 mb-4">
+                    <h4 class="font-bold text-lg mb-2">Your Details</h4>
+                    <p>Name: {{ form.customerName }}</p>
+                    <p>Email: {{ form.email }}</p>
+                    <p>Phone: {{ form.cellphone }}</p>
+                </div>
+                <div class="border rounded p-4 bg-gray-100 mb-4">
                     <h4 class="font-bold text-lg mb-2">Your Booking Code</h4>
                     <p
                         class="text-3xl font-bold text-blue-600 bg-yellow-100 p-4 rounded shadow"
                     >
                         {{ form.bookingCode }}
                     </p>
-                </div>
-                <div class="border rounded p-4 bg-gray-100">
-                    <h4 class="font-bold text-lg mb-2">Your Details</h4>
-                    <p>Name: {{ form.customerName }}</p>
-                    <p>Email: {{ form.email }}</p>
-                    <p>Phone: {{ form.cellphone }}</p>
                 </div>
                 <Button
                     label="Close"
