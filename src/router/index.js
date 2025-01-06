@@ -14,6 +14,18 @@ const router = createRouter({
                     component: () => import("@/views/Dashboard.vue"),
                 },
                 {
+                    path: "/Rooms/RoomControl",
+                    name: "Room Control",
+                    component: () =>
+                        import("@/views/pages/Rooms/RoomControl.vue"),
+                },
+                {
+                    path: "/Accounts/AccountsPanel",
+                    name: "Accounts Panel",
+                    component: () =>
+                        import("@/views/pages/Accounts/AccountsPanel.vue"),
+                },
+                {
                     path: "/Inventory/AddItems/ConsumableForm",
                     name: "ConsumableForm",
                     component: () =>
@@ -21,6 +33,7 @@ const router = createRouter({
                             "@/views/pages/Inventory/AddItems/ConsumableForm.vue"
                         ),
                 },
+
                 {
                     path: "/Inventory/ViewInventory/ViewItems",
                     name: "View Inventory",
@@ -28,6 +41,12 @@ const router = createRouter({
                         import(
                             "@/views/pages/Inventory/ViewInventory/ViewItems.vue"
                         ),
+                },
+
+                {
+                    path: "/Rooms/AddRoom",
+                    name: "Rooms ",
+                    component: () => import("@/views/pages/Rooms/AddRoom.vue"),
                 },
 
                 {

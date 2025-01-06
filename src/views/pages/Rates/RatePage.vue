@@ -62,34 +62,10 @@ const newType = ref({
 
 // Filter States
 const selectedCategoryId = ref(null);
-const searchKeyword = ref("");
-
-// Computed Properties for Filtering
-const filteredRoomTypes = computed(() => {
-    let filtered = roomTypes.value;
-
-    // Filter by category
-    if (selectedCategoryId.value !== null) {
-        filtered = filtered.filter(
-            (type) => type.categoryId === selectedCategoryId.value,
-        );
-    }
-
-    // Filter by search keyword
-    if (searchKeyword.value.trim()) {
-        const keyword = searchKeyword.value.trim().toLowerCase();
-        filtered = filtered.filter(
-            (type) =>
-                type.name.toLowerCase().includes(keyword) ||
-                roomCategories.value
-                    .find((cat) => cat.id === type.categoryId)
-                    ?.category.toLowerCase()
-                    .includes(keyword),
-        );
-    }
-
-    return filtered;
-});
+function clearFilters() {
+    selectedCategoryId.value = null; // Reset category filter
+    typeFilter.value = ""; // Reset type filter
+}
 
 // Functions
 function openAddTypeDialog() {
@@ -159,6 +135,28 @@ function saveType() {
 
 const showDeleteDialog = ref(false); // State for delete dialog visibility
 const deleteType = ref(null); // Holds the room type to be deleted
+const typeFilter = ref(""); // For filtering by type name
+
+const filteredRoomTypes = computed(() => {
+    let filtered = roomTypes.value;
+
+    // Filter by category
+    if (selectedCategoryId.value !== null) {
+        filtered = filtered.filter(
+            (type) => type.categoryId === selectedCategoryId.value,
+        );
+    }
+
+    // Filter by type name
+    if (typeFilter.value.trim()) {
+        const keyword = typeFilter.value.trim().toLowerCase();
+        filtered = filtered.filter((type) =>
+            type.name.toLowerCase().includes(keyword),
+        );
+    }
+
+    return filtered;
+});
 
 function openDeleteDialog(type) {
     deleteType.value = type; // Assign the type to be deleted
@@ -326,12 +324,13 @@ function applyDiscount() {
         <h1 class="text-2xl font-bold mb-4">Room Rate Configuration</h1>
 
         <div class="flex gap-4 mb-6">
+            <!-- Clear Filters Button -->
             <Button
                 type="button"
                 icon="pi pi-filter-slash"
                 label="Clear"
                 outlined
-                @click="selectedCategoryId = null"
+                @click="clearFilters"
             />
 
             <!-- Category Filter Dropdown -->
@@ -344,6 +343,9 @@ function applyDiscount() {
                 optionLabel="category"
                 placeholder="Filter by Category"
             />
+
+            <!-- Type Filter -->
+            <InputText v-model="typeFilter" placeholder="Search by Type Name" />
 
             <!-- Add Type Button -->
             <Button
@@ -468,7 +470,7 @@ function applyDiscount() {
             <div class="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-2 gap-4">
                 <div v-for="type in filteredRoomTypes" :key="type.id">
                     <div
-                        class="card shadow-md p-4 flex flex-col h-[290px] relative"
+                        class="card shadow-md p-4 flex flex-col h-[290px] border border-white rounded-xl relative"
                     >
                         <!-- Discount Badge -->
                         <span
@@ -493,7 +495,7 @@ function applyDiscount() {
                             Occupancy: {{ type.occupancy }} person(s)
                         </p>
                         <div
-                            class="grid grid-cols-3 gap-4 bg-gray-100 p-4 rounded-lg mb-4"
+                            class="grid grid-cols-3 gap-4 bg-gray-100 dark:bg-black p-4 rounded-lg mb-4"
                         >
                             <div>
                                 <p class="text-sm font-bold">6hrs:</p>
