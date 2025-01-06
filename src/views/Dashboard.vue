@@ -8,21 +8,38 @@ import StatsWidget from "@/components/dashboard/StatsWidget.vue";
 </script>
 
 <template>
-    <div class="grid grid-cols-12 gap-8">
-        <StatsWidget />
+    <div class="grid grid-cols-12 gap-6">
+        <!-- Stats Widget -->
+        <div class="col-span-12">
+            <StatsWidget />
+        </div>
 
-        <div class="col-span-12 xl:col-span-6">
-            <Chart1Widgets class="mb-7" />
+        <!-- Left Section -->
+        <div class="col-span-12 xl:col-span-6 space-y-6">
+            <Chart1Widgets />
             <CanceledBooking />
         </div>
-        <div class="col-span-12 xl:col-span-6">
+
+        <!-- Right Section -->
+        <div class="col-span-12 xl:col-span-6 space-y-6">
             <RevenueStreamWidget />
             <NotificationsWidget />
         </div>
 
-        <div class="col-span-12 xl:col-span-6"></div>
-        <div class="col-span-12 xl:col-span-6">
+        <!-- Best Selling Widget -->
+        <div class="col-span-12">
             <BestSellingWidget />
         </div>
     </div>
 </template>
+
+<style scoped>
+/* Ensure consistent spacing and responsiveness */
+.grid {
+    margin-top: 1rem;
+}
+
+.space-y-6 > *:not(:last-child) {
+    margin-bottom: 1.5rem; /* Ensure proper spacing between stacked components */
+}
+</style>

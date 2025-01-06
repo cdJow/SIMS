@@ -2,9 +2,10 @@
 import FloatingConfigurator from "@/components/FloatingConfigurator.vue";
 import { ref } from "vue";
 
+const name = ref("");
 const email = ref("");
 const password = ref("");
-const checked = ref(false);
+const confirmPassword = ref("");
 </script>
 
 <template>
@@ -68,62 +69,78 @@ const checked = ref(false);
                             Woodland Suite Hotel
                         </div>
                         <span class="text-muted-color font-medium"
-                            >Sign in to continue</span
+                            >Sign up to create an account</span
                         >
                     </div>
-
                     <div>
                         <label
-                            for="email1"
+                            for="name"
+                            class="block text-surface-900 dark:text-surface-0 text-xl font-medium mb-2"
+                            >Name</label
+                        >
+                        <InputText
+                            id="name"
+                            type="text"
+                            placeholder="Name"
+                            class="w-full md:w-[30rem] mb-4"
+                            v-model="name"
+                        />
+
+                        <label
+                            for="email"
                             class="block text-surface-900 dark:text-surface-0 text-xl font-medium mb-2"
                             >Email</label
                         >
                         <InputText
-                            id="email1"
+                            id="email"
                             type="text"
                             placeholder="Email address"
-                            class="w-full md:w-[30rem] mb-8"
+                            class="w-full md:w-[30rem] mb-4"
                             v-model="email"
                         />
 
                         <label
-                            for="password1"
-                            class="block text-surface-900 dark:text-surface-0 font-medium text-xl mb-2"
+                            for="password"
+                            class="block text-surface-900 dark:text-surface-0 text-xl font-medium mb-2"
                             >Password</label
                         >
                         <Password
-                            id="password1"
+                            id="password"
                             v-model="password"
                             placeholder="Password"
                             :toggleMask="true"
                             class="mb-4"
                             fluid
                             :feedback="false"
-                        ></Password>
+                        />
 
+                        <label
+                            for="confirmPassword"
+                            class="block text-surface-900 dark:text-surface-0 text-xl font-medium mb-4"
+                            >Confirm Password</label
+                        >
+                        <Password
+                            id="confirmPassword"
+                            v-model="confirmPassword"
+                            placeholder="Confirm Password"
+                            :toggleMask="true"
+                            class="mb-8"
+                            fluid
+                            :feedback="false"
+                        />
                         <div
                             class="flex items-center justify-between mt-2 mb-8 gap-8"
                         >
-                            <div class="flex items-center">
-                                <Checkbox
-                                    v-model="checked"
-                                    id="rememberme1"
-                                    binary
-                                    class="mr-2"
-                                ></Checkbox>
-                                <label for="rememberme1">Remember me</label>
-                            </div>
                             <router-link
-                                to="/auth/signup"
+                                to="/auth/login"
                                 class="font-medium no-underline ml-2 text-right cursor-pointer text-primary"
-                                >Don't have an account?</router-link
+                                >Already have an account?</router-link
                             >
                         </div>
                         <Button
-                            label="Sign In"
+                            label="Sign Up"
                             class="w-full"
-                            as="router-link"
-                            to="/"
+                            @click="handleSignUp"
                         ></Button>
                     </div>
                 </div>
@@ -133,13 +150,5 @@ const checked = ref(false);
 </template>
 
 <style scoped>
-.pi-eye {
-    transform: scale(1.6);
-    margin-right: 1rem;
-}
-
-.pi-eye-slash {
-    transform: scale(1.6);
-    margin-right: 1rem;
-}
+/* Styles for icons or other elements if needed */
 </style>
