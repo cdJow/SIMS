@@ -342,6 +342,13 @@ function calculatePrice() {
                 <p class="text-red-600 font-bold text-lg mb-4">
                     Take a Screenshot and Show it to the Counter
                 </p>
+                <div
+                    class="mt-4 p-4 border border-yellow-500 rounded bg-yellow-100 text-yellow-700 mb-4"
+                >
+                    <strong>Notice:</strong> You must check in within 30
+                    minutes, or your booking will be automatically canceled.
+                </div>
+
                 <div class="border rounded p-4 bg-gray-100 mb-4">
                     <h3 class="font-bold text-xl">{{ selectedRoom?.name }}</h3>
                     <p>{{ selectedRoom?.type }}</p>
@@ -349,13 +356,13 @@ function calculatePrice() {
                     <p>Total Price: ₱{{ calculatePrice() }}</p>
                 </div>
                 <div class="border rounded p-4 bg-gray-100 mb-4">
-                    <h4 class="font-bold text-lg mb-2">Your Details</h4>
+                    <h4 class="font-bold text-lg mb-2">Details</h4>
                     <p>Name: {{ form.customerName }}</p>
                     <p>Email: {{ form.email }}</p>
                     <p>Phone: {{ form.cellphone }}</p>
                 </div>
                 <div class="border rounded p-4 bg-gray-100 mb-4">
-                    <h4 class="font-bold text-lg mb-2">Your Booking Code</h4>
+                    <h4 class="font-bold text-lg mb-2">Code</h4>
                     <p
                         class="text-3xl font-bold text-blue-600 bg-yellow-100 p-4 rounded shadow"
                     >
