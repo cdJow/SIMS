@@ -54,6 +54,139 @@ const damageTypes = ref([
     { label: "Other", value: "other" },
 ]);
 
+const deleteConsumableDialogVisible = ref(false); // Dialog visibility state
+const consumableToDelete = ref(null); // Stores the consumable item to be deleted
+
+function confirmDeleteConsumable(item) {
+    consumableToDelete.value = item; // Store the consumable item to be deleted
+    deleteConsumableDialogVisible.value = true; // Open the confirmation dialog
+}
+
+function deleteConsumable() {
+    if (!consumableToDelete.value) {
+        console.error("No consumable item selected for deletion.");
+        return;
+    }
+
+    // Locate the product and batch containing the serial number
+    const consumableIndex = products.value.findIndex((product) =>
+        product.batches.some((batch) =>
+            batch.serialNumbers.some(
+                (sn) =>
+                    sn.serialNumber === consumableToDelete.value.serialNumber,
+            ),
+        ),
+    );
+
+    if (consumableIndex !== -1) {
+        const product = products.value[consumableIndex];
+        const batch = product.batches.find((batch) =>
+            batch.serialNumbers.some(
+                (sn) =>
+                    sn.serialNumber === consumableToDelete.value.serialNumber,
+            ),
+        );
+
+        if (batch) {
+            const serialIndex = batch.serialNumbers.findIndex(
+                (sn) =>
+                    sn.serialNumber === consumableToDelete.value.serialNumber,
+            );
+
+            if (serialIndex !== -1) {
+                // Remove the serial number from the batch
+                batch.serialNumbers.splice(serialIndex, 1);
+                console.log(
+                    "Consumable item deleted successfully:",
+                    consumableToDelete.value,
+                );
+
+                // Show success toast
+                toast.value.add({
+                    severity: "success",
+                    summary: "Deleted",
+                    detail: "Consumable item deleted successfully!",
+                    life: 3000,
+                });
+
+                consumableToDelete.value = null; // Reset the selected consumable
+                deleteConsumableDialogVisible.value = false; // Close the dialog
+                return;
+            }
+        }
+    }
+
+    console.error("Consumable item not found for deletion.");
+    consumableToDelete.value = null; // Reset the selected consumable
+    deleteConsumableDialogVisible.value = false; // Close the dialog
+}
+
+const editConsumableDialogVisible = ref(false); // Dialog visibility state
+const editingConsumableData = ref({
+    serialNumber: "",
+    srp: "",
+}); // Holds the consumable data being edited
+
+function openEditConsumableDialog(serial) {
+    editingConsumableData.value = { ...serial }; // Clone the serial data to avoid direct mutations
+    editConsumableDialogVisible.value = true; // Open the dialog
+}
+
+function saveEditConsumable() {
+    if (
+        !editingConsumableData.value.serialNumber ||
+        !editingConsumableData.value.srp
+    ) {
+        console.error("All fields are required.");
+        return;
+    }
+
+    // Find and update the edited serial number in the consumable batch data
+    const consumableIndex = products.value.findIndex((product) =>
+        product.batches.some((batch) =>
+            batch.serialNumbers.some(
+                (sn) =>
+                    sn.serialNumber ===
+                    editingConsumableData.value.serialNumber,
+            ),
+        ),
+    );
+
+    if (consumableIndex !== -1) {
+        const product = products.value[consumableIndex];
+        const batch = product.batches.find((batch) =>
+            batch.serialNumbers.some(
+                (sn) =>
+                    sn.serialNumber ===
+                    editingConsumableData.value.serialNumber,
+            ),
+        );
+        const serial = batch.serialNumbers.find(
+            (sn) =>
+                sn.serialNumber === editingConsumableData.value.serialNumber,
+        );
+
+        if (serial) {
+            serial.serialNumber = editingConsumableData.value.serialNumber;
+            serial.srp = editingConsumableData.value.srp;
+        }
+    }
+
+    console.log(
+        "Consumable data updated successfully:",
+        editingConsumableData.value,
+    );
+
+    // Show success toast notification
+    toast.value.add({
+        severity: "success",
+        summary: "Success",
+        detail: "Updated successfully!",
+        life: 3000, // Duration in milliseconds
+    });
+
+    editConsumableDialogVisible.value = false; // Close the dialog
+}
 // Function to open the damage report dialog
 function reportDamage(item) {
     selectedDamageItem.value = item; // Set the selected item for damage reporting
@@ -231,11 +364,6 @@ function onProductSelect(event) {
 function editProduct(prod) {
     product.value = { ...prod }; // Clone the product data to avoid direct mutations
     productDialog.value = true; // Open the dialog
-}
-
-function formatPrice(price) {
-    if (price == null || isNaN(price)) return "₱0.00"; // Handle null or invalid price
-    return `₱${price.toFixed(2)}`; // Format with two decimal places
 }
 
 function hideDialog() {
@@ -922,6 +1050,34 @@ function showError() {
         life: 3000,
     });
 }
+
+function formatCurrency(value) {
+    if (value == null || isNaN(value)) return "₱0.00"; // Default if invalid or null
+    return new Intl.NumberFormat("en-PH", {
+        style: "currency",
+        currency: "PHP",
+    }).format(value);
+}
+
+function getStatusTextColor(status) {
+    switch (status.toLowerCase()) {
+        case "rented":
+            return "text-yellow-600"; // Yellow for rented
+        case "available":
+            return "text-green-600"; // Green for available
+        case "damaged":
+            return "text-red-600"; // Red for damaged
+        case "assigned":
+            return "text-blue-600"; // Blue for assigned
+        default:
+            return "text-gray-600"; // Default gray
+    }
+}
+
+function formatPrice(value) {
+    if (value == null || isNaN(value)) return "₱0.00"; // Handle null or invalid value
+    return `₱${parseFloat(value).toFixed(2).toLocaleString()}`; // Format to 2 decimal places with commas
+}
 </script>
 
 <template>
@@ -1208,9 +1364,46 @@ function showError() {
                                             />
                                             <Column
                                                 field="srp"
-                                                header="Suggested Retail Price(SRP)"
+                                                header="Suggested Retail Price (SRP)"
                                                 sortable
-                                            />
+                                            >
+                                                <template #body="slotProps">
+                                                    {{
+                                                        formatCurrency(
+                                                            slotProps.data.srp,
+                                                        )
+                                                    }}
+                                                </template>
+                                            </Column>
+
+                                            <!-- Status Column -->
+                                            <Column
+                                                field="status"
+                                                header="Status"
+                                                sortable
+                                                style="min-width: 8rem"
+                                            >
+                                                <template #body="slotProps">
+                                                    <span
+                                                        :class="{
+                                                            'text-green-500':
+                                                                slotProps.data
+                                                                    .status ===
+                                                                'Available',
+                                                            'text-red-500':
+                                                                slotProps.data
+                                                                    .status ===
+                                                                'Sold',
+                                                        }"
+                                                    >
+                                                        {{
+                                                            slotProps.data
+                                                                .status
+                                                        }}
+                                                    </span>
+                                                </template>
+                                            </Column>
+
                                             <Column
                                                 :exportable="false"
                                                 style="min-width: 12rem"
@@ -1222,7 +1415,7 @@ function showError() {
                                                         rounded
                                                         class="mr-2"
                                                         @click="
-                                                            editProduct(
+                                                            openEditConsumableDialog(
                                                                 slotProps.data,
                                                             )
                                                         "
@@ -1233,7 +1426,7 @@ function showError() {
                                                         rounded
                                                         severity="danger"
                                                         @click="
-                                                            confirmDeleteProduct(
+                                                            confirmDeleteConsumable(
                                                                 slotProps.data,
                                                             )
                                                         "
@@ -1454,7 +1647,26 @@ function showError() {
                                                     field="status"
                                                     header="Status"
                                                     sortable
-                                                ></Column>
+                                                >
+                                                    <!-- Custom Template for Status -->
+                                                    <template #body="slotProps">
+                                                        <span
+                                                            :class="
+                                                                getStatusTextColor(
+                                                                    slotProps
+                                                                        .data
+                                                                        .status,
+                                                                )
+                                                            "
+                                                            class="font-bold"
+                                                        >
+                                                            {{
+                                                                slotProps.data
+                                                                    .status
+                                                            }}
+                                                        </span>
+                                                    </template>
+                                                </Column>
                                                 <Column
                                                     field="rental"
                                                     header="Rental"
@@ -1464,13 +1676,26 @@ function showError() {
                                                     field="rentalPrice"
                                                     header="Rental Price"
                                                     sortable
-                                                ></Column>
+                                                >
+                                                    <template #body="slotProps">
+                                                        {{
+                                                            formatPrice(
+                                                                slotProps.data
+                                                                    .rentalPrice,
+                                                            )
+                                                        }}
+                                                    </template>
+                                                </Column>
+
                                                 <Column
                                                     field="roomNumber"
                                                     header="Assigned Room"
                                                     sortable
                                                 ></Column>
-                                                <Column :exportable="false">
+                                                <Column
+                                                    :exportable="false"
+                                                    header="Actions"
+                                                >
                                                     <template #body="slotProps">
                                                         <div class="flex gap-2">
                                                             <!-- Edit Button -->
@@ -1496,6 +1721,14 @@ function showError() {
 
                                                             <!-- Delete Button -->
                                                             <Button
+                                                                v-if="
+                                                                    slotProps.data.status.toLowerCase() ===
+                                                                        'available' ||
+                                                                    slotProps.data.status.toLowerCase() ===
+                                                                        'assigned' ||
+                                                                    slotProps.data.status.toLowerCase() ===
+                                                                        'damaged'
+                                                                "
                                                                 icon="pi pi-trash"
                                                                 outlined
                                                                 rounded
@@ -2353,6 +2586,93 @@ function showError() {
                 icon="pi pi-check"
                 class="p-button-sm"
                 @click="submitDamageReport"
+            />
+        </template>
+    </Dialog>
+
+    <Dialog
+        v-model:visible="deleteConsumableDialogVisible"
+        :dismissableMask="true"
+        :style="{ width: '450px' }"
+        header="Confirm Delete"
+        :modal="true"
+    >
+        <div class="flex items-center gap-4">
+            <i class="pi pi-exclamation-triangle text-3xl text-yellow-500" />
+            <span>
+                Are you sure you want to delete the consumable item
+                <b>{{ consumableToDelete?.serialNumber }}</b
+                >?
+            </span>
+        </div>
+
+        <!-- Dialog Footer -->
+        <template #footer>
+            <Button
+                label="No"
+                icon="pi pi-times"
+                text
+                @click="deleteConsumableDialogVisible = false"
+            />
+            <Button
+                label="Yes"
+                icon="pi pi-check"
+                severity="danger"
+                @click="deleteConsumable"
+            />
+        </template>
+    </Dialog>
+
+    <!-- Edit COmsumable Serial Dialog -->
+    <Dialog
+        v-model:visible="editConsumableDialogVisible"
+        :style="{ width: '450px' }"
+        header="Edit Consumable"
+        :modal="true"
+        :dissmissableMask="true"
+    >
+        <div class="flex flex-col gap-4">
+            <!-- Serial Number -->
+            <div>
+                <label for="serialNumber" class="block font-bold mb-2"
+                    >Serial Number:</label
+                >
+                <InputText
+                    id="serialNumber"
+                    v-model="editingConsumableData.serialNumber"
+                    placeholder="Enter Serial Number"
+                    class="w-full"
+                />
+            </div>
+
+            <!-- SRP -->
+            <div>
+                <label for="srp" class="block font-bold mb-2"
+                    >Suggested Retail Price (SRP):</label
+                >
+                <InputNumber
+                    id="srp"
+                    v-model="editingConsumableData.srp"
+                    mode="currency"
+                    currency="PHP"
+                    placeholder="Enter SRP"
+                    class="w-full"
+                />
+            </div>
+        </div>
+
+        <!-- Dialog Footer -->
+        <template #footer>
+            <Button
+                label="Cancel"
+                icon="pi pi-times"
+                text
+                @click="editConsumableDialogVisible = false"
+            />
+            <Button
+                label="Save"
+                icon="pi pi-check"
+                @click="saveEditConsumable"
             />
         </template>
     </Dialog>

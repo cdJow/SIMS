@@ -303,10 +303,10 @@ const toggleDataTable = (event) => {
                             price for the entire batch. If enabled, individual
                             item rental settings will be disabled.
 
-                            <lable>
+                            <label>
                                 <label class="text-red-500">Note:</label>
                                 You can Set the rental price for each Item
-                            </lable>
+                            </label>
                         </p>
                     </Dialog>
                 </div>
@@ -347,7 +347,7 @@ const toggleDataTable = (event) => {
                                 >Select Duration</label
                             >
                             <Select
-                                v-model="dropdownItem"
+                                v-model="dropdownItems"
                                 :options="dropdownItems"
                                 optionLabel="name"
                                 placeholder="Select Day / Month / Year"

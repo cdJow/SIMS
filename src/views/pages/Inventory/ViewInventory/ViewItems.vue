@@ -1,7 +1,9 @@
 <script setup>
 import { CustomerService } from "@/service/CustomerService";
 import { ProductService } from "@/service/ProductService";
+import { RoomService } from "@/service/RoomService";
 import { FilterMatchMode, FilterOperator } from "@primevue/core/api";
+
 import { onBeforeMount, ref } from "vue";
 
 const customers1 = ref(null);
@@ -10,11 +12,38 @@ const customers3 = ref(null);
 const loading1 = ref(null);
 const expandedRows = ref([]);
 const batchExpandedRows = ref([]);
+const toast = ref(null);
 
-const op2 = ref();
-const selectedProduct = ref(null);
+// State variables
 
-const products = ref([]); // Use `ref` for reactivity
+const products = ref([]); // Products for the DataTable
+const selectedProduct = ref(null); // Selected product from the DataTable
+const selectedItem = ref(null); // Selected item details
+const popoverRef = ref(null); // Reference to the Popover
+
+const availableRooms = ref([]);
+const serialNumbers = ref([]);
+// For damaged item reporting
+
+// Fetch available rooms from RoomService
+onBeforeMount(() => {
+    availableRooms.value = RoomService.getAvailableRooms();
+});
+
+// Function to handle product selection
+function onProductSelect(event) {
+    console.log("Selected Product:", event.data);
+    selectedProduct.value = event.data; // Update the selected product
+    if (popoverRef.value) {
+        popoverRef.value.hide(); // Close the popover
+    }
+}
+
+// Function to confirm serial deletion
+
+// State management
+const isDialog2Visible = ref(false); // Controls the dialog visibility
+const isDialogVisible = ref(false); // Controls the dialog visibility
 
 function getOrderSeverity(order) {
     switch (order.status) {
@@ -35,10 +64,6 @@ function getOrderSeverity(order) {
     }
 }
 
-function toggleDataTable(event) {
-    op2.value.toggle(event);
-}
-
 function clearFilter() {
     filters.value = {
         global: { value: null, matchMode: FilterMatchMode.CONTAINS },
@@ -49,8 +74,16 @@ function clearFilter() {
     };
 }
 
-function onProductSelect(event) {
-    console.log("Selected serial number:", event.data);
+// Function to open the first dialog
+function toggleDataTable(item) {
+    selectedItem.value = item; // Set the selected item
+    isDialogVisible.value = true; // Open the dialog
+}
+
+// Function to open the second dialog
+function toggleDataTable2(item) {
+    selectedItem.value = item; // Set the selected item
+    isDialog2Visible.value = true; // Open the dialog
 }
 
 function getStockSeverity(product) {
@@ -113,10 +146,6 @@ onBeforeMount(() => {
     initFilters();
 });
 
-function formatPrice(value) {
-    return parseFloat(value).toFixed(2);
-}
-
 function initFilters() {
     filters.value = {
         global: { value: null, matchMode: FilterMatchMode.CONTAINS },
@@ -153,11 +182,39 @@ function expandAll() {
 function collapseAll() {
     expandedRows.value = null;
 }
+
+function formatCurrency(value) {
+    if (value == null || isNaN(value)) return "₱0.00"; // Default if invalid or null
+    return new Intl.NumberFormat("en-PH", {
+        style: "currency",
+        currency: "PHP",
+    }).format(value);
+}
+
+function getStatusTextColor(status) {
+    switch (status.toLowerCase()) {
+        case "rented":
+            return "text-yellow-600"; // Yellow for rented
+        case "available":
+            return "text-green-600"; // Green for available
+        case "damaged":
+            return "text-red-600"; // Red for damaged
+        case "assigned":
+            return "text-blue-600"; // Blue for assigned
+        default:
+            return "text-gray-600"; // Default gray
+    }
+}
+
+function formatPrice(value) {
+    if (value == null || isNaN(value)) return "₱0.00"; // Handle null or invalid value
+    return `₱${parseFloat(value).toFixed(2).toLocaleString()}`; // Format to 2 decimal places with commas
+}
 </script>
 
 <template>
     <div class="card">
-        <div class="font-semibold text-xl mb-4">Manage Items</div>
+        <div class="font-semibold text-xl mb-4">Item Control</div>
         <DataTable
             v-model:expandedRows="expandedRows"
             :value="products"
@@ -217,6 +274,7 @@ function collapseAll() {
             <Column expander style="width: 2rem" />
             <Column field="name" header="Item Name" style="min-width:"></Column>
             <Column field="brand" sortable header="Brand"></Column>
+            <Column field="quantity" sortable header="Quantity"></Column>
             <Column field="description" sortable header="Description"></Column>
             <Column
                 field="category"
@@ -255,6 +313,7 @@ function collapseAll() {
                         </IconField>
                     </div>
 
+                    <!--Consumable Batch Table-->
                     <DataTable
                         class="p-datatable-sm"
                         v-model:expandedRows="batchExpandedRows"
@@ -288,12 +347,21 @@ function collapseAll() {
                                 }}</span>
                             </template>
                         </Column>
+
+                        <Column field="srp" header="SRP" sortable>
+                            <template #body="slotProps">
+                                <span
+                                    >₱{{ slotProps.data.srp.toFixed(2) }}</span
+                                >
+                            </template>
+                        </Column>
                         <Column field="unit" header="Unit" sortable></Column>
                         <Column
                             field="supplier"
                             header="Supplier"
                             sortable
                         ></Column>
+
                         <Column field="expDate" header="Exp Date" sortable>
                             <template #body="slotProps">
                                 <span style="color: red">{{
@@ -309,6 +377,14 @@ function collapseAll() {
                                 />
                             </template>
                         </Column>
+                        <Column
+                            field="Actions"
+                            header="Actions"
+                            :exportable="false"
+                            style="min-width: 3rem"
+                            class="gap-2"
+                        >
+                        </Column>
 
                         <column header="Items">
                             <template #body="slotProps">
@@ -316,32 +392,28 @@ function collapseAll() {
                                     <Button
                                         type="button"
                                         icon="pi pi-list"
-                                        @click="toggleDataTable"
+                                        @click="toggleDataTable(slotProps.data)"
                                         rounded
                                         class="mr-2"
                                     />
-                                    <Popover
-                                        ref="op2"
-                                        id="overlay_panel"
-                                        style="width: 500px"
+                                    <Dialog
+                                        header="Items"
+                                        v-model:visible="isDialogVisible"
+                                        :breakpoints="{ '960px': '75vw' }"
+                                        :style="{ width: '40vw' }"
+                                        :modal="true"
+                                        :dismissable-mask="true"
                                     >
-                                        <DataTable
-                                            v-model:selection="selectedProduct"
-                                            :value="products"
-                                            selectionMode="single"
-                                            paginator
-                                            :rows="5"
-                                            :totalRecords="products.length"
-                                            @row-select="onProductSelect"
-                                        >
+                                        <!-- Header Section -->
+                                        <template #header>
                                             <div
                                                 class="flex items-center gap-2"
                                             >
                                                 <h6>
                                                     Items for
                                                     {{
-                                                        slotProps.data
-                                                            .batchNumber
+                                                        slotProps?.data
+                                                            ?.batchNumber
                                                     }}
                                                 </h6>
                                                 <Button
@@ -366,219 +438,302 @@ function collapseAll() {
                                                     />
                                                 </IconField>
                                             </div>
+                                        </template>
+
+                                        <!-- Nested Data Table -->
+                                        <DataTable
+                                            class="p-datatable-sm"
+                                            :value="
+                                                slotProps?.data?.serialNumbers
+                                            "
+                                        >
+                                            <Column
+                                                field="serialNumber"
+                                                header="Serial Number"
+                                                sortable
+                                            />
+                                            <Column
+                                                field="srp"
+                                                header="Suggested Retail Price (SRP)"
+                                                sortable
+                                            >
+                                                <template #body="slotProps">
+                                                    {{
+                                                        formatCurrency(
+                                                            slotProps.data.srp,
+                                                        )
+                                                    }}
+                                                </template>
+                                            </Column>
+
+                                            <!-- Status Column -->
+                                            <Column
+                                                field="status"
+                                                header="Status"
+                                                sortable
+                                                style="min-width: 8rem"
+                                            >
+                                                <template #body="slotProps">
+                                                    <span
+                                                        :class="{
+                                                            'text-green-500':
+                                                                slotProps.data
+                                                                    .status ===
+                                                                'Available',
+                                                            'text-red-500':
+                                                                slotProps.data
+                                                                    .status ===
+                                                                'Sold',
+                                                        }"
+                                                    >
+                                                        {{
+                                                            slotProps.data
+                                                                .status
+                                                        }}
+                                                    </span>
+                                                </template>
+                                            </Column>
+                                        </DataTable>
+
+                                        <!-- Main Data Table -->
+                                        <DataTable
+                                            v-model:selection="selectedProduct"
+                                            :value="products"
+                                            selectionMode="single"
+                                            paginator
+                                            :rows="5"
+                                            :totalRecords="products.length"
+                                            @row-select="onProductSelect"
+                                        >
+                                        </DataTable>
+
+                                        <!-- Footer Section -->
+                                        <template #footer>
+                                            <Button
+                                                label="Close"
+                                                @click="isDialogVisible = false"
+                                            />
+                                        </template>
+                                    </Dialog>
+                                </div>
+                            </template>
+                        </column>
+                    </DataTable>
+
+                    <!--Non-Consumable Batch Table-->
+                    <DataTable
+                        class="p-datatable-sm"
+                        v-model:expandedRows="batchExpandedRows"
+                        :value="slotProps.data.batches"
+                        dataKey="batchId"
+                        v-if="slotProps.data.category === 'Non-Consumable'"
+                    >
+                        <Column
+                            field="batchNumber"
+                            header="Batch Number"
+                            sortable
+                        ></Column>
+
+                        <Column
+                            field="purchaseDate"
+                            header="Purchase Date"
+                            sortable
+                        ></Column>
+                        <Column
+                            field="purchasePrice"
+                            header="Purchase Price"
+                            sortable
+                        >
+                            <template #body="slotProps">
+                                <span>{{
+                                    formatPrice(slotProps.data.purchasePrice)
+                                }}</span>
+                            </template>
+                        </Column>
+                        <Column field="unit" header="Unit" sortable></Column>
+
+                        <Column
+                            field="supplier"
+                            header="Supplier"
+                            sortable
+                        ></Column>
+
+                        <Column
+                            field="rental"
+                            header="Rental"
+                            sortable
+                        ></Column>
+
+                        <Column
+                            field="rentalprice"
+                            header="Rental Price"
+                            sortable
+                        ></Column>
+
+                        <Column field="warranty" header="Warranty" sortable>
+                            <template #body="slotProps">
+                                <span
+                                    >{{ slotProps.data.warrantyValue }}
+                                    {{ slotProps.data.warrantyUnit }}</span
+                                >
+                            </template>
+                        </Column>
+                        <Column
+                            field="quantity"
+                            header="Quantity"
+                            sortable
+                        ></Column>
+
+                        <Column
+                            field="minimumstocks"
+                            header="Minimum Stocks"
+                            sortable
+                        ></Column>
+                        <Column
+                            field="stocklimit"
+                            header="Stock Limit"
+                            sortable
+                        ></Column>
+                        <Column field="status" header="Status" sortable>
+                            <template #body="slotProps">
+                                <Tag
+                                    :value="slotProps.data.status"
+                                    :severity="getOrderSeverity(slotProps.data)"
+                                />
+                            </template>
+                        </Column>
+
+                        <column header="Items">
+                            <template #body="slotProps">
+                                <div class="flex flex-wrap gap-2">
+                                    <Button
+                                        type="button"
+                                        icon="pi pi-list"
+                                        @click="
+                                            toggleDataTable2(slotProps.data)
+                                        "
+                                        rounded
+                                        class="mr-2"
+                                    />
+                                    <Dialog
+                                        v-model:visible="isDialog2Visible"
+                                        :header="`Items for Batch | ${slotProps.data?.batchNumber || 'N/A'}`"
+                                        :breakpoints="{ '960px': '75vw' }"
+                                        :style="{ width: '60vw' }"
+                                        :modal="true"
+                                        :dismissable-mask="true"
+                                    >
+                                        <DataTable
+                                            v-model:selection="selectedProduct"
+                                            :value="serialNumbers"
+                                            selectionMode="single"
+                                        >
+                                            <div
+                                                class="flex items-center gap-2"
+                                            >
+                                                <Button
+                                                    type="button"
+                                                    icon="pi pi-filter-slash"
+                                                    label="Clear"
+                                                    outlined
+                                                    @click="clearFilter()"
+                                                />
+                                                <IconField>
+                                                    <InputIcon>
+                                                        <i
+                                                            class="pi pi-search"
+                                                        />
+                                                    </InputIcon>
+                                                    <InputText
+                                                        v-model="
+                                                            filters['global']
+                                                                .value
+                                                        "
+                                                        placeholder="Keyword Search"
+                                                    />
+                                                </IconField>
+                                            </div>
 
                                             <DataTable
-                                                class="p-datatable-sm"
+                                                class="p-datatable-xl"
                                                 :value="
                                                     slotProps.data.serialNumbers
                                                 "
+                                                :totalRecords="
+                                                    slotProps.data.serialNumbers
+                                                        .length
+                                                "
+                                                :rows="5"
+                                                paginator
+                                                @row-select="onProductSelect"
                                             >
                                                 <Column
                                                     field="serialNumber"
                                                     header="Serial Number"
                                                     sortable
                                                 ></Column>
+                                                <Column
+                                                    field="status"
+                                                    header="Status"
+                                                    sortable
+                                                >
+                                                    <!-- Custom Template for Status -->
+                                                    <template #body="slotProps">
+                                                        <span
+                                                            :class="
+                                                                getStatusTextColor(
+                                                                    slotProps
+                                                                        .data
+                                                                        .status,
+                                                                )
+                                                            "
+                                                            class="font-bold"
+                                                        >
+                                                            {{
+                                                                slotProps.data
+                                                                    .status
+                                                            }}
+                                                        </span>
+                                                    </template>
+                                                </Column>
+                                                <Column
+                                                    field="rental"
+                                                    header="Rental"
+                                                    sortable
+                                                ></Column>
+                                                <Column
+                                                    field="rentalPrice"
+                                                    header="Rental Price"
+                                                    sortable
+                                                >
+                                                    <template #body="slotProps">
+                                                        {{
+                                                            formatPrice(
+                                                                slotProps.data
+                                                                    .rentalPrice,
+                                                            )
+                                                        }}
+                                                    </template>
+                                                </Column>
+
+                                                <Column
+                                                    field="roomNumber"
+                                                    header="Assigned Room"
+                                                    sortable
+                                                ></Column>
                                             </DataTable>
                                         </DataTable>
-                                    </Popover>
+                                    </Dialog>
                                 </div>
                             </template>
                         </column>
                     </DataTable>
-
-                    <Transition name="fade">
-                        <DataTable
-                            class="p-datatable-sm"
-                            v-model:expandedRows="batchExpandedRows"
-                            :value="slotProps.data.batches"
-                            dataKey="batchId"
-                            v-if="slotProps.data.category === 'Non-Consumable'"
-                        >
-                            <Column
-                                field="batchNumber"
-                                header="Batch Number"
-                                sortable
-                            ></Column>
-                            <Column
-                                field="quantity"
-                                header="Quantity"
-                                sortable
-                            ></Column>
-                            <Column
-                                field="purchaseDate"
-                                header="Purchase Date"
-                                sortable
-                            ></Column>
-                            <Column
-                                field="purchasePrice"
-                                header="Purchase Price"
-                                sortable
-                            >
-                                <template #body="slotProps">
-                                    <span>{{
-                                        formatPrice(
-                                            slotProps.data.purchasePrice,
-                                        )
-                                    }}</span>
-                                </template>
-                            </Column>
-                            <Column
-                                field="unit"
-                                header="Unit"
-                                sortable
-                            ></Column>
-                            <Column
-                                field="supplier"
-                                header="Supplier"
-                                sortable
-                            ></Column>
-                            <Column field="warranty" header="Warranty" sortable>
-                                <template #body="slotProps">
-                                    <span
-                                        >{{ slotProps.data.warrantyValue }}
-                                        {{ slotProps.data.warrantyUnit }}</span
-                                    >
-                                </template>
-                            </Column>
-
-                            <Column
-                                field="rental"
-                                header="Rental"
-                                sortable
-                            ></Column>
-                            <Column
-                                field="rentalprice"
-                                header="Rental Price"
-                                sortable
-                            ></Column>
-
-                            <Column
-                                field="minimumstocks"
-                                header="Minimum Stocks"
-                                sortable
-                            ></Column>
-                            <Column
-                                field="stocklimit"
-                                header="Stock Limit"
-                                sortable
-                            ></Column>
-                            <Column field="status" header="Status" sortable>
-                                <template #body="slotProps">
-                                    <Tag
-                                        :value="slotProps.data.status"
-                                        :severity="
-                                            getOrderSeverity(slotProps.data)
-                                        "
-                                    />
-                                </template>
-                            </Column>
-
-                            <column header="Items">
-                                <template #body="slotProps">
-                                    <div class="flex flex-wrap gap-2">
-                                        <Button
-                                            type="button"
-                                            icon="pi pi-list"
-                                            @click="toggleDataTable"
-                                            rounded
-                                            class="mr-2"
-                                        />
-                                        <Popover
-                                            ref="op2"
-                                            id="overlay_panel"
-                                            style="width: 450px"
-                                        >
-                                            <DataTable
-                                                v-model:selection="
-                                                    selectedProduct
-                                                "
-                                                :value="products"
-                                                selectionMode="single"
-                                                @row-select="onProductSelect"
-                                            >
-                                                <div
-                                                    class="flex items-center gap-2"
-                                                >
-                                                    <h6>
-                                                        Items for
-                                                        {{
-                                                            slotProps.data
-                                                                .batchNumber
-                                                        }}
-                                                    </h6>
-                                                    <Button
-                                                        type="button"
-                                                        icon="pi pi-filter-slash"
-                                                        label="Clear"
-                                                        outlined
-                                                        @click="clearFilter()"
-                                                    />
-                                                    <IconField>
-                                                        <InputIcon>
-                                                            <i
-                                                                class="pi pi-search"
-                                                            />
-                                                        </InputIcon>
-                                                        <InputText
-                                                            v-model="
-                                                                filters[
-                                                                    'global'
-                                                                ].value
-                                                            "
-                                                            placeholder="Keyword Search"
-                                                        />
-                                                    </IconField>
-                                                </div>
-
-                                                <DataTable
-                                                    class="p-datatable-xl"
-                                                    :value="
-                                                        slotProps.data
-                                                            .serialNumbers
-                                                    "
-                                                    paginator
-                                                    :rows="8"
-                                                    :totalRecords="
-                                                        products.length
-                                                    "
-                                                    :currentPage="1"
-                                                >
-                                                    <Column
-                                                        field="serialNumber"
-                                                        header="Serial Number"
-                                                        sortable
-                                                    ></Column>
-                                                    <Column
-                                                        field="status"
-                                                        header="Status"
-                                                        sortable
-                                                    ></Column>
-                                                    <Column
-                                                        field="assignedroom"
-                                                        header="Assigned Room"
-                                                        sortable
-                                                    ></Column>
-                                                </DataTable>
-                                            </DataTable>
-                                        </Popover>
-                                    </div>
-                                </template>
-                            </column>
-                        </DataTable>
-                    </Transition>
                 </div>
             </template>
         </DataTable>
     </div>
-</template>
 
-<style scoped>
-.fade-enter-active,
-.fade-leave-active {
-    transition: opacity 0.5s ease;
-}
-.fade-enter-from,
-.fade-leave-to {
-    opacity: 0;
-}
-</style>
+    <template>
+        <Toast ref="toast" />
+    </template>
+</template>
