@@ -55,8 +55,11 @@ const rooms = ref([
     },
 ]);
 
+const searchQuery = ref("");
+const layout = ref("list");
+const options = ref(["list", "grid"]);
 const showBookingForm = ref(false);
-const showBookingSummary = ref(false);
+const showBookingSummary = ref(false); // To show the booking summary
 const selectedRoom = ref(null);
 
 const form = ref({
@@ -73,10 +76,17 @@ function generateBookingCode() {
     return `BOOK-${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
 }
 
-// Filter rooms to only display available ones
-const availableRooms = computed(() =>
-    rooms.value.filter((room) => room.status === "AVAILABLE")
-);
+// Filter rooms and bookings based on the search query
+const filteredRooms = computed(() => {
+    const query = searchQuery.value.toLowerCase();
+    return rooms.value.filter(
+        (room) =>
+            room.status === "AVAILABLE" &&
+            (room.name.toLowerCase().includes(query) ||
+                room.type.toLowerCase().includes(query) ||
+                room.price6.toString().includes(query))
+    );
+});
 
 function getRoomTagColor(status) {
     switch (status) {
@@ -129,45 +139,111 @@ function calculatePrice() {
     }
 }
 </script>
-
 <template>
     <div class="p-4 flex flex-col items-center">
-        <!-- Rooms List -->
-        <div class="card w-full max-w-5xl">
-            <div
-                v-for="room in availableRooms"
-                :key="room.id"
-                class="p-4 border rounded mb-4 shadow"
+        <!-- Search and Layout Options -->
+        <div
+            class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6 w-full max-w-3xl"
+        >
+            <input
+                v-model="searchQuery"
+                type="text"
+                placeholder="Search"
+                class="border border-gray-300 rounded px-4 py-2 w-full sm:max-w-md"
+            />
+            <SelectButton
+                v-model="layout"
+                :options="options"
+                :allowEmpty="false"
             >
-                <div class="flex flex-col md:flex-row gap-4">
-                    <div class="md:w-40">
+                <template #option="{ option }">
+                    <i
+                        :class="[
+                            option === 'list' ? 'pi pi-bars' : 'pi pi-table',
+                        ]"
+                    />
+                </template>
+            </SelectButton>
+        </div>
+
+        <!-- Rooms List/Grid -->
+        <div class="card w-full max-w-5xl">
+            <DataView :value="filteredRooms" :layout="layout">
+                <!-- List View -->
+                <template #list="slotProps">
+                    <div
+                        v-for="room in slotProps.items"
+                        :key="room.id"
+                        class="p-4 border rounded mb-4 shadow"
+                    >
+                        <div class="flex flex-col md:flex-row gap-4">
+                            <div class="md:w-40">
+                                <img
+                                    :src="room.image"
+                                    alt="Room Image"
+                                    class="rounded w-full h-32 object-cover"
+                                />
+                            </div>
+                            <div class="flex-1">
+                                <div class="text-xl font-bold">
+                                    {{ room.name }}
+                                </div>
+                                <div class="text-sm text-gray-600">
+                                    {{ room.type }}
+                                </div>
+                                <Tag
+                                    :value="room.status"
+                                    :severity="getRoomTagColor(room.status)"
+                                    class="mt-2"
+                                ></Tag>
+                            </div>
+                            <div
+                                class="flex flex-col items-end justify-between"
+                            >
+                                <div class="text-2xl font-bold">
+                                    ₱{{ room.price6 }} / 6 Hours
+                                </div>
+                                <Button
+                                    label="Book Now"
+                                    class="bg-red-500 text-white px-4 py-2 rounded mt-4 hover:bg-red-600"
+                                    @click="bookRoom(room)"
+                                ></Button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                <!-- Grid View -->
+                <template #grid="slotProps">
+                    <div
+                        v-for="room in slotProps.items"
+                        :key="room.id"
+                        class="p-4 border rounded shadow flex flex-col items-center text-center"
+                    >
                         <img
                             :src="room.image"
                             alt="Room Image"
-                            class="rounded w-full h-32 object-cover"
+                            class="rounded w-full h-32 object-cover mb-4"
                         />
-                    </div>
-                    <div class="flex-1">
                         <div class="text-xl font-bold">{{ room.name }}</div>
-                        <div class="text-sm text-gray-600">{{ room.type }}</div>
+                        <div class="text-sm text-gray-600 mb-2">
+                            {{ room.type }}
+                        </div>
                         <Tag
                             :value="room.status"
                             :severity="getRoomTagColor(room.status)"
-                            class="mt-2"
+                            class="mb-2"
                         ></Tag>
-                    </div>
-                    <div class="flex flex-col items-end justify-between">
-                        <div class="text-2xl font-bold">
+                        <div class="text-2xl font-bold mb-4">
                             ₱{{ room.price6 }} / 6 Hours
                         </div>
                         <Button
                             label="Book Now"
-                            class="bg-red-500 text-white px-4 py-2 rounded mt-4 hover:bg-red-600"
+                            class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
                             @click="bookRoom(room)"
                         ></Button>
                     </div>
-                </div>
-            </div>
+                </template>
+            </DataView>
         </div>
 
         <!-- Booking Form Modal -->
@@ -177,6 +253,7 @@ function calculatePrice() {
             :modal="true"
             :closable="false"
         >
+            <!-- Room Details -->
             <div class="mb-4 border rounded p-4 bg-gray-50">
                 <h3 class="font-bold text-lg">{{ selectedRoom?.name }}</h3>
                 <p class="text-sm text-gray-600">{{ selectedRoom?.type }}</p>
@@ -271,19 +348,19 @@ function calculatePrice() {
                     <p>Selected Duration: {{ form.hoursOfStay }} Hours</p>
                     <p>Total Price: ₱{{ calculatePrice() }}</p>
                 </div>
+                <div class="border rounded p-4 bg-gray-100 mb-4">
+                    <h4 class="font-bold text-lg mb-2">Your Booking Code</h4>
+                    <p
+                        class="text-3xl font-bold text-blue-600 bg-yellow-100 p-4 rounded shadow"
+                    >
+                        {{ form.bookingCode }}
+                    </p>
+                </div>
                 <div class="border rounded p-4 bg-gray-100">
                     <h4 class="font-bold text-lg mb-2">Your Details</h4>
                     <p>Name: {{ form.customerName }}</p>
                     <p>Email: {{ form.email }}</p>
                     <p>Phone: {{ form.cellphone }}</p>
-                </div>
-                <div
-                    class="border-2 border-blue-500 rounded p-4 bg-gray-50 mb-4"
-                >
-                    <h4 class="font-bold text-lg text-blue-600">CODE</h4>
-                    <p class="text-2xl font-mono text-blue-700 font-bold">
-                        {{ form.bookingCode }}
-                    </p>
                 </div>
                 <Button
                     label="Close"
