@@ -324,7 +324,7 @@ function calculatePrice() {
                             style="width: 100px; height: 100px"
                         >
                             <p class="text-xl font-bold">{{ option.label }}</p>
-                            <p class="text-sm font-medium">
+                            <p class="text-md font-medium">
                                 ₱{{ option.price }}
                             </p>
                         </div>
