@@ -69,7 +69,6 @@ const rooms = ref([
 
 const searchQuery = ref("");
 const layout = ref("list");
-const options = ref(["list", "grid"]);
 const showBookingForm = ref(false);
 const showBookingSummary = ref(false); // To show the booking summary
 const selectedRoom = ref(null);
@@ -165,10 +164,10 @@ function calculatePrice() {
 }
 </script>
 <template>
-    <div class="p-4 flex flex-col items-center">
+    <div class="p-4">
         <!-- Search and Layout Options -->
         <div
-            class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6 w-full max-w-3xl"
+            class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6 w-full max-w-3xl center mx-auto"
         >
             <input
                 v-model="searchQuery"
@@ -176,30 +175,17 @@ function calculatePrice() {
                 placeholder="Search"
                 class="border border-gray-300 rounded px-4 py-2 w-full sm:max-w-md"
             />
-            <SelectButton
-                v-model="layout"
-                :options="options"
-                :allowEmpty="false"
-            >
-                <template #option="{ option }">
-                    <i
-                        :class="[
-                            option === 'list' ? 'pi pi-bars' : 'pi pi-table',
-                        ]"
-                    />
-                </template>
-            </SelectButton>
         </div>
 
-        <!-- Rooms List/Grid -->
-        <div class="card w-full max-w-5xl">
+        <!-- Rooms List-->
+        <div class="mb-4 mt-4">
             <DataView :value="filteredRooms" :layout="layout">
                 <!-- List View -->
                 <template #list="slotProps">
                     <div
                         v-for="room in slotProps.items"
                         :key="room.id"
-                        class="p-4 border rounded mb-4 shadow"
+                        class="p-4 border rounded mb-4 shadow mb-9"
                     >
                         <div class="flex flex-col md:flex-row gap-4">
                             <div class="md:w-40">
@@ -235,37 +221,6 @@ function calculatePrice() {
                                 ></Button>
                             </div>
                         </div>
-                    </div>
-                </template>
-                <!-- Grid View -->
-                <template #grid="slotProps">
-                    <div
-                        v-for="room in slotProps.items"
-                        :key="room.id"
-                        class="p-4 border rounded shadow flex flex-col items-center text-center"
-                    >
-                        <img
-                            :src="room.image"
-                            alt="Room Image"
-                            class="rounded w-full h-32 object-cover mb-4"
-                        />
-                        <div class="text-xl font-bold">{{ room.name }}</div>
-                        <div class="text-sm text-gray-600 mb-2">
-                            {{ room.type }}
-                        </div>
-                        <Tag
-                            :value="room.status"
-                            :severity="getRoomTagColor(room.status)"
-                            class="mb-2"
-                        ></Tag>
-                        <div class="text-2xl font-bold mb-4">
-                            ₱{{ room.price6 }} / 6 Hours
-                        </div>
-                        <Button
-                            label="Book Now"
-                            class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-                            @click="bookRoom(room)"
-                        ></Button>
                     </div>
                 </template>
             </DataView>
