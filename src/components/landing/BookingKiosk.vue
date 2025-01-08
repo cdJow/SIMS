@@ -12,6 +12,8 @@ const rooms = ref([
         price12: 180,
         price24: 300,
         image: "https://via.placeholder.com/300x200.png?text=Single+Room",
+        description: "Perfect for solo travelers with a comfortable bed.",
+        occupancy: "1 person",
     },
     {
         id: 2,
@@ -22,6 +24,8 @@ const rooms = ref([
         price12: 280,
         price24: 400,
         image: "https://via.placeholder.com/300x200.png?text=Double+Room",
+        description: "Spacious room for two guests with elegant decor.",
+        occupancy: "2 persons",
     },
     {
         id: 3,
@@ -32,6 +36,8 @@ const rooms = ref([
         price12: 350,
         price24: 500,
         image: "https://via.placeholder.com/300x200.png?text=Queen+Room",
+        description: "Ideal for couples with a large queen-size bed.",
+        occupancy: "2 persons",
     },
     {
         id: 4,
@@ -42,6 +48,9 @@ const rooms = ref([
         price12: 300,
         price24: 450,
         image: "https://via.placeholder.com/300x200.png?text=Double+Room",
+        description:
+            "A stylish room for two guests, offering comfort and luxury.",
+        occupancy: "2 persons",
     },
     {
         id: 5,
@@ -52,6 +61,9 @@ const rooms = ref([
         price12: 400,
         price24: 600,
         image: "https://via.placeholder.com/300x200.png?text=Premium+Queen+Room",
+        description:
+            "Luxurious space with a queen-size bed and modern amenities.",
+        occupancy: "2 persons",
     },
 ]);
 
@@ -252,12 +264,21 @@ function calculatePrice() {
             header="Book Your Stay"
             :modal="true"
             :closable="false"
+            style="width: 95vw; max-width: 1200px"
         >
             <!-- Room Details -->
-            <div class="mb-4 border rounded p-4 bg-gray-50">
+            <div class="mb-4 border rounded p-5 bg-gray-50">
                 <h3 class="font-bold text-lg">{{ selectedRoom?.name }}</h3>
                 <p class="text-sm text-gray-600">{{ selectedRoom?.type }}</p>
+                <p class="text-gray-700 mt-2">
+                    {{ selectedRoom?.description }}
+                </p>
+                <div class="flex items-center mt-2 text-gray-600">
+                    <i class="pi pi-user mr-2"></i>
+                    <span>Occupancy: {{ selectedRoom?.occupancy }}</span>
+                </div>
             </div>
+
             <form @submit.prevent="handleBooking">
                 <div class="mb-4">
                     <label class="block mb-2 font-medium">Customer Name</label>
@@ -294,40 +315,69 @@ function calculatePrice() {
 
                 <div class="mb-4">
                     <label class="block mb-2 font-medium">Hours of Stay</label>
-                    <div class="grid grid-cols-3 gap-4">
-                        <div
+                    <div class="border rounded-lg p-4 bg-gray-100">
+                        <!-- Hour Options -->
+                        <div class="grid grid-cols-3 gap-4 text-center">
+                            <div
+                                v-for="option in [
+                                    {
+                                        value: '6',
+                                        label: '6hrs:',
+                                        price: selectedRoom?.price6 || 0,
+                                    },
+                                    {
+                                        value: '12',
+                                        label: '12hrs:',
+                                        price: selectedRoom?.price12 || 0,
+                                    },
+                                    {
+                                        value: '24',
+                                        label: '24hrs:',
+                                        price: selectedRoom?.price24 || 0,
+                                    },
+                                ]"
+                                :key="option.value"
+                            >
+                                <p class="text-lg font-bold">
+                                    {{ option.label }}
+                                </p>
+                                <p class="text-md text-gray-600">
+                                    ₱{{ option.price.toFixed(2) }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Select Buttons -->
+                    <div class="grid grid-cols-3 gap-10 mt-4">
+                        <button
                             v-for="option in [
                                 {
                                     value: '6',
-                                    label: '6 Hours',
+                                    label: '6hrs',
                                     price: selectedRoom?.price6 || 0,
                                 },
                                 {
                                     value: '12',
-                                    label: '12 Hours',
+                                    label: '12hrs',
                                     price: selectedRoom?.price12 || 0,
                                 },
                                 {
                                     value: '24',
-                                    label: '24 Hours',
+                                    label: '24hrs',
                                     price: selectedRoom?.price24 || 0,
                                 },
                             ]"
                             :key="option.value"
                             @click="form.hoursOfStay = option.value"
                             :class="[
-                                'border rounded-lg text-center cursor-pointer flex flex-col items-center justify-center gap-2 transition-all',
+                                'px-4 py-2 rounded-lg font-medium',
                                 form.hoursOfStay === option.value
-                                    ? 'bg-[#E74C48] text-white border-[#E74C48]'
-                                    : 'bg-[#FDECEC] text-[#E74C48] hover:bg-[#F7A1A0] hover:border-[#E74C48]',
+                                    ? 'bg-[#1E905F] text-white'
+                                    : 'bg-[#2DCE89] text-white hover:bg-[#1E905F]',
                             ]"
-                            style="width: 100px; height: 100px"
                         >
-                            <p class="text-xl font-bold">{{ option.label }}</p>
-                            <p class="text-md font-medium">
-                                ₱{{ option.price }}
-                            </p>
-                        </div>
+                            Select
+                        </button>
                     </div>
                 </div>
 
