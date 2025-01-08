@@ -271,6 +271,11 @@ function calculatePrice() {
                         class="w-full px-4 py-2 border rounded focus:outline-none"
                         placeholder="Enter your cellphone number"
                         required
+                        @input="
+                            form.cellphone = form.cellphone
+                                .replace(/[^0-9]/g, '')
+                                .slice(0, 11)
+                        "
                     />
                 </div>
 
