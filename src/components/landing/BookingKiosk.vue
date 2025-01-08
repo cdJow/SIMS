@@ -100,6 +100,38 @@ const filteredRooms = computed(() => {
     );
 });
 
+function selectHours(hours) {
+    form.value.hoursOfStay = hours;
+}
+
+function handleBooking() {
+    if (!form.value.hoursOfStay) {
+        alert("Please select hours of stay.");
+        return;
+    }
+    if (!form.value.confirmation) {
+        alert("Please confirm your details.");
+        return;
+    }
+
+    // Mark the selected room as BOOKED
+    if (selectedRoom.value) {
+        const roomIndex = rooms.value.findIndex(
+            (r) => r.id === selectedRoom.value.id
+        );
+        if (roomIndex !== -1) {
+            rooms.value[roomIndex].status = "BOOKED";
+        }
+    }
+
+    // Show the booking summary
+    showBookingForm.value = false;
+    showBookingSummary.value = true;
+
+    // Reset form values
+    form.value.confirmation = false;
+}
+
 function getRoomTagColor(status) {
     switch (status) {
         case "AVAILABLE":
@@ -117,25 +149,6 @@ function bookRoom(room) {
     selectedRoom.value = room;
     form.value.bookingCode = generateBookingCode(); // Generate booking code
     showBookingForm.value = true;
-}
-
-function handleBooking() {
-    if (selectedRoom.value) {
-        // Update room status to BOOKED
-        const roomIndex = rooms.value.findIndex(
-            (r) => r.id === selectedRoom.value.id
-        );
-        if (roomIndex !== -1) {
-            rooms.value[roomIndex].status = "BOOKED";
-        }
-    }
-
-    // Show the booking summary
-    showBookingForm.value = false;
-    showBookingSummary.value = true;
-
-    // Reset form values except selected room
-    form.value.confirmation = false;
 }
 
 function calculatePrice() {
@@ -280,6 +293,7 @@ function calculatePrice() {
             </div>
 
             <form @submit.prevent="handleBooking">
+                <!-- Customer Name -->
                 <div class="mb-4">
                     <label class="block mb-2 font-medium">Customer Name</label>
                     <input
@@ -290,6 +304,8 @@ function calculatePrice() {
                         required
                     />
                 </div>
+
+                <!-- Cellphone Number -->
                 <div class="mb-4">
                     <label class="block mb-2 font-medium"
                         >Cellphone Number</label
@@ -302,6 +318,8 @@ function calculatePrice() {
                         required
                     />
                 </div>
+
+                <!-- Email Address -->
                 <div class="mb-4">
                     <label class="block mb-2 font-medium">Email Address</label>
                     <input
@@ -313,10 +331,10 @@ function calculatePrice() {
                     />
                 </div>
 
+                <!-- Hours of Stay -->
                 <div class="mb-4">
                     <label class="block mb-2 font-medium">Hours of Stay</label>
                     <div class="border rounded-lg p-4 bg-gray-100">
-                        <!-- Hour Options -->
                         <div class="grid grid-cols-3 gap-4 text-center">
                             <div
                                 v-for="option in [
@@ -347,40 +365,41 @@ function calculatePrice() {
                             </div>
                         </div>
                     </div>
-                    <!-- Select Buttons -->
-                    <div class="grid grid-cols-3 gap-10 mt-4">
-                        <button
-                            v-for="option in [
-                                {
-                                    value: '6',
-                                    label: '6hrs',
-                                    price: selectedRoom?.price6 || 0,
-                                },
-                                {
-                                    value: '12',
-                                    label: '12hrs',
-                                    price: selectedRoom?.price12 || 0,
-                                },
-                                {
-                                    value: '24',
-                                    label: '24hrs',
-                                    price: selectedRoom?.price24 || 0,
-                                },
-                            ]"
-                            :key="option.value"
-                            @click="form.hoursOfStay = option.value"
-                            :class="[
-                                'px-4 py-2 rounded-lg font-medium',
-                                form.hoursOfStay === option.value
-                                    ? 'bg-[#1E905F] text-white'
-                                    : 'bg-[#2DCE89] text-white hover:bg-[#1E905F]',
-                            ]"
-                        >
-                            Select
-                        </button>
-                    </div>
                 </div>
-
+                <!-- Select Buttons -->
+                <div class="grid grid-cols-3 gap-4 mt-4 mb-4">
+                    <button
+                        v-for="option in [
+                            {
+                                value: '6',
+                                label: '6hrs',
+                                price: selectedRoom?.price6 || 0,
+                            },
+                            {
+                                value: '12',
+                                label: '12hrs',
+                                price: selectedRoom?.price12 || 0,
+                            },
+                            {
+                                value: '24',
+                                label: '24hrs',
+                                price: selectedRoom?.price24 || 0,
+                            },
+                        ]"
+                        :key="option.value"
+                        type="button"
+                        @click="selectHours(option.value)"
+                        :class="[
+                            'px-4 py-2 rounded-lg font-medium',
+                            form.hoursOfStay === option.value
+                                ? 'bg-[#1E905F] text-white'
+                                : 'bg-[#2DCE89] text-white hover:bg-[#1E905F]',
+                        ]"
+                    >
+                        Select
+                    </button>
+                </div>
+                <!-- Confirmation Checkbox -->
                 <div class="mb-4">
                     <label>
                         <input
@@ -391,19 +410,23 @@ function calculatePrice() {
                         I confirm that the provided details are correct.
                     </label>
                 </div>
+
+                <!-- Submit and Cancel Buttons -->
                 <div class="flex justify-between gap-4 mt-4">
-                    <Button
+                    <button
                         type="submit"
-                        label="Book"
-                        class="flex-1 bg-blue-600 text-white"
-                        :disabled="!form.confirmation"
-                    />
-                    <Button
+                        class="flex-1 bg-[#2DCE89] text-white px-4 py-2 rounded hover:bg-[#138A4E]"
+                        :disabled="!form.confirmation || !form.hoursOfStay"
+                    >
+                        Book
+                    </button>
+                    <button
                         type="button"
-                        label="Cancel"
-                        class="flex-1 bg-gray-400 text-white"
+                        class="flex-1 bg-[#2DCE89] text-white px-4 py-2 rounded hover:bg-[#138A4E]"
                         @click="showBookingForm = false"
-                    />
+                    >
+                        Cancel
+                    </button>
                 </div>
             </form>
         </Dialog>
