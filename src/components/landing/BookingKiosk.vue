@@ -116,7 +116,7 @@ function handleBooking() {
     // Mark the selected room as BOOKED
     if (selectedRoom.value) {
         const roomIndex = rooms.value.findIndex(
-            (r) => r.id === selectedRoom.value.id
+            (r) => r.id === selectedRoom.value.id,
         );
         if (roomIndex !== -1) {
             rooms.value[roomIndex].status = "BOOKED";
@@ -150,28 +150,6 @@ function bookRoom(room) {
     showBookingForm.value = true;
 }
 
-<<<<<<< HEAD
-function handleBooking() {
-    if (selectedRoom.value) {
-        // Update room status to BOOKED
-        const roomIndex = rooms.value.findIndex(
-            (r) => r.id === selectedRoom.value.id,
-        );
-        if (roomIndex !== -1) {
-            rooms.value[roomIndex].status = "BOOKED";
-        }
-    }
-
-    // Show the booking summary
-    showBookingForm.value = false;
-    showBookingSummary.value = true;
-
-    // Reset form values except selected room
-    form.value.confirmation = false;
-}
-
-=======
->>>>>>> 919716f794c21847b17079a5fdb13ff9166daea9
 function calculatePrice() {
     switch (form.value.hoursOfStay) {
         case "6":
@@ -207,7 +185,7 @@ function calculatePrice() {
                     <div
                         v-for="room in slotProps.items"
                         :key="room.id"
-                        class="p-4 border rounded mb-4 shadow mb-9"
+                        class="p-4 border rounded mb-4 shadow"
                     >
                         <div class="flex flex-col md:flex-row gap-4">
                             <div class="md:w-40">
@@ -254,11 +232,8 @@ function calculatePrice() {
             :dismissableMask="true"
             header="Book Your Stay"
             :modal="true"
-<<<<<<< HEAD
-=======
             :closable="false"
             style="width: 95vw; max-width: 1200px"
->>>>>>> 919716f794c21847b17079a5fdb13ff9166daea9
         >
             <!-- Room Details -->
             <div class="mb-4 border rounded p-5 bg-gray-50">
