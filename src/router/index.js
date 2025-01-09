@@ -35,6 +35,23 @@ const router = createRouter({
                 },
 
                 {
+                    path: "/Rooms/RoomList",
+                    name: "Room List",
+                    component: () => import("@/views/pages/Rooms/RoomList.vue"),
+                },
+                {
+                    path: "/Rooms/CheckIn",
+                    name: "Check In",
+                    component: () => import("@/views/pages/Rooms/CheckIn.vue"),
+                },
+
+                {
+                    path: "/Rooms/CheckOut",
+                    name: " CheckOut",
+                    component: () => import("@/views/pages/Rooms/CheckOut.vue"),
+                },
+
+                {
                     path: "/Inventory/ViewInventory/ViewItems",
                     name: "View Inventory",
                     component: () =>

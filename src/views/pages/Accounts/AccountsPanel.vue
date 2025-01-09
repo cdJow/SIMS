@@ -630,7 +630,7 @@ onMounted(() => {
             <!-- Open Calendar Button -->
             <div class="mt-4">
                 <Button
-                    label="Open Calendar"
+                    label="Open Logs"
                     icon="pi pi-calendar"
                     class="p-button-primary"
                     @click="openCalendar"
@@ -643,7 +643,7 @@ onMounted(() => {
 
     <Dialog
         v-model:visible="isCalendarDialogVisible"
-        header="Activity Calendar"
+        header="Logs"
         :modal="true"
         :closable="true"
         :style="{ width: '90vw', height: '80vh' }"

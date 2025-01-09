@@ -14,7 +14,7 @@ import TopbarWidget from "@/components/landing/TopbarWidget.vue";
             <!-- Ensure no conflicting overflow -->
             <!-- Sticky TopbarWidget Wrapper -->
             <div
-                class="sticky top-0 z-10 py-6 px-6 mx-0 flex items-center justify-between relative bg-white dark:bg-gray-900 w-full"
+                class="sticky top-0 z-10 py-6 px-6 mx-0 flex items-center justify-between bg-white dark:bg-gray-900 w-full"
             >
                 <TopbarWidget />
             </div>

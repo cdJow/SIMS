@@ -84,7 +84,7 @@ const filteredRooms = computed(() => {
             room.status === "AVAILABLE" &&
             (room.name.toLowerCase().includes(query) ||
                 room.type.toLowerCase().includes(query) ||
-                room.price6.toString().includes(query))
+                room.price6.toString().includes(query)),
     );
 });
 
@@ -111,7 +111,7 @@ function handleBooking() {
     if (selectedRoom.value) {
         // Update room status to BOOKED
         const roomIndex = rooms.value.findIndex(
-            (r) => r.id === selectedRoom.value.id
+            (r) => r.id === selectedRoom.value.id,
         );
         if (roomIndex !== -1) {
             rooms.value[roomIndex].status = "BOOKED";
@@ -249,9 +249,9 @@ function calculatePrice() {
         <!-- Booking Form Modal -->
         <Dialog
             v-model:visible="showBookingForm"
+            :dismissableMask="true"
             header="Book Your Stay"
             :modal="true"
-            :closable="false"
         >
             <!-- Room Details -->
             <div class="mb-4 border rounded p-4 bg-gray-50">

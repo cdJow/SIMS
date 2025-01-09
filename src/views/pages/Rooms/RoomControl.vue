@@ -305,36 +305,48 @@ const saveRoomDetails = () => {
 
                         <!-- Rates -->
                         <div
-                            class="p-4 bg-gray-100 dark:bg-slate-900 rounded-md mb-4"
+                            class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4 p-4"
                         >
-                            <div class="grid grid-cols-3 gap-2 text-center">
-                                <div>
-                                    <div class="text-sm font-semibold">
-                                        6hrs:
-                                    </div>
-                                    <div class="text-sm">
-                                        {{ formatPrice(room.price["6 Hours"]) }}
-                                    </div>
+                            <div
+                                class="p-4 bg-white dark:bg-slate-900 rounded-md shadow-md flex flex-col items-center"
+                            >
+                                <div
+                                    class="text-sm font-semibold text-gray-700 dark:text-gray-200"
+                                >
+                                    6hrs:
                                 </div>
-                                <div>
-                                    <div class="text-sm font-semibold">
-                                        12hrs:
-                                    </div>
-                                    <div class="text-sm">
-                                        {{
-                                            formatPrice(room.price["12 Hours"])
-                                        }}
-                                    </div>
+                                <div
+                                    class="text-sm text-green-600 font-semibold"
+                                >
+                                    {{ formatPrice(room.price["6 Hours"]) }}
                                 </div>
-                                <div>
-                                    <div class="text-sm font-semibold">
-                                        24hrs:
-                                    </div>
-                                    <div class="text-sm">
-                                        {{
-                                            formatPrice(room.price["24 Hours"])
-                                        }}
-                                    </div>
+                            </div>
+                            <div
+                                class="p-4 bg-white dark:bg-slate-900 rounded-md shadow-md flex flex-col items-center"
+                            >
+                                <div
+                                    class="text-sm font-semibold text-gray-700 dark:text-gray-200"
+                                >
+                                    12hrs:
+                                </div>
+                                <div
+                                    class="text-sm text-green-600 font-semibold"
+                                >
+                                    {{ formatPrice(room.price["12 Hours"]) }}
+                                </div>
+                            </div>
+                            <div
+                                class="p-4 bg-white dark:bg-slate-900 rounded-md shadow-md flex flex-col items-center"
+                            >
+                                <div
+                                    class="text-sm font-semibold text-gray-700 dark:text-gray-200"
+                                >
+                                    24hrs:
+                                </div>
+                                <div
+                                    class="text-sm text-green-600 font-semibold"
+                                >
+                                    {{ formatPrice(room.price["24 Hours"]) }}
                                 </div>
                             </div>
                         </div>

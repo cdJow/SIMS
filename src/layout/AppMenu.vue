@@ -120,6 +120,28 @@ const model = ref([
 
     {
         label: "Front Desk",
+        items: [
+            {
+                label: "Room List",
+                icon: "pi pi-fw pi-info-circle",
+                to: "/Rooms/RoomList",
+            },
+            {
+                label: "Check In",
+                icon: "pi pi-fw pi-sign-in",
+                to: "/Rooms/CheckIn",
+            },
+            {
+                label: "Check Out",
+                icon: "pi pi-fw pi-sign-out",
+                to: "/Rooms/CheckOut",
+            },
+            {
+                label: "Room Service",
+                icon: "pi pi-fw pi-utensils",
+                to: "/Rooms/RoomService",
+            },
+        ],
     },
 
     {
