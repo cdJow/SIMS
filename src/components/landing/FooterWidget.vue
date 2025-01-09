@@ -1,10 +1,17 @@
 <template>
-    <footer class="py-10 px-6 bg-surface-100 dark:bg-surface-800 text-surface-900 dark:text-surface-100">
+    <footer
+        class="py-10 px-6 bg-surface-100 dark:bg-surface-800 text-surface-900 dark:text-surface-100"
+    >
         <div class="grid grid-cols-1 md:grid-cols-3 gap-10 items-start">
             <!-- Logo and Brand Name -->
             <div class="flex flex-col items-center md:items-start">
                 <a class="flex items-center">
-                    <svg viewBox="0 0 54 40" fill="none" xmlns="http://www.w3.org/2000/svg" class="h-14 mr-3">
+                    <svg
+                        viewBox="0 0 54 40"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                        class="h-14 mr-3"
+                    >
                         <path
                             fill-rule="evenodd"
                             clip-rule="evenodd"
@@ -12,39 +19,64 @@
                             fill="var(--primary-color)"
                         />
                     </svg>
-                    <h4 class="text-2xl font-bold text-center md:text-left">Woodland Suites</h4>
+                    <h4 class="text-2xl font-bold text-center md:text-left">
+                        Woodland Suites
+                    </h4>
                 </a>
             </div>
 
             <!-- Contact Section -->
             <div class="text-center md:text-left">
                 <h4 class="text-xl font-semibold mb-4">Contact</h4>
-                <p class="text-surface-700 dark:text-surface-400 mb-2">Phone: +1 234 567 890</p>
-                <p class="text-surface-700 dark:text-surface-400 mb-2">Email: contact@woodlandsuites.com</p>
-                <p class="text-surface-700 dark:text-surface-400">Address: 123 Woodland Ave, Cityville</p>
+                <p class="text-surface-700 dark:text-surface-400 mb-2">
+                    Phone: 0945 492 5609
+                </p>
+                <p class="text-surface-700 dark:text-surface-400 mb-2">
+                    Email: contact@woodlandsuites.com
+                </p>
+                <p class="text-surface-700 dark:text-surface-400">
+                    Address: Roxas Ave, Iligan City, Lanao del Norte
+                </p>
             </div>
 
             <!-- Powered By Section -->
             <div class="text-center md:text-left">
                 <h4 class="text-xl font-semibold mb-4">Powered By</h4>
-                <p class="text-surface-700 dark:text-surface-400 mb-2">Woodland Suites Management</p>
-                <p class="text-surface-700 dark:text-surface-400">&copy; 2024 Woodland Suites. All rights reserved.</p>
+                <p class="text-surface-700 dark:text-surface-400 mb-2">
+                    Woodland Suites Management
+                </p>
+                <p class="text-surface-700 dark:text-surface-400">
+                    &copy; 2024 Woodland Suites. All rights reserved.
+                </p>
             </div>
         </div>
 
         <!-- Social Media Links -->
-        <div class="mt-8 flex flex-col md:flex-row justify-center md:justify-between items-center">
-            <p class="text-surface-700 dark:text-surface-400 text-center mb-4 md:mb-0">
+        <div
+            class="mt-8 flex flex-col md:flex-row justify-center md:justify-between items-center"
+        >
+            <p
+                class="text-surface-700 dark:text-surface-400 text-center mb-4 md:mb-0"
+            >
                 Follow us on:
             </p>
             <div class="flex gap-4">
-                <a href="#" class="text-surface-700 dark:text-surface-400 hover:text-primary transition">
+                <a
+                    href="https://www.facebook.com/profile.php?id=100086970826726"
+                    class="text-surface-700 dark:text-surface-400 hover:text-primary transition"
+                >
                     <i class="pi pi-facebook text-2xl"></i>
                 </a>
-                <a href="#" class="text-surface-700 dark:text-surface-400 hover:text-primary transition">
+                <a
+                    href="/auth/error"
+                    class="text-surface-700 dark:text-surface-400 hover:text-primary transition"
+                >
                     <i class="pi pi-twitter text-2xl"></i>
                 </a>
-                <a href="#" class="text-surface-700 dark:text-surface-400 hover:text-primary transition">
+                <a
+                    href="/auth/error"
+                    class="text-surface-700 dark:text-surface-400 hover:text-primary transition"
+                >
                     <i class="pi pi-instagram text-2xl"></i>
                 </a>
             </div>
