@@ -193,7 +193,7 @@ const confirmDeleteRoom = () => {
 
     // Remove the room from the rooms array
     const roomIndex = rooms.value.findIndex(
-        (r) => r.id === roomToDelete.value.id,
+        (r) => r.id === roomToDelete.value.id
     );
     if (roomIndex !== -1) {
         rooms.value.splice(roomIndex, 1); // Delete the room
