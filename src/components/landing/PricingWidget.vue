@@ -17,7 +17,7 @@
                 label="Book Now"
                 class="p-button-rounded bg-primary text-white hover:bg-primary-dark"
                 as="router-link"
-                to="/BookingPanel"
+                to="/auth/signup"
                 style="
                     width: 300px;
                     height: 80px;

@@ -256,16 +256,15 @@ function calculatePrice() {
         v-model:visible="showBookingForm"
         header="Book Your Stay"
         :modal="true"
-        :closable="false"
-        style="width: 95vw; max-width: 1200px"
+        style="width: 95vw; max-width: 600px; overflow: hidden"
+        class="relative"
+        :dismissable-mask="true"
     >
         <!-- Room Details -->
         <div class="mb-4 border rounded p-5 bg-gray-50">
             <h3 class="font-bold text-lg">{{ selectedRoom?.name }}</h3>
             <p class="text-sm text-gray-600">{{ selectedRoom?.type }}</p>
-            <p class="text-gray-700 mt-2">
-                {{ selectedRoom?.description }}
-            </p>
+            <p class="text-gray-700 mt-2">{{ selectedRoom?.description }}</p>
             <div class="flex items-center mt-2 text-gray-600">
                 <i class="pi pi-user mr-2"></i>
                 <span>Occupancy: {{ selectedRoom?.occupancy }}</span>
@@ -339,49 +338,48 @@ function calculatePrice() {
                             ]"
                             :key="option.value"
                         >
-                            <p class="text-lg font-bold">
-                                {{ option.label }}
-                            </p>
+                            <p class="text-lg font-bold">{{ option.label }}</p>
                             <p class="text-md text-gray-600">
                                 ₱{{ option.price.toFixed(2) }}
                             </p>
                         </div>
                     </div>
+                    <!-- Select Buttons -->
+                    <div class="grid grid-cols-3 gap-4 mt-4 mb-4">
+                        <button
+                            v-for="option in [
+                                {
+                                    value: '6',
+                                    label: '6hrs',
+                                    price: selectedRoom?.price6 || 0,
+                                },
+                                {
+                                    value: '12',
+                                    label: '12hrs',
+                                    price: selectedRoom?.price12 || 0,
+                                },
+                                {
+                                    value: '24',
+                                    label: '24hrs',
+                                    price: selectedRoom?.price24 || 0,
+                                },
+                            ]"
+                            :key="option.value"
+                            type="button"
+                            @click="selectHours(option.value)"
+                            :class="[
+                                'px-4 py-2 rounded-lg font-medium',
+                                form.hoursOfStay === option.value
+                                    ? 'bg-[#1E905F] text-white'
+                                    : 'bg-[#2DCE89] text-white hover:bg-[#1E905F]',
+                            ]"
+                        >
+                            Select
+                        </button>
+                    </div>
                 </div>
             </div>
-            <!-- Select Buttons -->
-            <div class="grid grid-cols-3 gap-4 mt-4 mb-4">
-                <button
-                    v-for="option in [
-                        {
-                            value: '6',
-                            label: '6hrs',
-                            price: selectedRoom?.price6 || 0,
-                        },
-                        {
-                            value: '12',
-                            label: '12hrs',
-                            price: selectedRoom?.price12 || 0,
-                        },
-                        {
-                            value: '24',
-                            label: '24hrs',
-                            price: selectedRoom?.price24 || 0,
-                        },
-                    ]"
-                    :key="option.value"
-                    type="button"
-                    @click="selectHours(option.value)"
-                    :class="[
-                        'px-4 py-2 rounded-lg font-medium',
-                        form.hoursOfStay === option.value
-                            ? 'bg-[#1E905F] text-white'
-                            : 'bg-[#2DCE89] text-white hover:bg-[#1E905F]',
-                    ]"
-                >
-                    Select
-                </button>
-            </div>
+
             <!-- Confirmation Checkbox -->
             <div class="mb-4">
                 <label>
@@ -405,7 +403,7 @@ function calculatePrice() {
                 </button>
                 <button
                     type="button"
-                    class="flex-1 bg-[#2DCE89] text-white px-4 py-2 rounded hover:bg-[#138A4E]"
+                    class="flex-1 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
                     @click="showBookingForm = false"
                 >
                     Cancel

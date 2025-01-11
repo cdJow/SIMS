@@ -1,21 +1,72 @@
 <script setup>
-import { nextTick } from "vue";
+import { nextTick, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
+// Router setup
 const router = useRouter();
 const route = useRoute();
 
+// Modal visibility
+const showBookedModal = ref(false);
+
+// Visibility controls
+const visibleDrawer = ref(false);
+const visibleBooksDrawer = ref(false);
+
+// Bookings data (dummy)
+const bookings = ref([
+    {
+        id: 1,
+        roomId: 1,
+        duration: 12,
+        price: 180,
+        dateBooked: "2025-01-10T14:00:00Z",
+    },
+    {
+        id: 2,
+        roomId: 2,
+        duration: 24,
+        price: 600,
+        dateBooked: "2025-01-11T10:00:00Z",
+    },
+    {
+        id: 3,
+        roomId: 3,
+        duration: 6,
+        price: 500,
+        dateBooked: "2025-01-12T08:00:00Z",
+    },
+]);
+
+// Cancel Booking
+const cancelBooking = (bookingId) => {
+    const confirmCancel = confirm(
+        "Are you sure you want to cancel this booking?"
+    );
+    if (confirmCancel) {
+        bookings.value = bookings.value.filter(
+            (booking) => booking.id !== bookingId
+        );
+        alert("Booking canceled successfully.");
+    }
+};
+
+// User details (mock)
+const userDetails = ref({
+    name: "John Doe",
+    email: "john.doe@example.com",
+    role: "Guest",
+});
+
+// Smooth scroll
 function smoothScroll(id) {
     if (route.path !== "/landing") {
-        // Navigate first if not already on the landing page
         router.push("/landing").then(() => {
-            // Wait until the navigation is complete and component is mounted
             nextTick(() => {
                 scrollToElement(id);
             });
         });
     } else {
-        // If already on the landing page, scroll immediately
         scrollToElement(id);
     }
 }
@@ -29,8 +80,15 @@ function scrollToElement(id) {
         });
     }
 }
-</script>
 
+// Logout functionality
+function handleLogout() {
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("userDetails");
+    router.push("/landing");
+    alert("You have successfully logged out.");
+}
+</script>
 <template>
     <a class="flex items-center" href="#">
         <svg
@@ -66,6 +124,7 @@ function scrollToElement(id) {
                 />
             </g>
         </svg>
+
         <span
             class="text-surface-900 dark:text-surface-0 font-medium text-2xl leading-normal mr-20 whitespace-nowrap"
             >Woodland Suites</span
@@ -134,7 +193,169 @@ function scrollToElement(id) {
                 >
             </li>
         </ul>
+
+        <div class="flex items-center ml-auto gap-6">
+            <!-- Trigger Modal -->
+            <button
+                @click="showBookedModal = true"
+                class="flex items-center text-surface-900 dark:text-surface-0 font-medium text-xl gap-2 cursor-pointer"
+            >
+                <i class="pi pi-book" style="font-size: 1em"></i>
+                <span>Booked</span>
+            </button>
+
+            <!-- Profile Section -->
+            <a
+                @click.prevent="visibleDrawer = true"
+                class="flex items-center text-surface-900 dark:text-surface-0 font-medium text-xl gap-2 cursor-pointer"
+            >
+                <i class="pi pi-user" style="font-size: 1em"></i>
+                <span>Profile</span>
+            </a>
+        </div>
     </div>
+
+    <Dialog
+        v-model:visible="showBookedModal"
+        header="Your Bookings"
+        :modal="true"
+        style="width: 95vw; max-width: 600px; overflow: hidden"
+        class="relative"
+        :dismissable-mask="true"
+    >
+        <!-- Bookings Details -->
+        <div class="p-4">
+            <div v-if="bookings.length > 0">
+                <div
+                    v-for="(booking, index) in bookings"
+                    :key="booking.id"
+                    class="mb-6 border rounded p-4 bg-gray-50 shadow"
+                >
+                    <h3 class="font-bold text-lg mb-2">
+                        Booking #{{ index + 1 }}
+                    </h3>
+                    <p class="text-gray-700">
+                        <strong>Room ID:</strong> {{ booking.roomId }}
+                    </p>
+                    <p class="text-gray-700">
+                        <strong>Duration:</strong> {{ booking.duration }} hours
+                    </p>
+                    <p class="text-gray-700">
+                        <strong>Price:</strong> ₱{{ booking.price }}
+                    </p>
+                    <p class="text-gray-700">
+                        <strong>Date Booked:</strong>
+                        {{
+                            new Date(booking.dateBooked).toLocaleDateString(
+                                "en-US",
+                                {
+                                    year: "numeric",
+                                    month: "long",
+                                    day: "numeric",
+                                }
+                            )
+                        }}
+                    </p>
+                    <button
+                        class="mt-2 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+                        @click="cancelBooking(booking.id)"
+                    >
+                        Cancel Book
+                    </button>
+                </div>
+            </div>
+
+            <!-- No Bookings -->
+            <div v-else>
+                <p class="text-gray-600 text-center">
+                    You have no bookings yet.
+                </p>
+            </div>
+
+            <!-- Close Button -->
+            <div class="flex justify-end mt-4">
+                <button
+                    class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+                    @click="showBookedModal = false"
+                >
+                    Close
+                </button>
+            </div>
+        </div>
+    </Dialog>
+
+    <!-- Drawer Component -->
+
+    <Drawer
+        v-model:visible="visibleDrawer"
+        header="Account Details"
+        position="right"
+    >
+        <div class="p-6">
+            <h2 class="text-2xl font-bold mb-6">Your Account</h2>
+            <div class="mb-4">
+                <p class="text-lg font-medium">
+                    <strong>Name:</strong> {{ userDetails.name }}
+                </p>
+            </div>
+            <div class="mb-4">
+                <p class="text-lg font-medium">
+                    <strong>Email:</strong> {{ userDetails.email }}
+                </p>
+            </div>
+            <div class="mt-6">
+                <Button
+                    label="Logout"
+                    class="p-button-danger"
+                    @click="handleLogout"
+                />
+            </div>
+        </div>
+    </Drawer>
+
+    <!-- Books Drawer -->
+    <Drawer
+        v-model:visible="visibleBooksDrawer"
+        header="Your Bookings"
+        position="right"
+    >
+        <div class="p-6">
+            <h2 class="text-2xl font-bold mb-6">Your Bookings</h2>
+
+            <!-- Show Bookings -->
+            <div v-if="bookings.length > 0">
+                <div
+                    v-for="(booking, index) in bookings"
+                    :key="booking.id"
+                    class="mb-6 border-b pb-4"
+                >
+                    <h3 class="text-lg font-bold mb-2">
+                        Booking #{{ index + 1 }}
+                    </h3>
+                    <p class="text-lg">
+                        <strong>Room:</strong> {{ booking.roomName }}
+                    </p>
+                    <p class="text-lg">
+                        <strong>Duration:</strong> {{ booking.duration }} hours
+                    </p>
+                    <p class="text-lg">
+                        <strong>Price:</strong> ₱{{ booking.price }}
+                    </p>
+                    <button
+                        class="mt-2 px-4 py-2 bg-red-500 text-white font-medium rounded hover:bg-red-600"
+                        @click="cancelBooking(booking.id)"
+                    >
+                        Cancel Booking
+                    </button>
+                </div>
+            </div>
+
+            <!-- No Bookings -->
+            <div v-else>
+                <p class="text-gray-600">You have no bookings yet.</p>
+            </div>
+        </div>
+    </Drawer>
 </template>
 
 <style scoped>
