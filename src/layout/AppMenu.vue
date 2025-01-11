@@ -127,19 +127,9 @@ const model = ref([
                 to: "/Rooms/RoomList",
             },
             {
-                label: "Check In",
-                icon: "pi pi-fw pi-sign-in",
-                to: "/Rooms/CheckIn",
-            },
-            {
-                label: "Check Out",
-                icon: "pi pi-fw pi-sign-out",
-                to: "/Rooms/CheckOut",
-            },
-            {
-                label: "Room Service",
-                icon: "pi pi-fw pi-utensils",
-                to: "/Rooms/RoomService",
+                label: "Mini-Store ",
+                icon: "pi pi-fw pi-shopping-cart",
+                to: "/POS/POS",
             },
         ],
     },

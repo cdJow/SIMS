@@ -52,6 +52,12 @@ const router = createRouter({
                 },
 
                 {
+                    path: "/POS/POS",
+                    name: " POS",
+                    component: () => import("@/views/pages/POS/POS.vue"),
+                },
+
+                {
                     path: "/Inventory/ViewInventory/ViewItems",
                     name: "View Inventory",
                     component: () =>
