@@ -1,7 +1,7 @@
 <script setup>
+import { useToast } from "primevue/usetoast";
 import { computed, ref } from "vue";
 
-// Mock data for rooms
 const rooms = ref([
     {
         id: 1,
@@ -9,16 +9,20 @@ const rooms = ref([
         floor: "1st Floor",
         image: "https://via.placeholder.com/300",
         name: "Room 101",
-        type: "Double",
+        type: "Double Size Bed",
         description: "Perfect for two guests with additional space.",
         status: "Available",
-        price: {
+        rate: {
             "6 Hours": 50,
             "12 Hours": 80,
             "24 Hours": 120,
         },
         cleaningStatus: "Clean",
-        guest: null, // No guest if the room is available
+        guestDetails: {
+            guestName: null, // Default guest name
+            cellphone: null, // Default cellphone
+            selectedHours: null, // Default selected hours
+        },
     },
     {
         id: 2,
@@ -26,10 +30,10 @@ const rooms = ref([
         floor: "1st Floor",
         image: "https://via.placeholder.com/300",
         name: "Room 102",
-        type: "Single",
+        type: "Single Size Bed",
         description: "A cozy room for a single guest.",
         status: "Occupied",
-        price: {
+        rate: {
             "6 Hours": 30,
             "12 Hours": 50,
             "24 Hours": 90,
@@ -47,312 +51,377 @@ const rooms = ref([
         floor: "2nd Floor",
         image: "https://via.placeholder.com/300",
         name: "Room 103",
-        type: "Suite",
+        type: "King Size Bed",
         description: "A luxurious suite for families or groups.",
-        status: "Cleaning",
-        price: {
+        status: "Available",
+        rate: {
             "6 Hours": 100,
             "12 Hours": 150,
             "24 Hours": 250,
         },
         cleaningStatus: "Needs Cleaning",
-        guest: null,
+        guestDetails: {
+            guestName: null, // Default guest name
+            cellphone: null, // Default cellphone
+            selectedHours: null, // Default selected hours
+        },
     },
     {
-        id: 3,
+        id: 4,
         roomNumber: "103",
         floor: "2nd Floor",
         image: "https://via.placeholder.com/300",
         name: "Room 103",
-        type: "Suite",
+        type: "King Size Bed",
         description: "A luxurious suite for families or groups.",
         status: "Cleaning",
-        price: {
+        rate: {
             "6 Hours": 100,
             "12 Hours": 150,
             "24 Hours": 250,
         },
         cleaningStatus: "Needs Cleaning",
-        guest: null,
+        guestDetails: {
+            guestName: null, // Default guest name
+            cellphone: null, // Default cellphone
+            selectedHours: null, // Default selected hours
+        },
     },
     {
-        id: 4,
+        id: 5,
         roomNumber: "104",
         floor: "2nd Floor",
         image: "https://via.placeholder.com/300",
         name: "Room 104",
-        type: "Double",
+        type: "Double Size Bed",
         description: "Spacious room perfect for couples.",
-        status: "Cleaning", // New cleaning status
-        price: {
+        status: "Booked",
+        rate: {
             "6 Hours": 60,
             "12 Hours": 100,
             "24 Hours": 140,
         },
         cleaningStatus: "In Progress",
-        guest: null,
+        guestDetails: {
+            guestName: null, // Default guest name
+            cellphone: null, // Default cellphone
+            selectedHours: null, // Default selected hours
+        },
     },
 ]);
 
-// Statistics for the dashboard
-const stats = ref({
-    availableRooms: 45,
-    newCleanedRooms: 12,
-    occupiedRooms: 78,
-    newCheckIns: 3,
-    bookings: 152,
-    newBookings: 24,
-});
-
-// Search and Filter State
-const searchQuery = ref("");
+// Filters and Sorting
 const selectedFilter = ref({
     roomType: null,
     status: null,
     cleaningStatus: null,
 });
+
+const selectedRoom = ref({
+    id: 1,
+    roomNumber: "",
+    status: "Available", // "Available", "Booked", or other states
+    guestName: null, // Null until a guest is assigned
+    cellphone: null, // Null until a phone number is provided
+    selectedHours: null, // Selected duration (e.g., "6 Hours")
+    selectedRate: null, // Rate corresponding to selected hours
+});
+
 const sortBy = ref(null);
 
 // Dropdown Options
 const roomTypes = ref(["Single", "Double", "Suite"]);
-const statuses = ref(["Available", "Occupied", "Out of Service"]);
-const cleaningStatuses = ref(["Clean", "Needs Cleaning"]);
 const sortOptions = ref(["Room Number", "Type", "Status"]);
+const cancelDialogVisible = ref(false); // Tracks visibility of the dialog
 
-// Computed Filtered Rooms
-const filteredRooms = computed(() => {
-    let filtered = rooms.value;
+function selectHours(hours) {
+    BookingDetails.value.selectedHours = hours; // Update selected hours
+    const rate = selectedRoom.value?.rate[hours]; // Get the corresponding rate
+    BookingDetails.value.selectedRate = rate ? rate : null; // Set rate if valid, otherwise null
+}
 
-    // Filter by search query
-    if (searchQuery.value) {
-        filtered = filtered.filter(
-            (room) =>
-                room.roomNumber.includes(searchQuery.value) ||
-                room.type
-                    .toLowerCase()
-                    .includes(searchQuery.value.toLowerCase()),
-        );
-    }
+// Filtered Rooms
+function getFilteredRooms() {
+    return computed(() => {
+        if (!rooms.value || rooms.value.length === 0) {
+            return [];
+        }
+        // Return the full room object
+        return rooms.value;
+    });
+}
+const filteredRooms = getFilteredRooms();
+const toast = useToast();
 
-    // Filter by room type
-    if (selectedFilter.value.roomType) {
-        filtered = filtered.filter(
-            (room) => room.type === selectedFilter.value.roomType,
-        );
-    }
+const checkInDialogVisible = ref(false); // Controls the visibility of the dialog
 
-    // Filter by status
-    if (selectedFilter.value.status) {
-        filtered = filtered.filter(
-            (room) => room.status === selectedFilter.value.status,
-        );
-    }
+// Derived data: Check-In and Check-Out dates
 
-    // Filter by cleaning status (example, if added to room data)
-    if (selectedFilter.value.cleaningStatus) {
-        filtered = filtered.filter(
-            (room) =>
-                room.cleaningStatus === selectedFilter.value.cleaningStatus,
-        );
-    }
-
-    // Sort
-    if (sortBy.value) {
-        switch (sortBy.value) {
-            case "Room Number":
-                filtered.sort((a, b) =>
-                    a.roomNumber.localeCompare(b.roomNumber),
-                );
-                break;
-            case "Type":
-                filtered.sort((a, b) => a.type.localeCompare(b.type));
-                break;
-            case "Status":
-                filtered.sort((a, b) => a.status.localeCompare(b.status));
-                break;
+const checkInDate = computed(() => new Date()); // Check-in is always the current date/time
+const checkOutDate = computed(() => {
+    if (
+        selectedRoom.value?.BookingDetails?.selectedHours &&
+        checkInDate.value
+    ) {
+        const hours = Number(selectedRoom.value.BookingDetails.selectedHours);
+        if (!isNaN(hours)) {
+            const checkOut = new Date(checkInDate.value);
+            checkOut.setHours(checkOut.getHours() + hours); // Add hours to check-in date
+            return checkOut;
         }
     }
-
-    return filtered;
+    return null;
 });
 
-// Dialog State
-const isDetailsDialogVisible = ref(false);
-const selectedRoom = ref(null);
-
-// Helper Functions
-const formatPrice = (value) => {
-    return value ? `₱${parseFloat(value).toFixed(2)}` : "₱0.00";
-};
-
-const getSeverity = (room) => {
-    switch (room.status) {
-        case "Available":
-            return "success";
-        case "Occupied":
-            return "danger";
-        case "Out of Service":
-            return "danger";
-        case "Cleaning":
-            return "danger";
-        default:
-            return "secondary";
+// Function to open the dialog
+function openCheckInDialog(room) {
+    if (!room || !room.BookingDetails?.bookingCode) {
+        console.error("Invalid room or booking details.");
+        return;
     }
-};
+    selectedRoom.value = room; // Set the selected room
+    checkInDialogVisible.value = true; // Show the dialog
+}
 
-const openDetailsDialog = (room) => {
-    selectedRoom.value = room;
-    isDetailsDialogVisible.value = true;
-};
+// Function to confirm check-in
+function confirmCheckIn(bookingCode) {
+    const room = rooms.value.find(
+        (r) => r.BookingDetails?.bookingCode === bookingCode,
+    );
+
+    if (room && room.status === "Booked") {
+        // Update the room status to Checked-In
+        room.status = "Occupied"; // Change status to Occupied
+        room.BookingDetails.checkInDate = new Date().toISOString(); // Set check-in date
+        room.BookingDetails.checkOutDate = checkOutDate.value.toISOString(); // Set check-out date
+
+        // Update selectedRoom if it matches
+        if (selectedRoom.value?.id === room.id) {
+            selectedRoom.value = { ...room };
+        }
+
+        // Simulate API call to update room status
+        updateRoomStatus(room.id, "Occupied", room.BookingDetails);
+
+        // Close the dialog
+        checkInDialogVisible.value = false;
+
+        // Show a success toast
+        toast.add({
+            severity: "success",
+            summary: "Check-In Successful",
+            detail: `Guest for Room ${room.roomNumber} has been checked in.`,
+            life: 3000,
+        });
+    } else {
+        // Close the dialog and show a failure toast
+        checkInDialogVisible.value = false;
+        toast.add({
+            severity: "warn",
+            summary: "Check-In Failed",
+            detail: `No active booking found with the code ${bookingCode}.`,
+            life: 3000,
+        });
+    }
+}
+// State for dialog visibility and selected room
+
+const DialogVisible = ref(false); // Controls visibility of the dialog
+
+// Function to open the dialog
+function openDialog(room) {
+    selectedRoom.value = room; // Set the selected room
+    DialogVisible.value = true; // Show the dialog
+}
+
+function closeBookingDialog() {
+    BookingDialogVisible.value = false; // Hide the dialog
+}
+
+// Function to open the dialog
+function openCancelDialog(room) {
+    if (!room || !room.BookingDetails?.bookingCode) {
+        console.error("No valid room or booking selected.");
+        return;
+    }
+    selectedRoom.value = room; // Set the selected room for cancellation
+    cancelDialogVisible.value = true; // Open the dialog
+}
+
+// Array to store canceled bookings (temporary storage for demonstration)
+const canceledBookings = [];
+
+// Function to cancel a booking
+// Function to confirm and cancel the booking
+function confirmAndCancelBooking(bookingCode) {
+    const room = rooms.value.find(
+        (r) => r.BookingDetails?.bookingCode === bookingCode,
+    );
+
+    if (room && room.status === "Booked") {
+        // Get the cancellation timestamp
+        const cancellationTimestamp = new Date().toISOString();
+
+        // Add the canceled booking details to a canceledBookings array (or database)
+        canceledBookings.push({
+            roomId: room.id,
+            roomNumber: room.roomNumber,
+            guestName: room.BookingDetails.guestName,
+            cellphone: room.BookingDetails.cellphone,
+            bookingCode: room.BookingDetails.bookingCode,
+            canceledAt: cancellationTimestamp,
+        });
+
+        // Reset the room details
+        room.status = "Available";
+        room.BookingDetails = null;
+
+        // Update the selected room if it matches
+        if (selectedRoom.value?.id === room.id) {
+            selectedRoom.value = { ...room };
+        }
+
+        // Simulate an API call to update room status
+        updateRoomStatus(room.id, "Available");
+
+        // Close the dialog
+        cancelDialogVisible.value = false;
+
+        // Show a success toast
+        toast.add({
+            severity: "info",
+            summary: "Booking Cancelled",
+            detail: `The booking for Room ${room.roomNumber} has been successfully cancelled.`,
+            life: 3000,
+        });
+    } else {
+        // Close the dialog and show a failure toast
+        cancelDialogVisible.value = false;
+        toast.add({
+            severity: "warn",
+            summary: "Cancellation Failed",
+            detail: `No active booking found with the code ${bookingCode}.`,
+            life: 3000,
+        });
+    }
+}
+
+// Reactive state for dialog visibility
+const BookingDialogVisible = ref(false); // Tracks visibility of the booking dialog
+
+// Reactive booking details
+const BookingDetails = ref({
+    guestName: null,
+    cellphone: null,
+    selectedHours: null,
+    selectedRate: null,
+});
+
+// Function to open the booking dialog
+function openBookingDialog() {
+    BookingDetails.value = {
+        guestName: "",
+        cellphone: "",
+        selectedHours: null,
+        selectedrate: null,
+    };
+    BookingDialogVisible.value = true;
+}
+
+// Function to update room status in the main rooms list
+function updateRoomStatus(roomId, status, BookingDetails = null) {
+    const room = rooms.value.find((r) => r.id === roomId);
+    if (room) {
+        room.status = status;
+
+        // If bookingDetails are provided, update the room's booking information
+        if (BookingDetails) {
+            room.bookingDetails = {
+                guestName: BookingDetails.guestName || "",
+                cellphone: BookingDetails.cellphone || "",
+                selectedHours: BookingDetails.selectedHours || 0,
+                selectedrate: BookingDetails.selectedrate || 0,
+                bookingTime: new Date().toLocaleString(), // Add a timestamp for reference
+            };
+        }
+    }
+}
+
+// Function to handle booking submission
+function submitBooking(BookingDetails) {
+    const room = rooms.value.find((r) => r.id === selectedRoom.value.id);
+
+    if (room) {
+        // Generate timestamp and unique booking code
+        const timestamp = new Date().toISOString();
+        const uniqueBookingCode = `BK-${room.id}-${Date.now().toString(36).toUpperCase()}`;
+
+        // Update room details
+        room.status = "Booked";
+        room.BookingDetails = {
+            guestName: BookingDetails.guestName,
+            cellphone: BookingDetails.cellphone,
+            selectedHours: BookingDetails.selectedHours,
+            selectedrate: BookingDetails.selectedrate,
+            bookingCode: uniqueBookingCode,
+            timestamp: timestamp,
+        };
+
+        // Update selectedRoom to reflect the updated room data
+        selectedRoom.value = { ...room };
+
+        // Simulate API call to update room status
+        updateRoomStatus(selectedRoom.value.id, "Booked");
+
+        // Show success toast notification
+        toast.add({
+            severity: "success",
+            summary: "Booking Confirmed",
+            detail: `Room ${room.roomNumber} booked successfully for ${room.BookingDetails.guestName}! Booking Code: ${uniqueBookingCode}`,
+            life: 3000,
+        });
+    }
+
+    // Close dialog and reset
+    BookingDialogVisible.value = false;
+}
+
+// Computed property for form validation
+const isFormValid = computed(() => {
+    const { guestName, cellphone, selectedHours, selectedRate } =
+        BookingDetails.value;
+    return !!(guestName && cellphone && selectedHours && selectedRate);
+});
 </script>
 
 <template>
-    <div class="grid grid-cols-12 gap-4 mb-5">
-        <!-- Total Available Rooms -->
-        <div class="col-span-12 lg:col-span-6 xl:col-span-3">
-            <div class="card mb-0">
-                <div class="flex justify-between mb-4">
-                    <div>
-                        <span class="block text-muted-color font-medium mb-4"
-                            >Available Rooms</span
-                        >
-                        <div
-                            class="text-surface-900 dark:text-surface-0 font-medium text-xl"
-                        >
-                            {{ stats.availableRooms }}
-                        </div>
-                    </div>
-                    <div
-                        class="flex items-center justify-center bg-green-100 dark:bg-green-400/10 rounded-border"
-                        style="width: 2.5rem; height: 2.5rem"
-                    >
-                        <i class="pi pi-table text-green-500 !text-xl"></i>
-                    </div>
-                </div>
-                <span class="text-primary font-medium"
-                    >{{ stats.newCleanedRooms }} new
-                </span>
-                <span class="text-muted-color text-[11px]"
-                    >rooms cleaned today</span
-                >
-            </div>
-        </div>
-
-        <!-- Total Occupied Rooms -->
-        <div class="col-span-12 lg:col-span-6 xl:col-span-3">
-            <div class="card mb-0">
-                <div class="flex justify-between mb-4">
-                    <div>
-                        <span class="block text-muted-color font-medium mb-4"
-                            >Occupied Rooms</span
-                        >
-                        <div
-                            class="text-surface-900 dark:text-surface-0 font-medium text-xl"
-                        >
-                            {{ stats.occupiedRooms }}
-                        </div>
-                    </div>
-                    <div
-                        class="flex items-center justify-center bg-red-100 dark:bg-red-400/10 rounded-border"
-                        style="width: 2.5rem; height: 2.5rem"
-                    >
-                        <i class="pi pi-table text-red-500 !text-xl"></i>
-                    </div>
-                </div>
-                <span class="text-primary font-medium"
-                    >{{ stats.newCheckIns }} new
-                </span>
-                <span class="text-muted-color">check-ins today</span>
-            </div>
-        </div>
-
-        <!-- Number of Bookings -->
-        <div class="col-span-12 lg:col-span-6 xl:col-span-3">
-            <div class="card mb-0">
-                <div class="flex justify-between mb-4">
-                    <div>
-                        <span class="block text-muted-color font-medium mb-4"
-                            >Bookings</span
-                        >
-                        <div
-                            class="text-surface-900 dark:text-surface-0 font-medium text-xl"
-                        >
-                            {{ stats.bookings }}
-                        </div>
-                    </div>
-                    <div
-                        class="flex items-center justify-center bg-blue-100 dark:bg-blue-400/10 rounded-border"
-                        style="width: 2.5rem; height: 2.5rem"
-                    >
-                        <i class="pi pi-calendar text-blue-500 !text-xl"></i>
-                    </div>
-                </div>
-                <span class="text-primary font-medium"
-                    >{{ stats.newBookings }} new
-                </span>
-                <span class="text-muted-color">bookings today</span>
-            </div>
-        </div>
-
-        <!-- Revenue -->
-        <div class="col-span-12 lg:col-span-6 xl:col-span-3">
-            <div class="card mb-0">
-                <div class="flex justify-between mb-4">
-                    <div>
-                        <span class="block text-muted-color font-medium mb-4"
-                            >Cleaning</span
-                        >
-                        <div
-                            class="text-surface-900 dark:text-surface-0 font-medium text-xl"
-                        >
-                            {{ stats.newCleanedRooms }}
-                        </div>
-                    </div>
-                    <div
-                        class="flex items-center justify-center bg-purple-100 dark:bg-purple-400/10 rounded-border"
-                        style="width: 2.5rem; height: 2.5rem"
-                    >
-                        <i class="pi pi-cog text-purple-500 text-xl"></i>
-                    </div>
-                </div>
-                <span class="text-primary font-medium"
-                    >{{ stats.newCleanedRooms }} new</span
-                >
-                <span class="text-muted-color">rooms cleaned today</span>
-            </div>
-        </div>
-    </div>
     <div class="card">
         <!-- Room Count Cards -->
 
         <h2 class="text-xl font-bold mb-5">Room List</h2>
         <div class="flex justify-between items-center mb-4">
-            <div
-                class="card grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
-            >
-                <InputText
-                    class="col-span-2"
-                    placeholder="Search by Room Number"
-                    v-model="searchQuery"
-                />
+            <div class="card flex items-center gap-4 p-4">
+                <div class="flex items-center gap-2">
+                    <Button
+                        type="button"
+                        icon="pi pi-filter-slash"
+                        label="Clear"
+                        outlined
+                    />
+                    <IconField>
+                        <InputIcon>
+                            <i class="pi pi-search" />
+                        </InputIcon>
+                        <InputText placeholder="Keyword Search" />
+                    </IconField>
+                </div>
                 <Select
                     v-model="selectedFilter.roomType"
                     :options="roomTypes"
                     placeholder="Filter by Room Type"
                     class="w-full"
                 />
-                <Select
-                    v-model="selectedFilter.status"
-                    :options="statuses"
-                    placeholder="Filter by Status"
-                    class="w-full"
-                />
-                <Select
-                    v-model="selectedFilter.cleaningStatus"
-                    :options="cleaningStatuses"
-                    placeholder="Filter by Cleaning Status"
-                    class="w-full"
-                />
+
                 <Select
                     v-model="sortBy"
                     :options="sortOptions"
@@ -361,122 +430,420 @@ const openDetailsDialog = (room) => {
                 />
             </div>
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-6">
+        <div>
+            <!-- Room Grid -->
             <div
-                v-for="room in filteredRooms"
-                :key="room.id"
-                :class="[
-                    'card border rounded-lg p-6 shadow-md flex flex-col gap-4',
-                ]"
+                class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 justify-center"
             >
-                <!-- Room Image and Status -->
-                <div>
-                    <div class="relative">
-                        <img
-                            :src="room.image"
-                            alt="Room Image"
-                            class="rounded-md w-full h-48 object-cover"
-                        />
-                        <Tag
-                            :value="room.status"
-                            :severity="getSeverity(room)"
-                            class="absolute top-2 left-2"
-                        />
+                <div
+                    v-for="room in filteredRooms"
+                    :key="room.id"
+                    class="relative w-full p-6 rounded-lg shadow-md border cursor-pointer hover:shadow-lg transition-shadow"
+                    @click="openDialog(room)"
+                >
+                    <!-- Room Details -->
+                    <div class="text-center text-2xl font-bold mb-2">
+                        Room {{ room.roomNumber }}
                     </div>
-                    <h3 class="text-lg font-semibold mt-4">
-                        {{ room.roomNumber }} - {{ room.type }}
-                    </h3>
-                    <p class="text-sm">{{ room.description }}</p>
-                    <div class="text-sm mt-2">
-                        <strong>Occupancy:</strong> 2 person(s)
+                    <div class="text-center text-lg font-medium mb-2">
+                        Floor: {{ room.floor }}
                     </div>
-                    <div class="text-sm mt-2">
-                        <strong>Floor:</strong> {{ room.floor }}
+                    <div class="text-center text-lg font-medium mb-4">
+                        Size: {{ room.type }}
                     </div>
-                    <!-- Added floor information -->
-                </div>
 
-                <!-- Pricing Section -->
-                <div class="grid grid-cols-3 gap-4">
+                    <!-- Status Badge -->
                     <div
-                        class="bg-white dark:bg-slate-600 border border-gray-200 shadow-sm p-4 rounded-lg flex flex-col items-center"
+                        :class="[
+                            'text-center px-4 py-2 rounded-full  text-white font-medium',
+                            room.status === 'Available'
+                                ? 'bg-green-500'
+                                : room.status === 'Booked'
+                                  ? 'bg-blue-500'
+                                  : room.status === 'Cleaning'
+                                    ? 'bg-orange-500'
+                                    : room.status === 'Occupied'
+                                      ? 'bg-red-500'
+                                      : 'bg-gray-400',
+                        ]"
                     >
-                        <p class="font-bold text-sm">6hrs:</p>
-                        <p class="text-green-600 font-semibold">
-                            ₱{{ room.price["6 Hours"] }}
-                        </p>
+                        {{ room.status }}
                     </div>
-                    <div
-                        class="bg-white border dark:bg-slate-600 border-gray-200 shadow-sm p-4 rounded-lg flex flex-col items-center"
-                    >
-                        <p class="font-bold text-sm">12hrs:</p>
-                        <p class="text-green-600 font-semibold">
-                            ₱{{ room.price["12 Hours"] }}
-                        </p>
-                    </div>
-                    <div
-                        class="bg-white border dark:bg-slate-600 border-gray-200 shadow-sm p-4 rounded-lg flex flex-col items-center"
-                    >
-                        <p class="font-bold text-sm">24hrs:</p>
-                        <p class="text-green-600 font-semibold">
-                            ₱{{ room.price["24 Hours"] }}
-                        </p>
-                    </div>
-                </div>
-
-                <!-- Button Actions -->
-                <div class="flex gap-4 mt-4">
-                    <!-- Details Button -->
-                    <Button
-                        label="Details"
-                        icon="pi pi-info-circle"
-                        class="p-button-primary w-full"
-                        @click="openDetailsDialog(room)"
-                    />
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Room Details Dialog -->
-        <Dialog
-            v-model:visible="isDetailsDialogVisible"
-            :modal="true"
-            :dismissable-mask="true"
-            :header="selectedRoom?.name || 'Room Details'"
-            :style="{ width: '30vw' }"
-        >
-            <div v-if="selectedRoom">
-                <h3 class="text-lg font-bold">{{ selectedRoom.name }}</h3>
-                <p class="text-sm">{{ selectedRoom.description }}</p>
-                <div class="mt-4">
-                    <h4 class="font-semibold">Room Details</h4>
-                    <p>Type: {{ selectedRoom.type }}</p>
-                    <p>Floor: {{ selectedRoom.floor }}</p>
+    <!-- Dialog -->
+    <Dialog
+        v-model:visible="DialogVisible"
+        header="Room Details"
+        :modal="true"
+        :dismissable-mask="true"
+        style="width: 70vh"
+    >
+        <template #header>
+            <div class="font-bold text-xl">
+                Room {{ selectedRoom?.roomNumber }} | {{ selectedRoom?.type }}
+            </div>
+            <div>
+                <p
+                    class="font-medium text-white py-2 px-4 rounded-md"
+                    :class="{
+                        'bg-green-500': selectedRoom?.status === 'Available',
+                        'bg-blue-500': selectedRoom?.status === 'Booked',
+                        'bg-yellow-500': selectedRoom?.status === 'Cleaning',
+                        'bg-red-500': selectedRoom?.status === 'Occupied',
+                        'bg-gray-500': ![
+                            'Available',
+                            'Booked',
+                            'Cleaning',
+                            'Occupied',
+                        ].includes(selectedRoom?.status),
+                    }"
+                >
+                    {{ selectedRoom?.status }}
+                </p>
+            </div>
+        </template>
+
+        <div v-if="selectedRoom">
+            <!-- Available Room Actions -->
+            <div
+                v-if="selectedRoom.status === 'Available'"
+                class="flex flex-col gap-2"
+            >
+                <div class="flex gap-2 mt-4 justify-center">
+                    <Button
+                        class="p-button-primary w-full p-2 rounded-lg"
+                        @click="openBookingDialog"
+                    >
+                        Book
+                    </Button>
+                    <Button
+                        class="p-button-primary w-full p-2 rounded-lg"
+                        @click="handleRoomAction('checkIn', selectedRoom)"
+                    >
+                        Check In
+                    </Button>
                 </div>
-                <div class="mt-4">
-                    <h4 class="font-semibold">Rates</h4>
-                    <p>
-                        6 Hours:
-                        {{ formatPrice(selectedRoom.price["6 Hours"]) }}
+            </div>
+
+            <!-- Booked Room Actions -->
+            <div
+                v-if="selectedRoom.status === 'Booked'"
+                class="flex flex-col gap-2"
+            >
+                <div v-if="selectedRoom.BookingDetails">
+                    <h4 class="text-xl mb-4 font-bold">Booking Details</h4>
+                    <p class="font-medium m-2">
+                        Guest Name:
+                        {{ selectedRoom.BookingDetails.guestName || "N/A" }}
                     </p>
-                    <p>
-                        12 Hours:
-                        {{ formatPrice(selectedRoom.price["12 Hours"]) }}
+                    <p class="font-medium m-2">
+                        Cellphone:
+                        {{ selectedRoom.BookingDetails.cellphone || "N/A" }}
                     </p>
-                    <p>
-                        24 Hours:
-                        {{ formatPrice(selectedRoom.price["24 Hours"]) }}
+                    <p class="font-medium m-2">
+                        Hours:
+                        {{ selectedRoom.BookingDetails.selectedHours || "N/A" }}
+                    </p>
+                    <p class="font-medium m-2">
+                        Rate:
+                        {{ selectedRoom.BookingDetails.selectedrate || "N/A" }}
+                    </p>
+                    <p class="font-medium m-2">
+                        Booking Code:
+                        {{ selectedRoom.BookingDetails.bookingCode || "N/A" }}
+                    </p>
+                    <p class="font-medium m-2">
+                        Date/Time:
+                        {{
+                            selectedRoom.BookingDetails.timestamp
+                                ? new Date(
+                                      selectedRoom.BookingDetails.timestamp,
+                                  ).toLocaleString("en-US", {
+                                      year: "numeric",
+                                      month: "long",
+                                      day: "numeric",
+                                      hour: "numeric",
+                                      minute: "2-digit",
+                                      hour12: true,
+                                  })
+                                : "N/A"
+                        }}
                     </p>
                 </div>
-                <div v-if="selectedRoom.status === 'Occupied'" class="mt-4">
-                    <h4 class="font-semibold">Current Booking</h4>
-                    <p>Guest Name: {{ selectedRoom.guest?.name || "N/A" }}</p>
-                    <p>Check-In: {{ selectedRoom.guest?.checkIn || "N/A" }}</p>
-                    <p>
-                        Check-Out: {{ selectedRoom.guest?.checkOut || "N/A" }}
+
+                <div class="flex gap-2 mt-4 justify-center">
+                    <Button
+                        class="p-button-primary w-full p-2 rounded-lg"
+                        @click="openCheckInDialog(selectedRoom)"
+                    >
+                        Check In
+                    </Button>
+                    <Button
+                        class="p-button-primary w-full p-2 rounded-lg"
+                        @click="openCancelDialog(selectedRoom)"
+                    >
+                        Cancel Booking
+                    </Button>
+                </div>
+            </div>
+
+            <!-- Occupied Room Actions -->
+            <div
+                v-if="selectedRoom.status === 'Occupied'"
+                class="flex flex-col gap-2"
+            >
+                <p>Status: {{ selectedRoom.status }}</p>
+                <p>
+                    <strong>Guest Name:</strong>
+                    {{ selectedRoom.guest?.name || "N/A" }}
+                </p>
+                <p>
+                    <strong>Check-In:</strong>
+                    {{ selectedRoom.guest?.checkIn || "N/A" }}
+                </p>
+                <p>
+                    <strong>Check-Out:</strong>
+                    {{ selectedRoom.guest?.checkOut || "N/A" }}
+                </p>
+                <div class="flex gap-2 mt-4 justify-center">
+                    <Button
+                        class="p-button-primary w-full rounded-lg"
+                        @click="handleRoomAction('checkOut', selectedRoom)"
+                    >
+                        Check Out
+                    </Button>
+                    <Button
+                        class="p-button-primary w-full rounded-lg"
+                        @click="handleRoomAction('extend', selectedRoom)"
+                    >
+                        Extend Stay
+                    </Button>
+                </div>
+            </div>
+        </div>
+    </Dialog>
+
+    <!-- Booking Dialog -->
+    <Dialog
+        v-model:visible="BookingDialogVisible"
+        :modal="true"
+        :dismissable-mask="true"
+        style="width: 70vh"
+    >
+        <template #header>
+            <div class="font-bold text-xl">
+                Room {{ selectedRoom?.roomNumber }} | {{ selectedRoom?.type }}
+            </div>
+        </template>
+
+        <div class="p-4">
+            <!-- Customer Information -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1"> Name</label>
+                <InputText
+                    v-model="BookingDetails.guestName"
+                    placeholder="Enter your name"
+                    class="w-full"
+                    required
+                />
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1"
+                    >Cellphone Number</label
+                >
+                <InputText
+                    v-model="BookingDetails.cellphone"
+                    placeholder="Enter your cellphone number"
+                    class="w-full"
+                    required
+                />
+            </div>
+
+            <div class="mb-4">
+                <h3 class="text-sm font-medium mb-2">Hours of Stay</h3>
+                <div class="grid grid-cols-3 gap-4">
+                    <div
+                        v-for="(rate, hours) in selectedRoom?.rate"
+                        :key="hours"
+                        class="border cursor-pointer p-4 text-center rounded-lg shadow-sm transition-all duration-200"
+                        :class="{
+                            'bg-green-500 text-white':
+                                BookingDetails.selectedHours === hours,
+                            'bg-gray-100':
+                                BookingDetails.selectedHours !== hours,
+                        }"
+                        @click="selectHours(hours)"
+                    >
+                        <h4 class="text-lg font-bold">{{ hours }}</h4>
+                        <!-- Ensure rate is valid before calling .toFixed() -->
+                        <p class="text-sm">
+                            ₱{{ rate ? rate.toFixed(2) : "N/A" }}
+                        </p>
+                    </div>
+                </div>
+                <!-- Display Selected Hours and Rate -->
+                <div class="mt-4">
+                    <p class="font-medium">
+                        Selected Hours:
+                        {{ BookingDetails.selectedHours || "None" }}
+                    </p>
+                    <p class="font-medium">
+                        Selected Rate:
+                        {{
+                            BookingDetails.selectedRate !== null
+                                ? `₱${BookingDetails.selectedRate.toFixed(2)}`
+                                : "None"
+                        }}
                     </p>
                 </div>
             </div>
-        </Dialog>
-    </div>
+
+            <!-- Action Buttons -->
+            <div class="flex gap-4 mt-6 justify-end">
+                <Button
+                    label="Cancel"
+                    class="p-button-primary"
+                    @click="closeBookingDialog"
+                />
+                <Button
+                    label="Submit Booking"
+                    class="p-button-primary"
+                    :disabled="!isFormValid"
+                    @click="submitBooking(BookingDetails)"
+                />
+            </div>
+        </div>
+    </Dialog>
+
+    <!-- Cancel Booking Dialog -->
+    <Dialog
+        v-model:visible="cancelDialogVisible"
+        header="Confirm Cancellation"
+        :modal="true"
+        :closable="false"
+        :draggable="false"
+        :breakpoints="{ '960px': '75vw', '640px': '90vw' }"
+        style="width: 30vw"
+    >
+        <div>
+            <p>
+                Are you sure you want to cancel the booking for Room
+                {{ selectedRoom?.roomNumber || "N/A" }} |
+                {{ selectedRoom?.roomType || "N/A" }} |
+                {{ selectedRoom?.floor || "N/A" }}?
+            </p>
+        </div>
+        <div class="flex justify-end mt-4">
+            <Button
+                label="No"
+                class="p-button-secondary mr-2"
+                @click="cancelDialogVisible = false"
+            />
+            <Button
+                label="Yes"
+                class="p-button-danger"
+                @click="
+                    confirmAndCancelBooking(
+                        selectedRoom.BookingDetails.bookingCode,
+                    )
+                "
+            />
+        </div>
+    </Dialog>
+
+    <!-- Check-In Dialog -->
+    <Dialog
+        v-model:visible="checkInDialogVisible"
+        header="Confirm Check-In"
+        :modal="true"
+        :draggable="false"
+        :breakpoints="{ '960px': '75vw', '640px': '90vw' }"
+        style="width: 30vw"
+    >
+        <div>
+            <p class="mb-4 text-xl font-bold">
+                {{ selectedRoom?.roomNumber || "N/A" }} |
+                {{ selectedRoom?.type || "N/A" }} |
+                {{ selectedRoom?.floor || "N/A" }}
+            </p>
+        </div>
+        <div class="flex flex-col mt-4">
+            <!-- Booking Details -->
+            <p class="font-medium mb-2">
+                Guest Name:
+                {{ selectedRoom?.BookingDetails?.guestName || "N/A" }}
+            </p>
+            <p class="font-medium mb-2">
+                Cellphone:
+                {{ selectedRoom?.BookingDetails?.cellphone || "N/A" }}
+            </p>
+            <p class="font-medium mb-2">
+                Booking Code:
+                {{ selectedRoom?.BookingDetails?.bookingCode || "N/A" }}
+            </p>
+            <p class="font-medium mb-2">
+                Selected Hours:
+                {{ selectedRoom?.BookingDetails?.selectedHours || "N/A" }}
+            </p>
+            <p class="font-medium mb-2">
+                Total Price:
+                {{
+                    selectedRoom?.BookingDetails?.totalPrice
+                        ? `$${selectedRoom.BookingDetails.totalPrice.toFixed(2)}`
+                        : "N/A"
+                }}
+            </p>
+            <p class="font-medium mb-2">
+                Check-In Date:
+                {{
+                    checkInDate
+                        ? new Date(checkInDate).toLocaleString("en-US", {
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
+                              hour: "numeric",
+                              minute: "2-digit",
+                              hour12: true,
+                          })
+                        : "N/A"
+                }}
+            </p>
+            <p class="font-medium mb-2">
+                Check-Out Date:
+                {{
+                    checkOutDate
+                        ? new Date(checkOutDate).toLocaleString("en-US", {
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
+                              hour: "numeric",
+                              minute: "2-digit",
+                              hour12: true,
+                          })
+                        : "N/A"
+                }}
+            </p>
+            <p class="font-medium mb-2">
+                Additional Notes:
+                {{ selectedRoom?.BookingDetails?.notes || "N/A" }}
+            </p>
+        </div>
+        <div class="flex justify-end mt-4">
+            <Button
+                label="No"
+                class="p-button-primary w-full mr-2"
+                @click="checkInDialogVisible = false"
+            />
+            <Button
+                label="Yes"
+                class="p-button-primary w-full"
+                @click="confirmCheckIn(selectedRoom.BookingDetails.bookingCode)"
+            />
+        </div>
+    </Dialog>
+    <Toast />
 </template>
