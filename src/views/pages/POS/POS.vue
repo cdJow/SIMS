@@ -11,6 +11,9 @@ export default {
             cart: [],
             confirmationDialogVisible: false,
             billDialogVisible: false, // For displaying the bill
+            history: [], // To store checkout history
+            historyDialogVisible: false, // For viewing checkout details
+            selectedHistory: null, // Selected history details
         };
     },
     computed: {
@@ -68,8 +71,25 @@ export default {
             this.confirmationDialogVisible = true;
         },
         confirmCheckout() {
+            const timestamp = new Date().toLocaleString(); // Get current date and time
+            const checkoutItems = [...this.cart]; // Clone the cart items
+            const total = this.cartTotal;
+
+            // Add the checkout details to history
+            this.history.push({
+                timestamp,
+                items: checkoutItems,
+                total,
+            });
+
+            // Clear the cart and reset dialogs
+            this.cart = [];
             this.confirmationDialogVisible = false;
-            this.billDialogVisible = true; // Open the bill dialog after confirmation
+            this.billDialogVisible = true; // Open the bill dialog
+        },
+        viewHistoryDetails(history) {
+            this.selectedHistory = history;
+            this.historyDialogVisible = true;
         },
     },
 };
@@ -260,6 +280,65 @@ export default {
                     label="Close"
                     class="p-button-primary"
                     @click="billDialogVisible = false"
+                />
+            </div>
+        </Dialog>
+
+        <!-- Transaction History Section -->
+        <div class="mt-8">
+            <h2 class="text-xl font-bold mb-4">Transaction History</h2>
+            <div
+                v-for="entry in history"
+                :key="entry.timestamp"
+                class="p-4 border rounded-lg shadow-md mb-4"
+            >
+                <div class="font-bold text-lg">
+                    Date & Time: {{ entry.timestamp }}
+                </div>
+                <div class="text-right mt-2">
+                    <Button
+                        label="View Details"
+                        class="p-button-primary"
+                        @click="viewHistoryDetails(entry)"
+                    />
+                </div>
+            </div>
+        </div>
+
+        <!-- History Details Dialog -->
+        <Dialog
+            v-model:visible="historyDialogVisible"
+            header="Transaction Details"
+            :modal="true"
+            class="w-1/2"
+        >
+            <div v-if="selectedHistory">
+                <h3 class="text-lg font-bold mb-4">Details</h3>
+                <ul>
+                    <li
+                        v-for="item in selectedHistory.items"
+                        :key="item.id"
+                        class="flex justify-between mb-2"
+                    >
+                        <span>{{ item.quantity }} x {{ item.name }}</span>
+                        <span
+                            >₱{{
+                                (item.quantity * item.price).toFixed(2)
+                            }}</span
+                        >
+                    </li>
+                </ul>
+                <hr class="my-4" />
+                <div class="flex justify-between font-bold text-lg">
+                    <span>Total</span>
+                    <span>₱{{ selectedHistory.total.toFixed(2) }}</span>
+                </div>
+            </div>
+            <div class="flex justify-end mt-4">
+                <Button
+                    label="Close"
+                    class="p-button-primary"
+                    @click="historyDialogVisible = false"
                 />
             </div>
         </Dialog>
