@@ -2,28 +2,61 @@
 export default {
     data() {
         return {
-            searchQuery: "",
+            productSearchQuery: "", // Search query for products
+            historySearchDate: null, // Selected date for filtering history
             products: [
                 { id: 1, name: "Bottled Water", price: 20.0, stock: 50 },
                 { id: 2, name: "Chips", price: 50.0, stock: 30 },
                 { id: 3, name: "Chocolate", price: 70.0, stock: 20 },
             ],
-            cart: [],
+            cart: [], // Stores cart items
             confirmationDialogVisible: false,
             billDialogVisible: false, // For displaying the bill
-            history: [], // To store checkout history
+            history: [
+                {
+                    timestamp: "2025-01-10 14:00",
+                    items: [
+                        {
+                            id: 1,
+                            name: "Bottled Water",
+                            price: 20.0,
+                            quantity: 2,
+                        },
+                    ],
+                    total: 40,
+                },
+                {
+                    timestamp: "2025-01-11 15:30",
+                    items: [{ id: 2, name: "Chips", price: 50.0, quantity: 3 }],
+                    total: 150,
+                },
+            ], // Transaction history
             historyDialogVisible: false, // For viewing checkout details
             selectedHistory: null, // Selected history details
         };
     },
     computed: {
+        // Filter products based on the product search query
         filteredProducts() {
+            const query = this.productSearchQuery.toLowerCase();
             return this.products.filter((product) =>
-                product.name
-                    .toLowerCase()
-                    .includes(this.searchQuery.toLowerCase())
+                product.name.toLowerCase().includes(query)
             );
         },
+        // Filter transaction history based on the selected date
+        filteredHistory() {
+            if (!this.historySearchDate) return this.history; // If no date is selected, show all history
+            const selectedDate = new Date(this.historySearchDate);
+            return this.history.filter((entry) => {
+                const entryDate = new Date(entry.timestamp);
+                return (
+                    selectedDate.getFullYear() === entryDate.getFullYear() &&
+                    selectedDate.getMonth() === entryDate.getMonth() &&
+                    selectedDate.getDate() === entryDate.getDate()
+                );
+            });
+        },
+        // Calculate the total cart amount
         cartTotal() {
             return this.cart.reduce(
                 (total, item) => total + item.price * item.quantity,
@@ -32,9 +65,6 @@ export default {
         },
     },
     methods: {
-        searchProducts() {
-            console.log("Search query:", this.searchQuery);
-        },
         addToCart(product) {
             const existingItem = this.cart.find(
                 (item) => item.id === product.id
@@ -71,8 +101,15 @@ export default {
             this.confirmationDialogVisible = true;
         },
         confirmCheckout() {
-            const timestamp = new Date().toLocaleString(); // Get current date and time
-            const checkoutItems = [...this.cart]; // Clone the cart items
+            const timestamp = new Date().toLocaleString("en-US", {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+                hour: "numeric",
+                minute: "numeric",
+                hour12: true,
+            });
+            const checkoutItems = [...this.cart];
             const total = this.cartTotal;
 
             // Add the checkout details to history
@@ -85,7 +122,7 @@ export default {
             // Clear the cart and reset dialogs
             this.cart = [];
             this.confirmationDialogVisible = false;
-            this.billDialogVisible = true; // Open the bill dialog
+            this.billDialogVisible = true;
         },
         viewHistoryDetails(history) {
             this.selectedHistory = history;
@@ -105,7 +142,7 @@ export default {
                 <!-- Search Bar -->
                 <div class="flex items-center mb-4">
                     <InputText
-                        v-model="searchQuery"
+                        v-model="productSearchQuery"
                         placeholder="Search for products..."
                         class="w-full mr-2"
                     />
@@ -255,11 +292,11 @@ export default {
             :modal="true"
             class="w-1/2"
         >
-            <div>
+            <div v-if="history.length > 0">
                 <h3 class="text-lg font-bold mb-2">Bill Details</h3>
                 <ul>
                     <li
-                        v-for="item in cart"
+                        v-for="item in history[history.length - 1].items"
                         :key="item.id"
                         class="flex justify-between"
                     >
@@ -272,8 +309,15 @@ export default {
                 <hr class="my-4" />
                 <div class="flex justify-between font-bold text-lg">
                     <span>Total</span>
-                    <span>₱{{ cartTotal.toFixed(2) }}</span>
+                    <span
+                        >₱{{
+                            history[history.length - 1].total.toFixed(2)
+                        }}</span
+                    >
                 </div>
+            </div>
+            <div v-else>
+                <p>No checkout data available.</p>
             </div>
             <div class="flex justify-end mt-4">
                 <Button
@@ -283,24 +327,47 @@ export default {
                 />
             </div>
         </Dialog>
-
         <!-- Transaction History Section -->
         <div class="mt-8">
-            <h2 class="text-xl font-bold mb-4">Transaction History</h2>
-            <div
-                v-for="entry in history"
-                :key="entry.timestamp"
-                class="p-4 border rounded-lg shadow-md mb-4"
-            >
-                <div class="font-bold text-lg">
-                    Date & Time: {{ entry.timestamp }}
-                </div>
-                <div class="text-right mt-2">
-                    <Button
-                        label="View Details"
-                        class="p-button-primary"
-                        @click="viewHistoryDetails(entry)"
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">Transaction History</h2>
+                <div class="flex items-center gap-2">
+                    <!-- Calendar Input for Date Search -->
+                    <Calendar
+                        v-model="historySearchDate"
+                        placeholder="Select date..."
+                        class="w-full max-w-md"
+                        dateFormat="mm/dd/yy"
+                        showIcon
+                        @input="filterHistory"
                     />
+                </div>
+            </div>
+            <div
+                class="overflow-y-auto max-h-96"
+                style="max-height: 24rem; padding-right: 0.5rem"
+            >
+                <div
+                    v-for="entry in filteredHistory"
+                    :key="entry.timestamp"
+                    class="p-2 border rounded-lg shadow-md mb-4"
+                    style="
+                        max-height: 5rem;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                    "
+                >
+                    <div class="font-bold text-lg">
+                        Date: {{ entry.timestamp }}
+                    </div>
+                    <div class="text-right mt-2">
+                        <Button
+                            label="View Details"
+                            class="p-button-primary"
+                            @click="viewHistoryDetails(entry)"
+                        />
+                    </div>
                 </div>
             </div>
         </div>
@@ -312,7 +379,11 @@ export default {
             :modal="true"
             class="w-1/2"
         >
-            <div v-if="selectedHistory">
+            <div
+                v-if="selectedHistory"
+                class="max-h-96 overflow-y-auto"
+                style="max-height: 24rem; overflow-y: auto; padding: 1rem"
+            >
                 <h3 class="text-lg font-bold mb-4">Details</h3>
                 <ul>
                     <li
