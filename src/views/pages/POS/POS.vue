@@ -10,6 +10,7 @@ export default {
             ],
             cart: [],
             confirmationDialogVisible: false,
+            billDialogVisible: false, // For displaying the bill
         };
     },
     computed: {
@@ -17,24 +18,23 @@ export default {
             return this.products.filter((product) =>
                 product.name
                     .toLowerCase()
-                    .includes(this.searchQuery.toLowerCase()),
+                    .includes(this.searchQuery.toLowerCase())
             );
         },
         cartTotal() {
             return this.cart.reduce(
                 (total, item) => total + item.price * item.quantity,
-                0,
+                0
             );
         },
     },
     methods: {
         searchProducts() {
-            // Logic for searching products (if dynamic search is needed)
             console.log("Search query:", this.searchQuery);
         },
         addToCart(product) {
             const existingItem = this.cart.find(
-                (item) => item.id === product.id,
+                (item) => item.id === product.id
             );
             if (existingItem) {
                 if (existingItem.quantity < product.stock) {
@@ -46,6 +46,21 @@ export default {
                 this.cart.push({ ...product, quantity: 1 });
             }
         },
+        increaseQuantity(item) {
+            const product = this.products.find((p) => p.id === item.id);
+            if (product && item.quantity < product.stock) {
+                item.quantity += 1;
+            } else {
+                alert("Stock limit reached.");
+            }
+        },
+        decreaseQuantity(item) {
+            if (item.quantity > 1) {
+                item.quantity -= 1;
+            } else {
+                this.removeFromCart(item.id);
+            }
+        },
         removeFromCart(productId) {
             this.cart = this.cart.filter((item) => item.id !== productId);
         },
@@ -53,9 +68,8 @@ export default {
             this.confirmationDialogVisible = true;
         },
         confirmCheckout() {
-            console.log("Checkout successful. Cart items:", this.cart);
-            this.cart = [];
             this.confirmationDialogVisible = false;
+            this.billDialogVisible = true; // Open the bill dialog after confirmation
         },
     },
 };
@@ -65,68 +79,131 @@ export default {
     <div class="p-4 card">
         <h1 class="text-2xl font-bold mb-4">Mini-Store POS</h1>
 
-        <!-- Search Bar -->
-        <div class="flex items-center mb-4">
-            <InputText
-                v-model="searchQuery"
-                placeholder="Search for products..."
-                class="w-full mr-2"
-            />
-            <Button
-                label="Search"
-                icon="pi pi-search"
-                class="p-button-primary"
-                @click="searchProducts"
-            />
-        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <!-- Mini-Store Column -->
+            <div class="border rounded-lg shadow-md p-4">
+                <!-- Search Bar -->
+                <div class="flex items-center mb-4">
+                    <InputText
+                        v-model="searchQuery"
+                        placeholder="Search for products..."
+                        class="w-full mr-2"
+                    />
+                    <Button
+                        label="Search"
+                        icon="pi pi-search"
+                        class="p-button-primary"
+                        @click="searchProducts"
+                    />
+                </div>
 
-        <!-- Product List -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div
-                v-for="product in filteredProducts"
-                :key="product.id"
-                class="p-4 border rounded-lg shadow-md"
-            >
-                <h3 class="text-lg font-medium">{{ product.name }}</h3>
-                <p class="text-sm text-gray-600">
-                    Price: ₱{{ product.price.toFixed(2) }}
-                </p>
-                <p class="text-sm text-gray-600">Stock: {{ product.stock }}</p>
+                <!-- Product List -->
+                <div
+                    class="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto"
+                    style="max-height: 400px"
+                >
+                    <div
+                        v-for="product in filteredProducts"
+                        :key="product.id"
+                        class="p-4 border rounded-lg shadow-md"
+                    >
+                        <h3 class="text-lg font-medium">{{ product.name }}</h3>
+                        <p class="text-sm text-gray-600">
+                            Price: ₱{{ product.price.toFixed(2) }}
+                        </p>
+                        <p class="text-sm text-gray-600">
+                            Stock: {{ product.stock }}
+                        </p>
+                        <Button
+                            label="Add to Cart"
+                            icon="pi pi-plus"
+                            class="p-button-primary mt-2 w-full"
+                            :disabled="product.stock <= 0"
+                            @click="addToCart(product)"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cart Column -->
+            <div class="border rounded-lg shadow-md p-4">
+                <h2 class="text-xl font-bold mb-4">Cart</h2>
+
+                <div class="overflow-y-auto" style="max-height: 400px">
+                    <DataTable
+                        :value="cart"
+                        class="p-datatable-sm shadow-md"
+                        responsiveLayout="scroll"
+                    >
+                        <!-- Column for Product Name -->
+                        <Column field="name" header="Product" />
+
+                        <!-- Column for Quantity with Increase/Decrease -->
+                        <Column header="Quantity">
+                            <template #body="slotProps">
+                                <div class="flex items-center gap-2">
+                                    <Button
+                                        icon="pi pi-minus"
+                                        class="p-button-text"
+                                        @click="
+                                            decreaseQuantity(slotProps.data)
+                                        "
+                                    />
+                                    <span>{{ slotProps.data.quantity }}</span>
+                                    <Button
+                                        icon="pi pi-plus"
+                                        class="p-button-text"
+                                        @click="
+                                            increaseQuantity(slotProps.data)
+                                        "
+                                    />
+                                </div>
+                            </template>
+                        </Column>
+
+                        <!-- Column for Price -->
+                        <Column header="Price (₱)">
+                            <template #body="slotProps">
+                                ₱{{ slotProps.data.price.toFixed(2) }}
+                            </template>
+                        </Column>
+
+                        <!-- Column for Subtotal -->
+                        <Column header="Subtotal (₱)">
+                            <template #body="slotProps">
+                                ₱{{
+                                    (
+                                        slotProps.data.price *
+                                        slotProps.data.quantity
+                                    ).toFixed(2)
+                                }}
+                            </template>
+                        </Column>
+
+                        <!-- Column for Actions -->
+                        <Column header="Actions">
+                            <template #body="slotProps">
+                                <Button
+                                    icon="pi pi-trash"
+                                    class="p-button-danger"
+                                    @click="removeFromCart(slotProps.data.id)"
+                                />
+                            </template>
+                        </Column>
+                    </DataTable>
+                </div>
+
+                <div class="text-right font-bold text-lg mt-4">
+                    Total: ₱{{ cartTotal.toFixed(2) }}
+                </div>
                 <Button
-                    label="Add to Cart"
-                    icon="pi pi-plus"
-                    class="p-button-success mt-2 w-full"
-                    :disabled="product.stock <= 0"
-                    @click="addToCart(product)"
+                    label="Checkout"
+                    icon="pi pi-check"
+                    class="p-button-primary mt-4 w-full"
+                    :disabled="cart.length === 0"
+                    @click="checkout"
                 />
             </div>
-        </div>
-
-        <!-- Cart Section -->
-        <div class="mt-8">
-            <h2 class="text-xl font-bold mb-4">Cart</h2>
-
-            <DataTable :value="cart" class="w-full mb-4">
-                <Column field="name" header="Product" />
-                <Column field="quantity" header="Quantity" />
-                <Column field="price" header="Price" />
-                <Column
-                    header="Actions"
-                    body="actionTemplate"
-                    :style="{ width: '150px' }"
-                />
-            </DataTable>
-
-            <div class="text-right font-bold text-lg">
-                Total: ₱{{ cartTotal.toFixed(2) }}
-            </div>
-            <Button
-                label="Checkout"
-                icon="pi pi-check"
-                class="p-button-primary mt-4 w-full"
-                :disabled="cart.length === 0"
-                @click="checkout"
-            />
         </div>
 
         <!-- Confirmation Dialog -->
@@ -147,6 +224,42 @@ export default {
                     label="Confirm"
                     class="p-button-primary"
                     @click="confirmCheckout"
+                />
+            </div>
+        </Dialog>
+
+        <!-- Bill Dialog -->
+        <Dialog
+            v-model:visible="billDialogVisible"
+            header="Bill Summary"
+            :modal="true"
+            class="w-1/2"
+        >
+            <div>
+                <h3 class="text-lg font-bold mb-2">Bill Details</h3>
+                <ul>
+                    <li
+                        v-for="item in cart"
+                        :key="item.id"
+                        class="flex justify-between"
+                    >
+                        <span>{{ item.quantity }} x {{ item.name }}</span>
+                        <span>
+                            ₱{{ (item.quantity * item.price).toFixed(2) }}
+                        </span>
+                    </li>
+                </ul>
+                <hr class="my-4" />
+                <div class="flex justify-between font-bold text-lg">
+                    <span>Total</span>
+                    <span>₱{{ cartTotal.toFixed(2) }}</span>
+                </div>
+            </div>
+            <div class="flex justify-end mt-4">
+                <Button
+                    label="Close"
+                    class="p-button-primary"
+                    @click="billDialogVisible = false"
                 />
             </div>
         </Dialog>

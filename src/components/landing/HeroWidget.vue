@@ -35,8 +35,8 @@ export default {
             <p class="font-normal text-2xl leading-normal md:mt-4 text-white">
                 Situated in Iligan City where beauty of nature and culture meet.
             </p>
-            <router-link to="/auth/signup" class="mt-6 primary-button"
-                >BOOK NOW</router-link
+            <router-link to="/BookingPanel" class="mt-6 primary-button"
+                >Book Now</router-link
             >
         </div>
     </div>

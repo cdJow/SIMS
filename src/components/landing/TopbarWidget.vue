@@ -114,15 +114,5 @@ function smoothScroll(id) {
                 </a>
             </li>
         </ul>
-        <!-- Profile Icon for Guest Login -->
-        <div class="ml-auto">
-            <a
-                href="/auth/login"
-                class="flex items-center text-surface-900 dark:text-surface-0 font-medium text-xl gap-2"
-            >
-                <i class="pi pi-user" style="font-size: 1em"></i>
-                Login
-            </a>
-        </div>
     </div>
 </template>
