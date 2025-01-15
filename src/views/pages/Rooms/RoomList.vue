@@ -1,124 +1,13 @@
 <script setup>
+import { rooms } from "@/service/RoomListService.js";
 import { useToast } from "primevue/usetoast";
 import { computed, ref } from "vue";
 
-const rooms = ref([
-    {
-        id: 1,
-        roomNumber: "101",
-        floor: "1st Floor",
-        image: "https://via.placeholder.com/300",
-        name: "Room 101",
-        type: "Double Size Bed",
-        description: "Perfect for two guests with additional space.",
-        status: "Available",
-        rate: {
-            "6 Hours": 50,
-            "12 Hours": 80,
-            "24 Hours": 120,
-        },
-        cleaningStatus: "Clean",
-        guestDetails: {
-            guestName: null,
-            cellphone: null,
-            selectedHours: null,
-            checkIn: null,
-            checkOut: null,
-        },
-    },
-    {
-        id: 2,
-        roomNumber: "102",
-        floor: "1st Floor",
-        image: "https://via.placeholder.com/300",
-        name: "Room 102",
-        type: "Single Size Bed",
-        description: "A cozy room for a single guest.",
-        status: "Occupied",
-        rate: {
-            "6 Hours": 30,
-            "12 Hours": 50,
-            "24 Hours": 90,
-        },
-        cleaningStatus: "Clean",
-        guestDetails: {
-            guestName: "John Doe",
-            cellphone: "123-456-7890",
-            selectedHours: 24,
-            checkIn: "2025-01-06 14:00",
-            checkOut: "2025-01-07 14:00",
-        },
-    },
-    {
-        id: 3,
-        roomNumber: "103",
-        floor: "2nd Floor",
-        image: "https://via.placeholder.com/300",
-        name: "Room 103",
-        type: "King Size Bed",
-        description: "A luxurious suite for families or groups.",
-        status: "Available",
-        rate: {
-            "6 Hours": 100,
-            "12 Hours": 150,
-            "24 Hours": 250,
-        },
-        cleaningStatus: "Needs Cleaning",
-        guestDetails: {
-            guestName: null,
-            cellphone: null,
-            selectedHours: null,
-            checkIn: null,
-            checkOut: null,
-        },
-    },
-    {
-        id: 4,
-        roomNumber: "104",
-        floor: "2nd Floor",
-        image: "https://via.placeholder.com/300",
-        name: "Room 104",
-        type: "King Size Bed",
-        description: "A luxurious suite for families or groups.",
-        status: "Cleaning",
-        rate: {
-            "6 Hours": 100,
-            "12 Hours": 150,
-            "24 Hours": 250,
-        },
-        cleaningStatus: "Needs Cleaning",
-        guestDetails: {
-            guestName: null,
-            cellphone: null,
-            selectedHours: null,
-            checkIn: null,
-            checkOut: null,
-        },
-    },
-    {
-        id: 5,
-        roomNumber: "105",
-        floor: "2nd Floor",
-        image: "https://via.placeholder.com/300",
-        name: "Room 105",
-        type: "Double Size Bed",
-        description: "Spacious room perfect for couples.",
-        status: "Booked",
-        rate: {
-            "6 Hours": 60,
-            "12 Hours": 100,
-            "24 Hours": 140,
-        },
-        cleaningStatus: "In Progress",
-        guestDetails: {
-            guestName: "Jane Smith",
-            cellphone: "987-654-3210",
-            selectedHours: 12,
-            checkIn: "2025-01-06 10:00",
-            checkOut: "2025-01-06 22:00",
-        },
-    },
-]);
+function selectHours(hours) {
+    BookingDetails.value.selectedHours = hours;
+    const rate = selectedRoom.value?.rate[hours]; // Use the selected room's rate object
+    BookingDetails.value.selectedrate = rate ? rate : null; // Set the rate if valid
+}
 
 // Filters and Sorting
 const selectedFilter = ref({
@@ -144,12 +33,6 @@ const roomTypes = ref(["Single", "Double", "Suite"]);
 const sortOptions = ref(["Room Number", "Type", "Status"]);
 const cancelDialogVisible = ref(false); // Tracks visibility of the dialog
 
-function selectHours(hours) {
-    BookingDetails.value.selectedHours = hours; // Update selected hours
-    const rate = selectedRoom.value?.rate[hours]; // Get the corresponding rate
-    BookingDetails.value.selectedrate = rate ? rate : null; // Set rate if valid, otherwise null
-}
-
 // Filtered Rooms
 function getFilteredRooms() {
     return computed(() => {
@@ -168,20 +51,6 @@ const checkInDialogVisible = ref(false); // Controls the visibility of the dialo
 // Derived data: Check-In and Check-Out dates
 
 const checkInDate = computed(() => new Date()); // Check-in is always the current date/time
-const checkOutDate = computed(() => {
-    if (
-        selectedRoom.value?.BookingDetails?.selectedHours &&
-        checkInDate.value
-    ) {
-        const hours = Number(selectedRoom.value.BookingDetails.selectedHours);
-        if (!isNaN(hours)) {
-            const checkOut = new Date(checkInDate.value);
-            checkOut.setHours(checkOut.getHours() + hours); // Add hours to check-in date
-            return checkOut;
-        }
-    }
-    return null;
-});
 
 // Function to open the dialog
 function openCheckInDialog(room) {
@@ -200,21 +69,39 @@ function confirmCheckIn(bookingCode) {
     );
 
     if (room && room.status === "Booked") {
-        // Check if checkOutDate.value is set
-        if (!checkOutDate.value) {
+        // Validate selectedHours
+        if (!selectHours || selectHours <= 0) {
             toast.add({
                 severity: "error",
                 summary: "Check-In Error",
-                detail: "Please select a valid check-out date.",
+                detail: "Please select the duration of stay (hours).",
                 life: 3000,
             });
-            return; // Exit the function if checkOutDate is not valid
+            return; // Exit the function if selectedHours is not valid
+        }
+
+        // Automatically calculate the checkout date based on selected hours
+        const checkInDate = new Date(); // Assume the current date/time is the check-in date
+        const checkOutDate = new Date(
+            checkInDate.getTime() + selectHours * 60 * 60 * 1000,
+        );
+
+        // Ensure calculated date is valid
+        if (isNaN(checkOutDate.getTime())) {
+            console.error("Error: Invalid checkout date calculation.");
+            toast.add({
+                severity: "error",
+                summary: "Check-In Error",
+                detail: "Failed to calculate the checkout date. Please try again.",
+                life: 3000,
+            });
+            return;
         }
 
         // Update the room status to Checked-In
         room.status = "Occupied"; // Change status to Occupied
-        room.BookingDetails.checkInDate = new Date().toISOString(); // Set check-in date
-        room.BookingDetails.checkOutDate = checkOutDate.value.toISOString(); // Set check-out date
+        room.BookingDetails.checkInDate = checkInDate.toISOString(); // Set check-in date
+        room.BookingDetails.checkOutDate = checkOutDate.toISOString(); // Set check-out date
 
         // Update selectedRoom if it matches
         if (selectedRoom.value?.id === room.id) {
@@ -265,7 +152,7 @@ function confirmCheckIn(bookingCode) {
 // Helper function to reset booking dialog state
 function resetBookingDialog() {
     // Reset any form fields or related data
-    checkOutDate.value = null; // Reset check-out date
+
     selectedRoom.value = null; // Clear selected room
 }
 
@@ -743,7 +630,7 @@ const isFormValid = computed(() => {
                     <p class="font-medium">
                         Selected Rate:
                         {{
-                            BookingDetails.selectedRate !== null
+                            BookingDetails.selectedrate !== null
                                 ? `₱${BookingDetails.selectedrate}`
                                 : "None"
                         }}
@@ -842,7 +729,7 @@ const isFormValid = computed(() => {
             <p class="font-medium">
                 Selected Rate:
                 {{
-                    BookingDetails.selectedRate !== null
+                    BookingDetails.selectedrate !== null
                         ? `₱${BookingDetails.selectedrate}`
                         : "None"
                 }}
