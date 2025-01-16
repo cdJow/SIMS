@@ -273,14 +273,14 @@ export default {
             <p>Are you sure you want to proceed with checkout?</p>
             <div class="flex justify-end mt-4">
                 <Button
-                    label="Cancel"
-                    class="p-button-secondary mr-2"
-                    @click="confirmationDialogVisible = false"
+                    label="Confirm"
+                    class="p-button-primary mr-2"
+                    @click="confirmCheckout"
                 />
                 <Button
-                    label="Confirm"
-                    class="p-button-primary"
-                    @click="confirmCheckout"
+                    label="Cancel"
+                    class="p-button-secondary"
+                    @click="confirmationDialogVisible = false"
                 />
             </div>
         </Dialog>
