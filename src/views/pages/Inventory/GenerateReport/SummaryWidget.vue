@@ -112,13 +112,15 @@
                     <div
                         class="text-gray-900 dark:text-white font-bold text-2xl"
                     >
-                        $25,000
+                        ₱25,000
                     </div>
                 </div>
                 <div
                     class="flex items-center justify-center w-12 h-12 bg-orange-100 dark:bg-orange-500/10 rounded-lg"
                 >
-                    <i class="pi pi-dollar text-orange-500 text-2xl"></i>
+                    <i class="pi" style="color: #f59e0b; font-size: 1.25rem"
+                        >₱</i
+                    >
                 </div>
             </div>
             <span class="text-orange-600 font-semibold">5% increase </span>

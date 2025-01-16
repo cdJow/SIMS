@@ -26,11 +26,9 @@ const selectedRoom = ref({
     selectedrate: null, // Rate corresponding to selected hours
 });
 
-const sortBy = ref(null);
-
 // Dropdown Options
 const roomTypes = ref(["Single", "Double", "Suite"]);
-const sortOptions = ref(["Room Number", "Type", "Status"]);
+
 const cancelDialogVisible = ref(false); // Tracks visibility of the dialog
 
 // Filtered Rooms
@@ -60,6 +58,17 @@ function openCheckInDialog(room) {
     }
     selectedRoom.value = room; // Set the selected room
     checkInDialogVisible.value = true; // Show the dialog
+}
+
+// Functions
+function formatDate(date) {
+    if (!date) return "N/A";
+    return new Date(date).toLocaleString(); // Formats the date and time
+}
+
+function handleRoomAction(action, room) {
+    console.log(`Action: ${action}`, room);
+    // Add logic for API calls or modal displays
 }
 
 // Function to confirm check-in
@@ -162,8 +171,16 @@ const DialogVisible = ref(false); // Controls visibility of the dialog
 
 // Function to open the dialog
 function openDialog(room) {
-    selectedRoom.value = room; // Set the selected room
-    DialogVisible.value = true; // Show the dialog
+    if (!room) {
+        console.error("Room data is missing.");
+        return;
+    }
+    // Ensure BookingDetails exists for Booked or Occupied rooms
+    if (room.status === "Booked" && !room.BookingDetails) {
+        console.error("BookingDetails is missing for Booked room:", room);
+    }
+    selectedRoom.value = room;
+    DialogVisible.value = true;
 }
 
 function closeBookingDialog() {
@@ -280,15 +297,26 @@ function updateRoomStatus(roomId, status, BookingDetails = null) {
 }
 
 // Function to handle booking submission
+function generateBookingCode() {
+    // Generate a random alphanumeric string of at least 4 characters
+    const randomString = Math.random()
+        .toString(36)
+        .substring(2, 6)
+        .toUpperCase(); // Ensure exactly 4 characters
+    return `BK-${randomString}`;
+}
+
 function submitBooking(BookingDetails) {
+    console.log("Submitted Booking Details:", BookingDetails); // Log submitted details
+
     const room = rooms.value.find((r) => r.id === selectedRoom.value.id);
 
     if (room) {
-        // Generate timestamp and unique booking code
-        const timestamp = new Date().toISOString();
-        const uniqueBookingCode = `BK-${room.id}-${Date.now().toString(36).toUpperCase()}`;
+        // Generate unique booking code
+        const uniqueBookingCode = generateBookingCode(room.id);
 
         // Update room details
+        const timestamp = new Date().toISOString();
         room.status = "Booked";
         room.BookingDetails = {
             guestName: BookingDetails.guestName,
@@ -327,43 +355,73 @@ const isFormValid = computed(() => {
 </script>
 
 <template>
-    <div class="card">
-        <!-- Room Count Cards -->
+    <div class="flex flex-row gap-4">
+        <!-- Filter Section -->
+        <div class="w-1/5 p-4 card rounded-lg">
+            <h3 class="text-lg font-bold mb-4">Filters</h3>
 
-        <h2 class="text-xl font-bold mb-5">Room List</h2>
-        <div class="flex justify-between items-center mb-4">
-            <div class="card flex items-center gap-4 p-4">
-                <div class="flex items-center gap-2">
-                    <Button
-                        type="button"
-                        icon="pi pi-filter-slash"
-                        label="Clear"
-                        outlined
-                    />
-                    <IconField>
-                        <InputIcon>
-                            <i class="pi pi-search" />
-                        </InputIcon>
-                        <InputText placeholder="Keyword Search" />
-                    </IconField>
-                </div>
+            <!-- Clear and Search -->
+            <div class="mb-4">
+                <Button
+                    type="button"
+                    icon="pi pi-filter-slash"
+                    label="Clear"
+                    outlined
+                    class="mb-4 w-full"
+                />
+                <IconField>
+                    <InputIcon>
+                        <i class="pi pi-search" />
+                    </InputIcon>
+                    <InputText placeholder="Keyword Search" class="w-full" />
+                </IconField>
+            </div>
+
+            <!-- Room Type Filter -->
+            <div class="mb-4">
                 <Select
                     v-model="selectedFilter.roomType"
                     :options="roomTypes"
                     placeholder="Filter by Room Type"
                     class="w-full"
                 />
+            </div>
 
-                <Select
-                    v-model="sortBy"
-                    :options="sortOptions"
-                    placeholder="Sort By"
-                    class="w-full"
-                />
+            <!-- Status Filters -->
+            <div class="mb-4">
+                <h4 class="font-bold text-lg mb-2">Filter by Status</h4>
+                <div class="flex flex-col gap-2">
+                    <div>
+                        <Checkbox
+                            v-model="selectedFilter.available"
+                            label="Available"
+                            class="mr-2"
+                        />
+                        <label for="available">Available</label>
+                    </div>
+                    <div>
+                        <Checkbox
+                            v-model="selectedFilter.occupied"
+                            label="Occupied"
+                            class="mr-2"
+                        />
+                        <label for="occupied">Occupied</label>
+                    </div>
+                    <div>
+                        <Checkbox
+                            v-model="selectedFilter.cleaning"
+                            label="Cleaning"
+                            class="mr-2"
+                        />
+                        <label for="cleaning">Cleaning</label>
+                    </div>
+                </div>
             </div>
         </div>
-        <div>
-            <!-- Room Grid -->
+
+        <!-- Room Grid Section -->
+        <div class="flex-1 card p-4">
+            <h2 class="text-xl font-bold mb-5">Room List</h2>
             <div
                 class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 justify-center"
             >
@@ -402,8 +460,18 @@ const isFormValid = computed(() => {
         style="width: 70vh"
     >
         <template #header>
-            <div class="font-bold text-xl">
-                Room {{ selectedRoom?.roomNumber }} | {{ selectedRoom?.type }}
+            <div class="space-y-2">
+                <!-- Room Number and Type -->
+                <div class="font-bold text-xl uppercase">
+                    Room {{ selectedRoom?.roomNumber }} |
+                    {{ selectedRoom?.type }}
+                </div>
+                <!-- Floor Information -->
+                <div>
+                    <p class="text-md uppercase">
+                        {{ selectedRoom?.floor }}
+                    </p>
+                </div>
             </div>
             <div>
                 <p
@@ -427,19 +495,6 @@ const isFormValid = computed(() => {
         </template>
 
         <div v-if="selectedRoom">
-            <div>
-                <div class="text-xl font-bold mb-2">Room Details</div>
-            </div>
-            <div>
-                <p class="font-medium py-2 px-2 rounded-md">
-                    Floor: {{ selectedRoom?.floor }}
-                </p>
-            </div>
-            <div>
-                <p class="font-medium py-2 px-2 rounded-md">
-                    Room Type: {{ selectedRoom?.type }}
-                </p>
-            </div>
             <!-- Available Room Actions -->
             <div
                 v-if="selectedRoom.status === 'Available'"
@@ -450,112 +505,111 @@ const isFormValid = computed(() => {
                         class="p-button-primary w-full p-2 rounded-lg"
                         @click="openBookingDialog"
                     >
-                        Book
-                    </Button>
-                    <Button
-                        class="p-button-primary w-full p-2 rounded-lg"
-                        @click="handleRoomAction('checkIn', selectedRoom)"
-                    >
-                        Check In
+                        Book / Check In
                     </Button>
                 </div>
             </div>
 
+            <div v-if="selectedRoom.status === 'Cleaning'">
+                <Button
+                    class="p-button-primary w-full p-2 rounded-lg"
+                    @click="handleRoomAction('clean', selectedRoom)"
+                >
+                    Done Cleaning</Button
+                >
+            </div>
+
             <!-- Booked Room Actions -->
-            <div
-                v-if="selectedRoom.status === 'Booked'"
-                class="flex flex-col gap-2"
-            >
-                <div v-if="selectedRoom.BookingDetails">
-                    <h4 class="text-xl mb-4 font-bold">Booking Details</h4>
-                    <p class="font-medium m-2">
+            <div v-if="selectedRoom && selectedRoom.status === 'Booked'">
+                <!-- Booked Room Details -->
+                <div
+                    v-if="
+                        selectedRoom.status === 'Booked' &&
+                        selectedRoom.guestDetails
+                    "
+                    class="flex flex-col gap-4 p-4"
+                >
+                    <h4 class="text-xl mb-2 font-bold">Booking Details</h4>
+                    <p>
                         Guest Name:
-                        {{ selectedRoom.BookingDetails.guestName || "N/A" }}
+                        {{ selectedRoom?.guestDetails?.guestName || "N/A" }}
                     </p>
-                    <p class="font-medium m-2">
+                    <p>
                         Cellphone:
-                        {{ selectedRoom.BookingDetails.cellphone || "N/A" }}
+                        {{ selectedRoom?.guestDetails?.cellphone || "N/A" }}
                     </p>
-                    <p class="font-medium m-2">
+                    <p>
                         Hours:
-                        {{ selectedRoom.BookingDetails.selectedHours || "N/A" }}
+                        {{ selectedRoom?.guestDetails?.selectedHours || "N/A" }}
                     </p>
-                    <p class="font-medium m-2">
+                    <p>
                         Rate:
                         {{
-                            selectedRoom.BookingDetails.selectedrate !== null &&
-                            selectedRoom.BookingDetails.selectedrate !==
-                                undefined
-                                ? `₱${selectedRoom.BookingDetails.selectedrate.toFixed(2)}`
+                            selectedRoom.guestDetails?.rate !== undefined
+                                ? `₱${selectedRoom?.guestDetails?.rate?.toFixed(2)}`
                                 : "N/A"
                         }}
                     </p>
-                    <p class="font-medium m-2">
+                    <p>
                         Booking Code:
-                        {{ selectedRoom.BookingDetails.bookingCode || "N/A" }}
-                    </p>
-                    <p class="font-medium m-2">
-                        Date/Time:
-                        {{
-                            selectedRoom.BookingDetails.timestamp
-                                ? new Date(
-                                      selectedRoom.BookingDetails.timestamp,
-                                  ).toLocaleString("en-US", {
-                                      year: "numeric",
-                                      month: "long",
-                                      day: "numeric",
-                                      hour: "numeric",
-                                      minute: "2-digit",
-                                      hour12: true,
-                                  })
-                                : "N/A"
-                        }}
+                        {{ selectedRoom.guestDetails?.bookingCode || "N/A" }}
                     </p>
                 </div>
 
+                <!-- Actions for Booked Rooms -->
                 <div class="flex gap-2 mt-4 justify-center">
                     <Button
-                        class="p-button-primary w-full p-2 rounded-lg"
+                        label="Check In"
+                        class="p-button-primary w-full rounded-lg"
                         @click="openCheckInDialog(selectedRoom)"
-                    >
-                        Check In
-                    </Button>
+                    />
                     <Button
-                        class="p-button-primary w-full p-2 rounded-lg"
+                        label="Cancel Booking"
+                        class="p-button-primary w-full rounded-lg"
                         @click="openCancelDialog(selectedRoom)"
-                    >
-                        Cancel Booking
-                    </Button>
+                    />
                 </div>
             </div>
 
             <!-- Occupied Room Actions -->
             <div
                 v-if="selectedRoom.status === 'Occupied'"
-                class="flex flex-col gap-2"
+                class="flex flex-col gap-4"
             >
-                <p>Status: {{ selectedRoom.status }}</p>
-                <p>
+                <p class="">
                     <strong>Guest Name:</strong>
-                    {{ selectedRoom.guest?.name || "N/A" }}
+                    {{ selectedRoom.guestDetails?.guestName || "N/A" }}
                 </p>
-                <p>
+                <p class="">
                     <strong>Check-In:</strong>
-                    {{ selectedRoom.guest?.checkIn || "N/A" }}
+                    {{
+                        formatDate(selectedRoom.guestDetails?.checkIn) || "N/A"
+                    }}
                 </p>
-                <p>
+                <p class="">
                     <strong>Check-Out:</strong>
-                    {{ selectedRoom.guest?.checkOut || "N/A" }}
+                    {{
+                        formatDate(selectedRoom.guestDetails?.checkOut) || "N/A"
+                    }}
+                </p>
+                <p class="">
+                    <strong>Booking Code:</strong>
+                    {{ selectedRoom.guestDetails?.bookingCode || "N/A" }}
+                </p>
+                <p class="">
+                    <strong>Rate:</strong> ${{
+                        selectedRoom.guestDetails?.rate || "N/A"
+                    }}
                 </p>
                 <div class="flex gap-2 mt-4 justify-center">
                     <Button
-                        class="p-button-primary w-full rounded-lg"
+                        class="p-button-primary w-full"
                         @click="handleRoomAction('checkOut', selectedRoom)"
                     >
                         Check Out
                     </Button>
                     <Button
-                        class="p-button-primary w-full rounded-lg"
+                        class="p-button-primary w-full"
                         @click="handleRoomAction('extend', selectedRoom)"
                     >
                         Extend Stay
@@ -621,33 +675,18 @@ const isFormValid = computed(() => {
                         <p class="text-sm">₱{{ rate ? rate : "N/A" }}</p>
                     </div>
                 </div>
-                <!-- Display Selected Hours and Rate -->
-                <div class="mt-4">
-                    <p class="font-medium">
-                        Selected Hours:
-                        {{ BookingDetails.selectedHours || "None" }}
-                    </p>
-                    <p class="font-medium">
-                        Selected Rate:
-                        {{
-                            BookingDetails.selectedrate !== null
-                                ? `₱${BookingDetails.selectedrate}`
-                                : "None"
-                        }}
-                    </p>
-                </div>
             </div>
 
             <!-- Action Buttons -->
             <div class="flex gap-4 mt-6 justify-end">
                 <Button
                     label="Cancel"
-                    class="p-button-primary"
+                    class="p-button-primary w-full"
                     @click="closeBookingDialog"
                 />
                 <Button
-                    label="Submit Booking"
-                    class="p-button-primary"
+                    label="Save "
+                    class="p-button-primary w-full"
                     :disabled="!isFormValid"
                     @click="submitBooking(BookingDetails)"
                 />
@@ -783,5 +822,6 @@ const isFormValid = computed(() => {
             />
         </div>
     </Dialog>
+
     <Toast />
 </template>

@@ -1,8 +1,6 @@
 <script setup>
 import BestSellingWidget from "@/components/dashboard/BestSellingWidget.vue";
-import CanceledBooking from "@/components/dashboard/CanceledBooking.vue";
 import Chart1Widgets from "@/components/dashboard/Chart1Widgets.vue";
-import NotificationsWidget from "@/components/dashboard/NotificationsWidget.vue";
 import RevenueStreamWidget from "@/components/dashboard/RevenueStreamWidget.vue";
 import StatsWidget from "@/components/dashboard/StatsWidget.vue";
 </script>
@@ -17,13 +15,11 @@ import StatsWidget from "@/components/dashboard/StatsWidget.vue";
         <!-- Left Section -->
         <div class="col-span-12 xl:col-span-6 space-y-6">
             <Chart1Widgets />
-            <CanceledBooking />
         </div>
 
         <!-- Right Section -->
         <div class="col-span-12 xl:col-span-6 space-y-6">
             <RevenueStreamWidget />
-            <NotificationsWidget />
         </div>
 
         <!-- Best Selling Widget -->
