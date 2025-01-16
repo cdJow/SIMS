@@ -1,114 +1,13 @@
 <script setup>
+import { rooms } from "@/service/RoomListService.js";
 import { useToast } from "primevue/usetoast";
 import { computed, ref } from "vue";
 
-const rooms = ref([
-    {
-        id: 1,
-        roomNumber: "101",
-        floor: "1st Floor",
-        image: "https://via.placeholder.com/300",
-        name: "Room 101",
-        type: "Double Size Bed",
-        description: "Perfect for two guests with additional space.",
-        status: "Available",
-        rate: {
-            "6 Hours": 50,
-            "12 Hours": 80,
-            "24 Hours": 120,
-        },
-        cleaningStatus: "Clean",
-        guestDetails: {
-            guestName: null, // Default guest name
-            cellphone: null, // Default cellphone
-            selectedHours: null, // Default selected hours
-        },
-    },
-    {
-        id: 2,
-        roomNumber: "102",
-        floor: "1st Floor",
-        image: "https://via.placeholder.com/300",
-        name: "Room 102",
-        type: "Single Size Bed",
-        description: "A cozy room for a single guest.",
-        status: "Occupied",
-        rate: {
-            "6 Hours": 30,
-            "12 Hours": 50,
-            "24 Hours": 90,
-        },
-        cleaningStatus: "Clean",
-        guest: {
-            name: "John Doe",
-            checkIn: "2025-01-06 14:00",
-            checkOut: "2025-01-07 11:00",
-        },
-    },
-    {
-        id: 3,
-        roomNumber: "103",
-        floor: "2nd Floor",
-        image: "https://via.placeholder.com/300",
-        name: "Room 103",
-        type: "King Size Bed",
-        description: "A luxurious suite for families or groups.",
-        status: "Available",
-        rate: {
-            "6 Hours": 100,
-            "12 Hours": 150,
-            "24 Hours": 250,
-        },
-        cleaningStatus: "Needs Cleaning",
-        guestDetails: {
-            guestName: null, // Default guest name
-            cellphone: null, // Default cellphone
-            selectedHours: null, // Default selected hours
-        },
-    },
-    {
-        id: 4,
-        roomNumber: "103",
-        floor: "2nd Floor",
-        image: "https://via.placeholder.com/300",
-        name: "Room 103",
-        type: "King Size Bed",
-        description: "A luxurious suite for families or groups.",
-        status: "Cleaning",
-        rate: {
-            "6 Hours": 100,
-            "12 Hours": 150,
-            "24 Hours": 250,
-        },
-        cleaningStatus: "Needs Cleaning",
-        guestDetails: {
-            guestName: null, // Default guest name
-            cellphone: null, // Default cellphone
-            selectedHours: null, // Default selected hours
-        },
-    },
-    {
-        id: 5,
-        roomNumber: "104",
-        floor: "2nd Floor",
-        image: "https://via.placeholder.com/300",
-        name: "Room 104",
-        type: "Double Size Bed",
-        description: "Spacious room perfect for couples.",
-        status: "Booked",
-        rate: {
-            "6 Hours": 60,
-            "12 Hours": 100,
-            "24 Hours": 140,
-        },
-        cleaningStatus: "In Progress",
-        guestDetails: {
-            guestName: null, // Default guest name
-            cellphone: null, // Default cellphone
-            selectedHours: null, // Default selected hours
-        },
-    },
-]);
+function selectHours(hours) {
+    BookingDetails.value.selectedHours = hours;
+    const rate = selectedRoom.value?.rate[hours]; // Use the selected room's rate object
+    BookingDetails.value.selectedrate = rate ? rate : null; // Set the rate if valid
+}
 
 // Filters and Sorting
 const selectedFilter = ref({
@@ -124,7 +23,7 @@ const selectedRoom = ref({
     guestName: null, // Null until a guest is assigned
     cellphone: null, // Null until a phone number is provided
     selectedHours: null, // Selected duration (e.g., "6 Hours")
-    selectedRate: null, // Rate corresponding to selected hours
+    selectedrate: null, // Rate corresponding to selected hours
 });
 
 const sortBy = ref(null);
@@ -133,12 +32,6 @@ const sortBy = ref(null);
 const roomTypes = ref(["Single", "Double", "Suite"]);
 const sortOptions = ref(["Room Number", "Type", "Status"]);
 const cancelDialogVisible = ref(false); // Tracks visibility of the dialog
-
-function selectHours(hours) {
-    BookingDetails.value.selectedHours = hours; // Update selected hours
-    const rate = selectedRoom.value?.rate[hours]; // Get the corresponding rate
-    BookingDetails.value.selectedRate = rate ? rate : null; // Set rate if valid, otherwise null
-}
 
 // Filtered Rooms
 function getFilteredRooms() {
@@ -158,20 +51,6 @@ const checkInDialogVisible = ref(false); // Controls the visibility of the dialo
 // Derived data: Check-In and Check-Out dates
 
 const checkInDate = computed(() => new Date()); // Check-in is always the current date/time
-const checkOutDate = computed(() => {
-    if (
-        selectedRoom.value?.BookingDetails?.selectedHours &&
-        checkInDate.value
-    ) {
-        const hours = Number(selectedRoom.value.BookingDetails.selectedHours);
-        if (!isNaN(hours)) {
-            const checkOut = new Date(checkInDate.value);
-            checkOut.setHours(checkOut.getHours() + hours); // Add hours to check-in date
-            return checkOut;
-        }
-    }
-    return null;
-});
 
 // Function to open the dialog
 function openCheckInDialog(room) {
@@ -190,10 +69,39 @@ function confirmCheckIn(bookingCode) {
     );
 
     if (room && room.status === "Booked") {
+        // Validate selectedHours
+        if (!selectHours || selectHours <= 0) {
+            toast.add({
+                severity: "error",
+                summary: "Check-In Error",
+                detail: "Please select the duration of stay (hours).",
+                life: 3000,
+            });
+            return; // Exit the function if selectedHours is not valid
+        }
+
+        // Automatically calculate the checkout date based on selected hours
+        const checkInDate = new Date(); // Assume the current date/time is the check-in date
+        const checkOutDate = new Date(
+            checkInDate.getTime() + selectHours * 60 * 60 * 1000,
+        );
+
+        // Ensure calculated date is valid
+        if (isNaN(checkOutDate.getTime())) {
+            console.error("Error: Invalid checkout date calculation.");
+            toast.add({
+                severity: "error",
+                summary: "Check-In Error",
+                detail: "Failed to calculate the checkout date. Please try again.",
+                life: 3000,
+            });
+            return;
+        }
+
         // Update the room status to Checked-In
         room.status = "Occupied"; // Change status to Occupied
-        room.BookingDetails.checkInDate = new Date().toISOString(); // Set check-in date
-        room.BookingDetails.checkOutDate = checkOutDate.value.toISOString(); // Set check-out date
+        room.BookingDetails.checkInDate = checkInDate.toISOString(); // Set check-in date
+        room.BookingDetails.checkOutDate = checkOutDate.toISOString(); // Set check-out date
 
         // Update selectedRoom if it matches
         if (selectedRoom.value?.id === room.id) {
@@ -201,18 +109,31 @@ function confirmCheckIn(bookingCode) {
         }
 
         // Simulate API call to update room status
-        updateRoomStatus(room.id, "Occupied", room.BookingDetails);
+        updateRoomStatus(room.id, "Occupied", room.BookingDetails)
+            .then(() => {
+                // Close the dialog after successful API call
+                checkInDialogVisible.value = false;
 
-        // Close the dialog
-        checkInDialogVisible.value = false;
+                // Show a success toast
+                toast.add({
+                    severity: "success",
+                    summary: "Check-In Successful",
+                    detail: `Guest for Room ${room.roomNumber} has been checked in.`,
+                    life: 3000,
+                });
 
-        // Show a success toast
-        toast.add({
-            severity: "success",
-            summary: "Check-In Successful",
-            detail: `Guest for Room ${room.roomNumber} has been checked in.`,
-            life: 3000,
-        });
+                // Reset the dialog state if needed
+                resetBookingDialog();
+            })
+            .catch((error) => {
+                console.error("Error updating room status:", error);
+                toast.add({
+                    severity: "error",
+                    summary: "Check-In Error",
+                    detail: "Failed to update room status. Please try again.",
+                    life: 3000,
+                });
+            });
     } else {
         // Close the dialog and show a failure toast
         checkInDialogVisible.value = false;
@@ -222,8 +143,19 @@ function confirmCheckIn(bookingCode) {
             detail: `No active booking found with the code ${bookingCode}.`,
             life: 3000,
         });
+
+        // Reset the dialog state
+        resetBookingDialog();
     }
 }
+
+// Helper function to reset booking dialog state
+function resetBookingDialog() {
+    // Reset any form fields or related data
+
+    selectedRoom.value = null; // Clear selected room
+}
+
 // State for dialog visibility and selected room
 
 const DialogVisible = ref(false); // Controls visibility of the dialog
@@ -314,7 +246,7 @@ const BookingDetails = ref({
     guestName: null,
     cellphone: null,
     selectedHours: null,
-    selectedRate: null,
+    selectedrate: null,
 });
 
 // Function to open the booking dialog
@@ -388,9 +320,9 @@ function submitBooking(BookingDetails) {
 
 // Computed property for form validation
 const isFormValid = computed(() => {
-    const { guestName, cellphone, selectedHours, selectedRate } =
+    const { guestName, cellphone, selectedHours, selectedrate } =
         BookingDetails.value;
-    return !!(guestName && cellphone && selectedHours && selectedRate);
+    return !!(guestName && cellphone && selectedHours && selectedrate);
 });
 </script>
 
@@ -438,36 +370,23 @@ const isFormValid = computed(() => {
                 <div
                     v-for="room in filteredRooms"
                     :key="room.id"
-                    class="relative w-full p-6 rounded-lg shadow-md border cursor-pointer hover:shadow-lg transition-shadow"
+                    class="relative w-full p-6 rounded-lg shadow-md border cursor-pointer hover:shadow-lg transition-shadow text-white"
+                    :class="{
+                        'bg-green-500': room.status === 'Available',
+                        'bg-blue-500': room.status === 'Booked',
+                        'bg-orange-500': room.status === 'Cleaning',
+                        'bg-red-500': room.status === 'Occupied',
+                        'bg-gray-400':
+                            room.status !== 'Available' &&
+                            room.status !== 'Booked' &&
+                            room.status !== 'Cleaning' &&
+                            room.status !== 'Occupied',
+                    }"
                     @click="openDialog(room)"
                 >
                     <!-- Room Details -->
                     <div class="text-center text-2xl font-bold mb-2">
                         Room {{ room.roomNumber }}
-                    </div>
-                    <div class="text-center text-lg font-medium mb-2">
-                        Floor: {{ room.floor }}
-                    </div>
-                    <div class="text-center text-lg font-medium mb-4">
-                        Size: {{ room.type }}
-                    </div>
-
-                    <!-- Status Badge -->
-                    <div
-                        :class="[
-                            'text-center px-4 py-2 rounded-full  text-white font-medium',
-                            room.status === 'Available'
-                                ? 'bg-green-500'
-                                : room.status === 'Booked'
-                                  ? 'bg-blue-500'
-                                  : room.status === 'Cleaning'
-                                    ? 'bg-orange-500'
-                                    : room.status === 'Occupied'
-                                      ? 'bg-red-500'
-                                      : 'bg-gray-400',
-                        ]"
-                    >
-                        {{ room.status }}
                     </div>
                 </div>
             </div>
@@ -508,6 +427,19 @@ const isFormValid = computed(() => {
         </template>
 
         <div v-if="selectedRoom">
+            <div>
+                <div class="text-xl font-bold mb-2">Room Details</div>
+            </div>
+            <div>
+                <p class="font-medium py-2 px-2 rounded-md">
+                    Floor: {{ selectedRoom?.floor }}
+                </p>
+            </div>
+            <div>
+                <p class="font-medium py-2 px-2 rounded-md">
+                    Room Type: {{ selectedRoom?.type }}
+                </p>
+            </div>
             <!-- Available Room Actions -->
             <div
                 v-if="selectedRoom.status === 'Available'"
@@ -550,7 +482,13 @@ const isFormValid = computed(() => {
                     </p>
                     <p class="font-medium m-2">
                         Rate:
-                        {{ selectedRoom.BookingDetails.selectedrate || "N/A" }}
+                        {{
+                            selectedRoom.BookingDetails.selectedrate !== null &&
+                            selectedRoom.BookingDetails.selectedrate !==
+                                undefined
+                                ? `₱${selectedRoom.BookingDetails.selectedrate.toFixed(2)}`
+                                : "N/A"
+                        }}
                     </p>
                     <p class="font-medium m-2">
                         Booking Code:
@@ -680,9 +618,7 @@ const isFormValid = computed(() => {
                     >
                         <h4 class="text-lg font-bold">{{ hours }}</h4>
                         <!-- Ensure rate is valid before calling .toFixed() -->
-                        <p class="text-sm">
-                            ₱{{ rate ? rate.toFixed(2) : "N/A" }}
-                        </p>
+                        <p class="text-sm">₱{{ rate ? rate : "N/A" }}</p>
                     </div>
                 </div>
                 <!-- Display Selected Hours and Rate -->
@@ -694,8 +630,8 @@ const isFormValid = computed(() => {
                     <p class="font-medium">
                         Selected Rate:
                         {{
-                            BookingDetails.selectedRate !== null
-                                ? `₱${BookingDetails.selectedRate.toFixed(2)}`
+                            BookingDetails.selectedrate !== null
+                                ? `₱${BookingDetails.selectedrate}`
                                 : "None"
                         }}
                     </p>
@@ -760,6 +696,7 @@ const isFormValid = computed(() => {
         v-model:visible="checkInDialogVisible"
         header="Confirm Check-In"
         :modal="true"
+        :dismissable-mask="true"
         :draggable="false"
         :breakpoints="{ '960px': '75vw', '640px': '90vw' }"
         style="width: 30vw"
@@ -789,14 +726,15 @@ const isFormValid = computed(() => {
                 Selected Hours:
                 {{ selectedRoom?.BookingDetails?.selectedHours || "N/A" }}
             </p>
-            <p class="font-medium mb-2">
-                Total Price:
+            <p class="font-medium">
+                Selected Rate:
                 {{
-                    selectedRoom?.BookingDetails?.totalPrice
-                        ? `$${selectedRoom.BookingDetails.totalPrice.toFixed(2)}`
-                        : "N/A"
+                    BookingDetails.selectedrate !== null
+                        ? `₱${BookingDetails.selectedrate}`
+                        : "None"
                 }}
             </p>
+
             <p class="font-medium mb-2">
                 Check-In Date:
                 {{

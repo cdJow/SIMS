@@ -8,7 +8,30 @@ export default {
                 { id: 1, name: "Bottled Water", price: 20.0, stock: 50 },
                 { id: 2, name: "Chips", price: 50.0, stock: 30 },
                 { id: 3, name: "Chocolate", price: 70.0, stock: 20 },
+                { id: 4, name: "Soda Can", price: 40.0, stock: 25 },
+                { id: 5, name: "Juice Box", price: 60.0, stock: 35 },
+                { id: 6, name: "Sandwich", price: 100.0, stock: 15 },
+                { id: 7, name: "Cookies", price: 80.0, stock: 18 },
+                { id: 8, name: "Ice Cream", price: 120.0, stock: 10 },
+                { id: 9, name: "Instant Noodles", price: 45.0, stock: 40 },
+                { id: 10, name: "Energy Drink", price: 85.0, stock: 25 },
+                { id: 11, name: "Bread Loaf", price: 55.0, stock: 20 },
+                { id: 12, name: "Milk Carton", price: 65.0, stock: 30 },
+                { id: 13, name: "Chewing Gum", price: 10.0, stock: 100 },
+                { id: 14, name: "Granola Bar", price: 90.0, stock: 15 },
+                { id: 15, name: "Tea Bags (Pack)", price: 50.0, stock: 40 },
+                { id: 16, name: "Coffee Pack", price: 120.0, stock: 12 },
+                { id: 17, name: "Packaged Salad", price: 150.0, stock: 8 },
+                { id: 18, name: "Peanut Butter Jar", price: 200.0, stock: 5 },
+                { id: 19, name: "Jam Jar", price: 180.0, stock: 6 },
+                { id: 20, name: "Box of Cereal", price: 250.0, stock: 10 },
+                { id: 21, name: "Pack of Biscuits", price: 35.0, stock: 50 },
+                { id: 22, name: "Frozen Pizza", price: 300.0, stock: 4 },
+                { id: 23, name: "Canned Soup", price: 75.0, stock: 20 },
+                { id: 24, name: "Bag of Rice (1kg)", price: 120.0, stock: 10 },
+                { id: 25, name: "Cooking Oil (1L)", price: 180.0, stock: 7 },
             ],
+
             cart: [], // Stores cart items
             confirmationDialogVisible: false,
             billDialogVisible: false, // For displaying the bill
@@ -40,7 +63,7 @@ export default {
         filteredProducts() {
             const query = this.productSearchQuery.toLowerCase();
             return this.products.filter((product) =>
-                product.name.toLowerCase().includes(query)
+                product.name.toLowerCase().includes(query),
             );
         },
         // Filter transaction history based on the selected date
@@ -60,14 +83,14 @@ export default {
         cartTotal() {
             return this.cart.reduce(
                 (total, item) => total + item.price * item.quantity,
-                0
+                0,
             );
         },
     },
     methods: {
         addToCart(product) {
             const existingItem = this.cart.find(
-                (item) => item.id === product.id
+                (item) => item.id === product.id,
             );
             if (existingItem) {
                 if (existingItem.quantity < product.stock) {
