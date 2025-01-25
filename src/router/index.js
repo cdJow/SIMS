@@ -58,6 +58,12 @@ const router = createRouter({
                 },
 
                 {
+                    path: "/POS/Extra",
+                    name: " Extra",
+                    component: () => import("@/views/pages/POS/Extra.vue"),
+                },
+
+                {
                     path: "/Inventory/ViewInventory/ViewItems",
                     name: "View Inventory",
                     component: () =>

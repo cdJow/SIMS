@@ -3,12 +3,12 @@ export default {
     data() {
         return {
             stats: {
-                availableRooms: 45,
-                newCleanedRooms: 12,
-                occupiedRooms: 78,
-                newCheckIns: 3,
-                bookings: 152,
-                newBookings: 24,
+                operationalRooms: 80,
+
+                underMaintinance: 4,
+
+                totalRooms: 84,
+
                 revenue: 5500,
                 revenueIncrease: 12,
             },
@@ -25,12 +25,12 @@ export default {
                 <div class="flex justify-between mb-4">
                     <div>
                         <span class="block text-muted-color font-medium mb-4"
-                            >Available Rooms</span
+                            >Operational Rooms</span
                         >
                         <div
-                            class="text-surface-900 dark:text-surface-0 font-medium text-xl"
+                            class="text-green-500 dark:text-surface-0 text-4xl font-semi-bold"
                         >
-                            {{ stats.availableRooms }}
+                            {{ stats.operationalRooms }}
                         </div>
                     </div>
                     <div
@@ -40,12 +40,6 @@ export default {
                         <i class="pi pi-table text-green-500 !text-xl"></i>
                     </div>
                 </div>
-                <span class="text-primary font-medium"
-                    >{{ stats.newCleanedRooms }} new
-                </span>
-                <span class="text-muted-color text-[11px]"
-                    >rooms cleaned today</span
-                >
             </div>
         </div>
 
@@ -55,12 +49,12 @@ export default {
                 <div class="flex justify-between mb-4">
                     <div>
                         <span class="block text-muted-color font-medium mb-4"
-                            >Occupied Rooms</span
+                            >Under Maintinance</span
                         >
                         <div
-                            class="text-surface-900 dark:text-surface-0 font-medium text-xl"
+                            class="text-red-500 dark:text-surface-0 text-4xl font-semi-bold"
                         >
-                            {{ stats.occupiedRooms }}
+                            {{ stats.underMaintinance }}
                         </div>
                     </div>
                     <div
@@ -70,10 +64,6 @@ export default {
                         <i class="pi pi-table text-red-500 !text-xl"></i>
                     </div>
                 </div>
-                <span class="text-primary font-medium"
-                    >{{ stats.newCheckIns }} new
-                </span>
-                <span class="text-muted-color">check-ins today</span>
             </div>
         </div>
 
@@ -83,12 +73,12 @@ export default {
                 <div class="flex justify-between mb-4">
                     <div>
                         <span class="block text-muted-color font-medium mb-4"
-                            >Bookings</span
+                            >Total Rooms</span
                         >
                         <div
-                            class="text-surface-900 dark:text-surface-0 font-medium text-xl"
+                            class="text-blue-900 dark:text-surface-0 text-4xl font-semi-bold"
                         >
-                            {{ stats.bookings }}
+                            {{ stats.totalRooms }}
                         </div>
                     </div>
                     <div
@@ -98,10 +88,6 @@ export default {
                         <i class="pi pi-calendar text-blue-500 !text-xl"></i>
                     </div>
                 </div>
-                <span class="text-primary font-medium"
-                    >{{ stats.newBookings }} new
-                </span>
-                <span class="text-muted-color">bookings today</span>
             </div>
         </div>
 
@@ -110,13 +96,13 @@ export default {
             <div class="card mb-0">
                 <div class="flex justify-between mb-4">
                     <div>
-                        <span class="block text-muted-color font-medium mb-4"
+                        <span class="block text-muted-color font-medium mb-1"
                             >Revenue</span
                         >
                         <div
-                            class="text-surface-900 dark:text-surface-0 font-medium text-xl"
+                            class="text-blue-500 dark:text-surface-0 font-semi-bold text-xl"
                         >
-                            ₱{{ stats.revenue }}
+                            ₱ {{ stats.revenue }}
                         </div>
                     </div>
                     <div
