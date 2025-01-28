@@ -122,14 +122,14 @@ const filteredRooms = computed(() => {
                 room.roomNumber.includes(searchQuery.value) ||
                 room.type
                     .toLowerCase()
-                    .includes(searchQuery.value.toLowerCase()),
+                    .includes(searchQuery.value.toLowerCase())
         );
     }
 
     // Filter by room type
     if (selectedFilter.value.roomType) {
         filtered = filtered.filter(
-            (room) => room.type === selectedFilter.value.roomType,
+            (room) => room.type === selectedFilter.value.roomType
         );
     }
 
@@ -137,7 +137,7 @@ const filteredRooms = computed(() => {
     if (selectedFilter.value.cleaningStatus) {
         filtered = filtered.filter(
             (room) =>
-                room.cleaningStatus === selectedFilter.value.cleaningStatus,
+                room.cleaningStatus === selectedFilter.value.cleaningStatus
         );
     }
 
@@ -146,7 +146,7 @@ const filteredRooms = computed(() => {
         switch (sortBy.value) {
             case "Room Number":
                 filtered.sort((a, b) =>
-                    a.roomNumber.localeCompare(b.roomNumber),
+                    a.roomNumber.localeCompare(b.roomNumber)
                 );
                 break;
             case "Type":

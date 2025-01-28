@@ -4,17 +4,17 @@
             <div
                 class="text-surface-900 dark:text-surface-0 font-normal mb-2 text-4xl"
             >
-                Book Your Stay
+                View Our Rooms
             </div>
-            <span class="text-muted-color text-2xl"
-                >Reserve your spot now and enjoy a delightful experience</span
+            <span class="text-muted-color text-2xl">
+                Check available rooms and choose your ideal stay</span
             >
         </div>
 
         <!-- Big Book Now Button -->
         <div class="flex justify-center mt-12">
             <Button
-                label="Book Now"
+                label="Available Rooms"
                 class="p-button-rounded bg-primary text-white hover:bg-primary-dark"
                 as="router-link"
                 to="/BookingPanel"

@@ -110,7 +110,7 @@ function smoothScroll(id) {
                     @click.prevent="smoothScroll('pricing')"
                     class="px-0 py-4 text-surface-900 dark:text-surface-0 font-medium text-xl"
                 >
-                    <span>Book</span>
+                    <span>Available Rooms</span>
                 </a>
             </li>
         </ul>
