@@ -60,6 +60,131 @@ function openCheckInDialog(room) {
     checkInDialogVisible.value = true; // Show the dialog
 }
 
+const directCheckInDialogVisible = ref(false);
+const directCheckInDetails = ref({
+    guestName: null,
+    cellphone: null,
+    selectedHours: null,
+    selectedRate: null,
+});
+
+// Add to your script setup
+function openDirectCheckInDialog() {
+    directCheckInDetails.value = {
+        guestName: "",
+        cellphone: "",
+        selectedHours: null,
+        selectedRate: null,
+    };
+    directCheckInDialogVisible.value = true;
+}
+
+// Function to format currency
+function formatCurrency(value) {
+    if (!value) return "0.00";
+    return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "PHP",
+    }).format(value);
+}
+
+function confirmDirectCheckIn() {
+    if (!selectedRoom.value || !directCheckInDetails.value.selectedHours) {
+        toast.add({
+            severity: "error",
+            summary: "Missing Information",
+            detail: "Please fill all required fields",
+            life: 3000,
+        });
+        return;
+    }
+
+    const checkInDate = new Date();
+    const checkOutDate = new Date(
+        checkInDate.getTime() +
+            directCheckInDetails.value.selectedHours * 60 * 60 * 1000,
+    );
+
+    // Update room status
+    selectedRoom.value.status = "Occupied";
+    selectedRoom.value.BookingDetails = {
+        ...directCheckInDetails.value,
+        bookingCode: generateBookingCode(),
+        checkInDate: checkInDate.toISOString(),
+        checkOutDate: checkOutDate.toISOString(),
+        timestamp: new Date().toISOString(),
+    };
+
+    updateRoomStatus(
+        selectedRoom.value.id,
+        "Occupied",
+        directCheckInDetails.value,
+    );
+
+    toast.add({
+        severity: "success",
+        summary: "Direct Check-In Successful",
+        detail: `${directCheckInDetails.value.guestName} checked into Room ${selectedRoom.value.roomNumber}`,
+        life: 3000,
+    });
+
+    directCheckInDialogVisible.value = false;
+}
+
+// Function to open the checkout dialog
+function openCheckoutDialog() {
+    checkoutDialogVisible.value = true;
+}
+
+function openExtendDialog() {
+    extendDialogVisible.value = true;
+}
+
+// Function to select rate and hours
+function selectRateAndHours(hours, rate) {
+    directCheckInDetails.value.selectedHours = hours;
+    directCheckInDetails.value.selectedRate = rate;
+}
+
+// Reactive state for checkout dialog
+const checkoutDialogVisible = ref(false);
+
+// Function to confirm checkout
+function confirmCheckout() {
+    console.log("Checkout confirmed:", selectedRoom.value);
+    // Logic for processing checkout goes here
+    checkoutDialogVisible.value = false;
+}
+
+// Reactive state for extend dialog
+const extendDialogVisible = ref(false);
+
+// Reactive variables for extension details
+const additionalHours = ref(null);
+const additionalRate = ref(0);
+const newTotal = ref(0);
+
+function confirmExtension() {
+    console.log("Extension confirmed with details:", {
+        room: selectedRoom.value,
+        additionalHours: additionalHours.value,
+        additionalRate: additionalRate.value,
+        newTotal: newTotal.value,
+    });
+
+    // Update the selected room's stay duration and rate
+    selectedRoom.value.selectedHours += additionalHours.value;
+    selectedRoom.value.selectedrate = newTotal.value;
+
+    // Close the dialog
+    extendDialogVisible.value = false;
+
+    // Reset state for next use
+    additionalHours.value = null;
+    additionalRate.value = 0;
+    newTotal.value = 0;
+}
+
 // Functions
 function formatDate(date) {
     if (!date) return "N/A";
@@ -348,9 +473,8 @@ function submitBooking(BookingDetails) {
 
 // Computed property for form validation
 const isFormValid = computed(() => {
-    const { guestName, cellphone, selectedHours, selectedrate } =
-        BookingDetails.value;
-    return !!(guestName && cellphone && selectedHours && selectedrate);
+    const { guestName, cellphone } = BookingDetails.value;
+    return !!(guestName && cellphone);
 });
 </script>
 
@@ -505,8 +629,14 @@ const isFormValid = computed(() => {
                         class="p-button-primary w-full p-2 rounded-lg"
                         @click="openBookingDialog"
                     >
-                        Book / Check In
+                        Book
                     </Button>
+                    <Button
+                        label=" Check-In"
+                        icon="pi pi-sign-in"
+                        class="p-button-primary w-full"
+                        @click="openDirectCheckInDialog"
+                    />
                 </div>
             </div>
 
@@ -538,18 +668,7 @@ const isFormValid = computed(() => {
                         Cellphone:
                         {{ selectedRoom?.guestDetails?.cellphone || "N/A" }}
                     </p>
-                    <p>
-                        Hours:
-                        {{ selectedRoom?.guestDetails?.selectedHours || "N/A" }}
-                    </p>
-                    <p>
-                        Rate:
-                        {{
-                            selectedRoom.guestDetails?.rate !== undefined
-                                ? `₱${selectedRoom?.guestDetails?.rate?.toFixed(2)}`
-                                : "N/A"
-                        }}
-                    </p>
+
                     <p>
                         Booking Code:
                         {{ selectedRoom.guestDetails?.bookingCode || "N/A" }}
@@ -604,13 +723,13 @@ const isFormValid = computed(() => {
                 <div class="flex gap-2 mt-4 justify-center">
                     <Button
                         class="p-button-primary w-full"
-                        @click="handleRoomAction('checkOut', selectedRoom)"
+                        @click="openCheckoutDialog(selectedRoom)"
                     >
                         Check Out
                     </Button>
                     <Button
                         class="p-button-primary w-full"
-                        @click="handleRoomAction('extend', selectedRoom)"
+                        @click="openExtendDialog(selectedRoom)"
                     >
                         Extend Stay
                     </Button>
@@ -628,7 +747,8 @@ const isFormValid = computed(() => {
     >
         <template #header>
             <div class="font-bold text-xl">
-                Room {{ selectedRoom?.roomNumber }} | {{ selectedRoom?.type }}
+                Book Room {{ selectedRoom?.roomNumber }} |
+                {{ selectedRoom?.type }}
             </div>
         </template>
 
@@ -653,28 +773,6 @@ const isFormValid = computed(() => {
                     class="w-full"
                     required
                 />
-            </div>
-
-            <div class="mb-4">
-                <h3 class="text-sm font-medium mb-2">Hours of Stay</h3>
-                <div class="grid grid-cols-3 gap-4">
-                    <div
-                        v-for="(rate, hours) in selectedRoom?.rate"
-                        :key="hours"
-                        class="border cursor-pointer p-4 text-center rounded-lg shadow-sm transition-all duration-200"
-                        :class="{
-                            'bg-green-500 text-white':
-                                BookingDetails.selectedHours === hours,
-                            'bg-gray-100':
-                                BookingDetails.selectedHours !== hours,
-                        }"
-                        @click="selectHours(hours)"
-                    >
-                        <h4 class="text-lg font-bold">{{ hours }}</h4>
-                        <!-- Ensure rate is valid before calling .toFixed() -->
-                        <p class="text-sm">₱{{ rate ? rate : "N/A" }}</p>
-                    </div>
-                </div>
             </div>
 
             <!-- Action Buttons -->
@@ -823,5 +921,305 @@ const isFormValid = computed(() => {
         </div>
     </Dialog>
 
+    <!-- Direct Check-In Dialog -->
+    <Dialog
+        v-model:visible="directCheckInDialogVisible"
+        header="Direct Check-In"
+        :modal="true"
+        :dismissable-mask="true"
+        style="width: 70vh"
+    >
+        <template #header>
+            <div class="font-bold text-xl">
+                Direct Check-In: Room {{ selectedRoom?.roomNumber }}
+            </div>
+        </template>
+
+        <div class="p-4 space-y-4">
+            <!-- Guest Information -->
+            <div class="space-y-2">
+                <label class="block text-sm font-medium text-gray-600">
+                    Guest Name
+                </label>
+                <InputText
+                    v-model="directCheckInDetails.guestName"
+                    placeholder="Enter guest name"
+                    class="w-full"
+                    required
+                />
+            </div>
+
+            <div class="space-y-2">
+                <label class="block text-sm font-medium text-gray-600">
+                    Contact Number
+                </label>
+                <InputText
+                    v-model="directCheckInDetails.cellphone"
+                    placeholder="Enter contact number"
+                    class="w-full"
+                    required
+                />
+            </div>
+
+            <!-- Duration and Rate Selection -->
+            <div>
+                <label class="block text-sm font-medium text-gray-600 mb-2">
+                    Select Stay Duration:
+                </label>
+                <div class="grid grid-cols-3 gap-4">
+                    <div
+                        v-for="(rate, hours) in selectedRoom?.rate"
+                        :key="hours"
+                        :class="[
+                            'p-4 border rounded-lg cursor-pointer',
+                            {
+                                'border-blue-500 bg-blue-50':
+                                    directCheckInDetails.selectedHours ===
+                                    parseInt(hours),
+                            },
+                        ]"
+                        @click="selectRateAndHours(parseInt(hours), rate)"
+                    >
+                        <div class="font-semibold text-lg">
+                            {{ hours }} hours
+                        </div>
+                        <div class="text-gray-500">
+                            {{ formatCurrency(rate) }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payment Summary -->
+            <div class="bg-gray-50 p-4 rounded-lg">
+                <div class="flex justify-between items-center">
+                    <span class="font-medium">Total :</span>
+                    <span class="font-semibold text-lg">
+                        {{
+                            formatCurrency(
+                                directCheckInDetails.selectedRate || 0,
+                            )
+                        }}
+                    </span>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex gap-4 mt-6">
+                <Button
+                    label="Cancel"
+                    severity="primary"
+                    class="flex-1"
+                    @click="directCheckInDialogVisible = false"
+                />
+                <Button
+                    label="Confirm Check-In"
+                    icon="pi pi-check"
+                    class="flex-1 p-button-primary"
+                    :disabled="
+                        !directCheckInDetails.guestName ||
+                        !directCheckInDetails.cellphone ||
+                        !directCheckInDetails.selectedHours
+                    "
+                    @click="confirmDirectCheckIn"
+                />
+            </div>
+        </div>
+    </Dialog>
+
+    <!-- Checkout Dialog -->
+
+    <Dialog
+        v-model:visible="checkoutDialogVisible"
+        header="Room Checkout"
+        :modal="true"
+        :dismissable-mask="true"
+        style="width: 70vh"
+    >
+        <template #header>
+            <div class="font-bold text-xl">
+                Checkout: Room {{ selectedRoom.roomNumber }}
+            </div>
+        </template>
+
+        <div class="p-4 space-y-4">
+            <!-- Guest Information -->
+            <div class="space-y-2">
+                <label class="block text-sm font-medium text-gray-600">
+                    Guest Name
+                </label>
+                <InputText
+                    v-model="selectedRoom.guestName"
+                    class="w-full"
+                    readonly
+                />
+            </div>
+
+            <!-- Contact Number -->
+            <div class="space-y-2">
+                <label class="block text-sm font-medium text-gray-600">
+                    Contact Number
+                </label>
+                <InputText
+                    v-model="selectedRoom.cellphone"
+                    class="w-full"
+                    readonly
+                />
+            </div>
+
+            <!-- Duration and Rate Summary -->
+            <div class="space-y-4">
+                <div class="flex justify-between items-center">
+                    <span class="font-medium">Duration:</span>
+                    <span class="font-semibold">
+                        {{ selectedRoom.selectedHours || "N/A" }} Hours
+                    </span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="font-medium">Rate:</span>
+                    <span class="font-semibold">
+                        {{ formatCurrency(selectedRoom.selectedrate || 0) }}
+                    </span>
+                </div>
+            </div>
+
+            <!-- Payment Section -->
+            <div class="bg-gray-50 p-4 rounded-lg">
+                <div class="flex justify-between items-center">
+                    <span class="font-medium">Total Amount:</span>
+                    <span class="font-semibold text-lg">
+                        {{ formatCurrency(selectedRoom.selectedrate || 0) }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex gap-4 mt-6">
+            <Button
+                label="Cancel"
+                severity="primary"
+                class="flex-1"
+                @click="checkoutDialogVisible = false"
+            />
+            <Button
+                label="Confirm Checkout"
+                icon="pi pi-check"
+                class="flex-1 p-button-primary"
+                :disabled="!selectedRoom.selectedrate"
+                @click="confirmCheckout"
+            />
+        </div>
+    </Dialog>
+
+    <!-- Extend Stay Dialog -->
+    <Dialog
+        v-model:visible="extendDialogVisible"
+        header="Extend Stay"
+        :modal="true"
+        :dismissable-mask="true"
+        style="width: 70vh"
+    >
+        <template #header>
+            <div class="font-bold text-xl">
+                Extend Stay for Room {{ selectedRoom.roomNumber }}
+            </div>
+        </template>
+
+        <div class="p-4 space-y-4">
+            <!-- Guest Information -->
+            <div class="space-y-2">
+                <label class="block text-sm font-medium text-gray-600">
+                    Guest Name
+                </label>
+                <InputText
+                    v-model="selectedRoom.guestName"
+                    class="w-full"
+                    readonly
+                />
+            </div>
+
+            <div class="space-y-2">
+                <label class="block text-sm font-medium text-gray-600">
+                    Contact Number
+                </label>
+                <InputText
+                    v-model="selectedRoom.cellphone"
+                    class="w-full"
+                    readonly
+                />
+            </div>
+
+            <!-- Extend Stay Input -->
+            <div class="space-y-2">
+                <label class="block text-sm font-medium text-gray-600">
+                    Enter Additional Hours
+                </label>
+                <InputText
+                    v-model.number="additionalHours"
+                    placeholder="Enter number of hours"
+                    class="w-full"
+                    type="number"
+                />
+            </div>
+
+            <div class="space-y-2">
+                <label class="block text-sm font-medium text-gray-600">
+                    Enter Additional Amount
+                </label>
+                <InputText
+                    v-model.number="additionalRate"
+                    placeholder="Enter additional amount"
+                    class="w-full"
+                    type="number"
+                />
+            </div>
+
+            <!-- Payment Summary -->
+            <div class="bg-gray-50 p-4 rounded-lg">
+                <div class="flex justify-between items-center">
+                    <span class="font-medium">Current Total:</span>
+                    <span class="font-semibold">
+                        {{ formatCurrency(selectedRoom.selectedrate || 0) }}
+                    </span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="font-medium">Additional Amount:</span>
+                    <span class="font-semibold">
+                        {{ formatCurrency(additionalRate || 0) }}
+                    </span>
+                </div>
+                <hr class="my-2" />
+                <div class="flex justify-between items-center">
+                    <span class="font-medium text-lg">New Total:</span>
+                    <span class="font-semibold text-lg">
+                        {{
+                            formatCurrency(
+                                (selectedRoom.selectedrate || 0) +
+                                    (additionalRate || 0),
+                            )
+                        }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex gap-4 mt-6">
+            <Button
+                label="Cancel"
+                severity="primary"
+                class="flex-1"
+                @click="extendDialogVisible = false"
+            />
+            <Button
+                label="Confirm Extension"
+                icon="pi pi-check"
+                class="flex-1 p-button-primary"
+                :disabled="!additionalHours || !additionalRate"
+                @click="confirmExtension"
+            />
+        </div>
+    </Dialog>
     <Toast />
 </template>

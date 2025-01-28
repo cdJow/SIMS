@@ -115,6 +115,11 @@ const model = ref([
                 icon: "pi pi-fw pi-eye",
                 to: "/Inventory/ViewInventory/ViewItems",
             },
+            {
+                label: "Billing and Invoices",
+                icon: "pi pi-fw pi-file",
+                to: "",
+            },
         ],
     },
 
@@ -129,7 +134,7 @@ const model = ref([
             {
                 label: "Check-In List",
                 icon: "pi pi-fw pi-sign-in",
-                to: "/check-in-list", // Add the navigation route here
+                to: "/Rooms/CheckInList", // Add the navigation route here
             },
             {
                 label: "Check-Out List",

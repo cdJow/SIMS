@@ -52,6 +52,13 @@ const router = createRouter({
                 },
 
                 {
+                    path: "/Rooms/CheckInList",
+                    name: " CheckOut",
+                    component: () =>
+                        import("@/views/pages/Rooms/CheckInList.vue"),
+                },
+
+                {
                     path: "/POS/POS",
                     name: " POS",
                     component: () => import("@/views/pages/POS/POS.vue"),
