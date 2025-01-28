@@ -74,7 +74,7 @@ const rooms = ref([
 
 const searchQuery = ref("");
 const showBookingForm = ref(false);
-const showBookingSummary = ref(false); // To show the booking summary
+const showPendingModal = ref(false); // Modal to display pending status
 const selectedRoom = ref(null);
 
 const form = ref({
@@ -83,32 +83,25 @@ const form = ref({
     email: "",
     hoursOfStay: "",
     confirmation: false,
-    bookingCode: "", // Stores the generated booking code
 });
 
-// Generate a unique booking code
-function generateBookingCode() {
-    return `BOOK-${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
-}
-
-// Filter rooms and bookings based on the search query
+// Filter rooms to show only available rooms that match the search query
 const filteredRooms = computed(() => {
     const query = searchQuery.value.toLowerCase();
     return rooms.value.filter(
         (room) =>
             room.status === "AVAILABLE" &&
             (room.name.toLowerCase().includes(query) ||
-                room.type.toLowerCase().includes(query) ||
-                room.price6.toString().includes(query) ||
-                room.price12.toString().includes(query) ||
-                room.price24.toString().includes(query))
+                room.type.toLowerCase().includes(query))
     );
 });
 
+// Select hours of stay
 function selectHours(hours) {
     form.value.hoursOfStay = hours;
 }
 
+// Handle booking
 function handleBooking() {
     if (!form.value.hoursOfStay) {
         alert("Please select hours of stay.");
@@ -119,56 +112,47 @@ function handleBooking() {
         return;
     }
 
-    // Mark the selected room as BOOKED
-    if (selectedRoom.value) {
-        const roomIndex = rooms.value.findIndex(
-            (r) => r.id === selectedRoom.value.id
-        );
-        if (roomIndex !== -1) {
-            rooms.value[roomIndex].status = "BOOKED";
-        }
+    // Update the selected room status to "Pending"
+    const roomIndex = rooms.value.findIndex(
+        (r) => r.id === selectedRoom.value.id
+    );
+    if (roomIndex !== -1) {
+        rooms.value[roomIndex].status = "PENDING";
     }
 
-    // Show the booking summary
+    // Close the booking form and show the pending modal
     showBookingForm.value = false;
-    showBookingSummary.value = true;
+    showPendingModal.value = true;
 
     // Reset form values
     form.value.confirmation = false;
+    form.value.customerName = "";
+    form.value.cellphone = "";
+    form.value.email = "";
+    form.value.hoursOfStay = "";
 }
 
+// Get room tag color based on status
 function getRoomTagColor(status) {
     switch (status) {
         case "AVAILABLE":
             return "success";
-        case "BOOKED":
+        case "PENDING":
             return "warning";
-        case "MAINTENANCE":
+        case "BOOKED":
             return "danger";
         default:
             return null;
     }
 }
 
+// Open booking form
 function bookRoom(room) {
     selectedRoom.value = room;
-    form.value.bookingCode = generateBookingCode(); // Generate booking code
     showBookingForm.value = true;
 }
-
-function calculatePrice() {
-    switch (form.value.hoursOfStay) {
-        case "6":
-            return selectedRoom.value.price6;
-        case "12":
-            return selectedRoom.value.price12;
-        case "24":
-            return selectedRoom.value.price24;
-        default:
-            return 0;
-    }
-}
 </script>
+
 <template>
     <div class="p-4">
         <!-- Search and Layout Options -->
@@ -254,11 +238,10 @@ function calculatePrice() {
     <!-- Booking Form Modal -->
     <Dialog
         v-model:visible="showBookingForm"
-        header="Book Your Stay"
+        header="Check In"
         :modal="true"
         style="width: 95vw; max-width: 600px; overflow: hidden"
         class="relative"
-        :dismissable-mask="true"
     >
         <!-- Room Details -->
         <div class="mb-4 border rounded p-5 bg-gray-50">
@@ -271,6 +254,7 @@ function calculatePrice() {
             </div>
         </div>
 
+        <!-- Booking Form -->
         <form @submit.prevent="handleBooking">
             <!-- Customer Name -->
             <div class="mb-4">
@@ -316,66 +300,40 @@ function calculatePrice() {
             <!-- Hours of Stay -->
             <div class="mb-4">
                 <label class="block mb-2 font-medium">Hours of Stay</label>
-                <div class="border rounded-lg p-4 bg-gray-100">
-                    <div class="grid grid-cols-3 gap-4 text-center">
-                        <div
-                            v-for="option in [
-                                {
-                                    value: '6',
-                                    label: '6hrs:',
-                                    price: selectedRoom?.price6 || 0,
-                                },
-                                {
-                                    value: '12',
-                                    label: '12hrs:',
-                                    price: selectedRoom?.price12 || 0,
-                                },
-                                {
-                                    value: '24',
-                                    label: '24hrs:',
-                                    price: selectedRoom?.price24 || 0,
-                                },
-                            ]"
-                            :key="option.value"
-                        >
-                            <p class="text-lg font-bold">{{ option.label }}</p>
-                            <p class="text-md text-gray-600">
-                                ₱{{ option.price.toFixed(2) }}
-                            </p>
-                        </div>
-                    </div>
-                    <!-- Select Buttons -->
-                    <div class="grid grid-cols-3 gap-4 mt-4 mb-4">
-                        <button
-                            v-for="option in [
-                                {
-                                    value: '6',
-                                    label: '6hrs',
-                                    price: selectedRoom?.price6 || 0,
-                                },
-                                {
-                                    value: '12',
-                                    label: '12hrs',
-                                    price: selectedRoom?.price12 || 0,
-                                },
-                                {
-                                    value: '24',
-                                    label: '24hrs',
-                                    price: selectedRoom?.price24 || 0,
-                                },
-                            ]"
-                            :key="option.value"
-                            type="button"
-                            @click="selectHours(option.value)"
-                            :class="[
-                                'px-4 py-2 rounded-lg font-medium',
-                                form.hoursOfStay === option.value
-                                    ? 'bg-[#1E905F] text-white'
-                                    : 'bg-[#2DCE89] text-white hover:bg-[#1E905F]',
-                            ]"
-                        >
-                            Select
-                        </button>
+                <div class="grid grid-cols-3 gap-4">
+                    <div
+                        v-for="option in [
+                            {
+                                value: '6',
+                                label: '6hrs',
+                                price: selectedRoom?.price6 || 0,
+                            },
+                            {
+                                value: '12',
+                                label: '12hrs',
+                                price: selectedRoom?.price12 || 0,
+                            },
+                            {
+                                value: '24',
+                                label: '24hrs',
+                                price: selectedRoom?.price24 || 0,
+                            },
+                        ]"
+                        :key="option.value"
+                        class="p-4 border rounded-lg shadow-md text-center cursor-pointer hover:bg-green-50 transition"
+                        :class="
+                            form.hoursOfStay === option.value
+                                ? 'bg-green-100 border-green-500'
+                                : ''
+                        "
+                        @click="selectHours(option.value)"
+                    >
+                        <p class="text-lg font-bold text-green-600">
+                            {{ option.label }}
+                        </p>
+                        <p class="text-md font-medium text-green-600">
+                            ₱{{ option.price.toFixed(2) }}
+                        </p>
                     </div>
                 </div>
             </div>
@@ -399,7 +357,7 @@ function calculatePrice() {
                     class="flex-1 bg-[#2DCE89] text-white px-4 py-2 rounded hover:bg-[#138A4E]"
                     :disabled="!form.confirmation || !form.hoursOfStay"
                 >
-                    Book
+                    Confirm
                 </button>
                 <button
                     type="button"
@@ -410,51 +368,5 @@ function calculatePrice() {
                 </button>
             </div>
         </form>
-    </Dialog>
-
-    <!-- Booking Summary Modal -->
-    <Dialog
-        v-model:visible="showBookingSummary"
-        header="Booking Summary"
-        :modal="true"
-        :closable="false"
-    >
-        <div class="text-center p-4">
-            <p class="text-red-600 font-bold text-lg mb-4">
-                Take a Screenshot and Show it to the Counter
-            </p>
-            <div
-                class="mt-4 p-4 border border-yellow-500 rounded bg-yellow-100 text-yellow-700 mb-4"
-            >
-                <strong>Notice:</strong> You must check in within 30 minutes, or
-                your booking will be automatically canceled.
-            </div>
-
-            <div class="border rounded p-4 bg-gray-100 mb-4">
-                <h3 class="font-bold text-xl">{{ selectedRoom?.name }}</h3>
-                <p>{{ selectedRoom?.type }}</p>
-                <p>Selected Duration: {{ form.hoursOfStay }} Hours</p>
-                <p>Total Price: ₱{{ calculatePrice() }}</p>
-            </div>
-            <div class="border rounded p-4 bg-gray-100 mb-4">
-                <h4 class="font-bold text-lg mb-2">Details</h4>
-                <p>Name: {{ form.customerName }}</p>
-                <p>Email: {{ form.email }}</p>
-                <p>Phone: {{ form.cellphone }}</p>
-            </div>
-            <div class="border rounded p-4 bg-gray-100 mb-4">
-                <h4 class="font-bold text-lg mb-2">Code</h4>
-                <p
-                    class="text-3xl font-bold text-blue-600 bg-yellow-100 p-4 rounded shadow"
-                >
-                    {{ form.bookingCode }}
-                </p>
-            </div>
-            <Button
-                label="Close"
-                class="mt-4 bg-blue-600 text-white"
-                @click="showBookingSummary = false"
-            />
-        </div>
     </Dialog>
 </template>

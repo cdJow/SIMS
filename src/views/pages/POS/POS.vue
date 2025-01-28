@@ -63,7 +63,7 @@ export default {
         filteredProducts() {
             const query = this.productSearchQuery.toLowerCase();
             return this.products.filter((product) =>
-                product.name.toLowerCase().includes(query),
+                product.name.toLowerCase().includes(query)
             );
         },
         // Filter transaction history based on the selected date
@@ -83,14 +83,14 @@ export default {
         cartTotal() {
             return this.cart.reduce(
                 (total, item) => total + item.price * item.quantity,
-                0,
+                0
             );
         },
     },
     methods: {
         addToCart(product) {
             const existingItem = this.cart.find(
-                (item) => item.id === product.id,
+                (item) => item.id === product.id
             );
             if (existingItem) {
                 if (existingItem.quantity < product.stock) {

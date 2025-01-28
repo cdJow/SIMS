@@ -271,6 +271,12 @@ const router = createRouter({
         },
 
         {
+            path: "/Kioskpage",
+            name: " Kioskpage",
+            component: () => import("@/views/pages/Kioskpage.vue"),
+        },
+
+        {
             path: "/auth/signup",
             name: "signup",
             component: () => import("@/views/pages/auth/SignUp.vue"),

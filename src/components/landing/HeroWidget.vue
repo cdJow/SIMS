@@ -36,7 +36,7 @@ export default {
                 Situated in Iligan City where beauty of nature and culture meet.
             </p>
             <router-link to="/BookingPanel" class="mt-6 primary-button"
-                >Book Now</router-link
+                >Available Rooms</router-link
             >
         </div>
     </div>

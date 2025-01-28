@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import BookingKiosk from "@/components/landing/BookingKiosk.vue";
+import AvailableRooms from "@/components/landing/AvailableRooms.vue";
 
 import TopbarBooking from "@/components/landing/TopbarBooking.vue";
 </script>
@@ -13,7 +13,7 @@ import TopbarBooking from "@/components/landing/TopbarBooking.vue";
             >
                 <TopbarBooking />
             </div>
-            <BookingKiosk />
+            <AvailableRooms />
         </div>
     </div>
 </template>
