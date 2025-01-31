@@ -139,12 +139,12 @@ const model = ref([
             {
                 label: "Check-Out List",
                 icon: "pi pi-fw pi-sign-out",
-                to: "/check-out-list", // Add the navigation route here
+                to: "/Rooms/CheckoutList", // Add the navigation route here
             },
             {
                 label: "Canceled Booking",
                 icon: "pi pi-fw pi-ban",
-                to: "",
+                to: "/Rooms/CanceledBooking",
             },
             {
                 label: "Mini-Store ",

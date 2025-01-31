@@ -79,6 +79,15 @@ function openDirectCheckInDialog() {
     directCheckInDialogVisible.value = true;
 }
 
+const billDialogVisible = ref(false);
+
+const paymentDialogVisible = ref(false);
+
+// Open Payment Dialog
+const openPaymentDialog = () => {
+    paymentDialogVisible.value = true;
+};
+
 // Function to format currency
 function formatCurrency(value) {
     if (!value) return "0.00";
@@ -88,51 +97,12 @@ function formatCurrency(value) {
     }).format(value);
 }
 
-function confirmDirectCheckIn() {
-    if (!selectedRoom.value || !directCheckInDetails.value.selectedHours) {
-        toast.add({
-            severity: "error",
-            summary: "Missing Information",
-            detail: "Please fill all required fields",
-            life: 3000,
-        });
-        return;
-    }
-
-    const checkInDate = new Date();
-    const checkOutDate = new Date(
-        checkInDate.getTime() +
-            directCheckInDetails.value.selectedHours * 60 * 60 * 1000,
-    );
-
-    // Update room status
-    selectedRoom.value.status = "Occupied";
-    selectedRoom.value.BookingDetails = {
-        ...directCheckInDetails.value,
-        bookingCode: generateBookingCode(),
-        checkInDate: checkInDate.toISOString(),
-        checkOutDate: checkOutDate.toISOString(),
-        timestamp: new Date().toISOString(),
-    };
-
-    updateRoomStatus(
-        selectedRoom.value.id,
-        "Occupied",
-        directCheckInDetails.value,
-    );
-
-    toast.add({
-        severity: "success",
-        summary: "Direct Check-In Successful",
-        detail: `${directCheckInDetails.value.guestName} checked into Room ${selectedRoom.value.roomNumber}`,
-        life: 3000,
-    });
-
-    directCheckInDialogVisible.value = false;
+function openBillDialog() {
+    billDialogVisible.value = true;
 }
-
 // Function to open the checkout dialog
-function openCheckoutDialog() {
+function openCheckoutDialog(room) {
+    selectedRoom.value = { ...room, selectedrate: room.rate || 0 }; // Ensure selectedrate is set
     checkoutDialogVisible.value = true;
 }
 
@@ -146,16 +116,83 @@ function selectRateAndHours(hours, rate) {
     directCheckInDetails.value.selectedRate = rate;
 }
 
+// Payment Details
+// Payment Details
+const paymentDetails = ref({
+    amountReceived: "",
+    deposit: "",
+});
+
 // Reactive state for checkout dialog
 const checkoutDialogVisible = ref(false);
 
 // Function to confirm checkout
 function confirmCheckout() {
     console.log("Checkout confirmed:", selectedRoom.value);
-    // Logic for processing checkout goes here
+
+    // Find the room in the rooms array
+    const roomIndex = rooms.value.findIndex(
+        (r) => r.id === selectedRoom.value.id,
+    );
+    if (roomIndex === -1) {
+        console.error("Room not found in the rooms array.");
+        toast.add({
+            severity: "error",
+            summary: "Checkout Failed",
+            detail: "Room not found. Please try again.",
+            life: 3000,
+        });
+        return;
+    }
+
+    // Update the room status locally
+    rooms.value[roomIndex].status = "Available"; // Or any other status you use for checked-out rooms
+    rooms.value[roomIndex].guestName = null; // Clear guest name
+    rooms.value[roomIndex].cellphone = null; // Clear contact number
+    rooms.value[roomIndex].selectedHours = null; // Clear selected hours
+    rooms.value[roomIndex].selectedrate = null; // Clear selected rate
+
+    // If you're using a backend, send an API request to update the room status
+    updateRoomStatus(selectedRoom.value.id, "Available")
+        .then(() => {
+            console.log("Room status updated successfully.");
+            toast.add({
+                severity: "success",
+                summary: "Checkout Successful",
+                detail: `Room ${selectedRoom.value.roomNumber} has been checked out.`,
+                life: 3000,
+            });
+        })
+        .catch((error) => {
+            console.error("Failed to update room status:", error);
+            toast.add({
+                severity: "error",
+                summary: "Checkout Failed",
+                detail: "Failed to update room status. Please try again.",
+                life: 3000,
+            });
+        });
+
+    // Close the checkout dialog
     checkoutDialogVisible.value = false;
 }
 
+// Example function to update room status via an API
+async function updateRoomStatus(roomId, status) {
+    const response = await fetch(`/api/rooms/${roomId}/status`, {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status }),
+    });
+
+    if (!response.ok) {
+        throw new Error("Failed to update room status");
+    }
+
+    return response.json();
+}
 // Reactive state for extend dialog
 const extendDialogVisible = ref(false);
 
@@ -400,25 +437,6 @@ function openBookingDialog() {
         selectedrate: null,
     };
     BookingDialogVisible.value = true;
-}
-
-// Function to update room status in the main rooms list
-function updateRoomStatus(roomId, status, BookingDetails = null) {
-    const room = rooms.value.find((r) => r.id === roomId);
-    if (room) {
-        room.status = status;
-
-        // If bookingDetails are provided, update the room's booking information
-        if (BookingDetails) {
-            room.bookingDetails = {
-                guestName: BookingDetails.guestName || "",
-                cellphone: BookingDetails.cellphone || "",
-                selectedHours: BookingDetails.selectedHours || 0,
-                selectedrate: BookingDetails.selectedrate || 0,
-                bookingTime: new Date().toLocaleString(), // Add a timestamp for reference
-            };
-        }
-    }
 }
 
 // Function to handle booking submission
@@ -931,7 +949,7 @@ const isFormValid = computed(() => {
     >
         <template #header>
             <div class="font-bold text-xl">
-                Direct Check-In: Room {{ selectedRoom?.roomNumber }}
+                Check-In: Room {{ selectedRoom?.roomNumber }}
             </div>
         </template>
 
@@ -989,11 +1007,134 @@ const isFormValid = computed(() => {
                     </div>
                 </div>
             </div>
+        </div>
+        <!-- Action Buttons -->
+        <div class="flex gap-4 mt-6">
+            <Button
+                label="Cancel"
+                severity="primary"
+                class="flex-1"
+                @click="directCheckInDialogVisible = false"
+            />
+            <Button
+                label="Proceed to Payment"
+                icon="pi pi-check"
+                class="flex-1 p-button-primary"
+                @click="openPaymentDialog"
+            />
+        </div>
+    </Dialog>
 
-            <!-- Payment Summary -->
+    <!-- Bill Dialog -->
+    <Dialog
+        v-model:visible="billDialogVisible"
+        header="Bill Details"
+        :modal="true"
+        :dismissable-mask="true"
+        style="width: 70vh"
+    >
+        <template #header>
+            <div class="font-bold text-xl">
+                Bill for Room {{ billData.roomNumber }}
+            </div>
+        </template>
+
+        <div class="p-4 space-y-4">
+            <!-- Guest Information -->
+            <div class="space-y-2">
+                <div class="text-lg font-semibold">Guest Information</div>
+                <div class="text-gray-600">
+                    <div>Name: {{ billData.guestName }}</div>
+                    <div>Contact: {{ billData.cellphone }}</div>
+                </div>
+            </div>
+
+            <!-- Room Information -->
+            <div class="space-y-2">
+                <div class="text-lg font-semibold">Room Information</div>
+                <div class="text-gray-600">
+                    <div>Room Number: {{ billData.roomNumber }}</div>
+                    <div>Stay Duration: {{ billData.stayDuration }} hours</div>
+                </div>
+            </div>
+
+            <!-- Payment Details -->
+            <div class="space-y-2">
+                <div class="text-lg font-semibold">Payment Details</div>
+                <div class="text-gray-600">
+                    <div>
+                        Total Amount: {{ formatCurrency(billData.totalAmount) }}
+                    </div>
+                    <div>
+                        Amount Received:
+                        {{ formatCurrency(billData.amountReceived) }}
+                    </div>
+                    <div>Deposit: {{ formatCurrency(billData.deposit) }}</div>
+                </div>
+            </div>
+
+            <!-- Summary -->
+            <div class="bg-gray-50 p-4 rounded-lg">
+                <div class="text-lg font-semibold">Summary</div>
+                <div class="text-gray-600">
+                    <div class="flex justify-between">
+                        <span>Total:</span>
+                        <span>{{ formatCurrency(billData.totalAmount) }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Amount Received:</span>
+                        <span>{{
+                            formatCurrency(billData.amountReceived)
+                        }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Deposit:</span>
+                        <span>{{ formatCurrency(billData.deposit) }}</span>
+                    </div>
+                    <div class="flex justify-between font-semibold">
+                        <span>Balance:</span>
+                        <span>{{ formatCurrency(billData.balance) }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex gap-4 mt-6">
+                <Button
+                    label="Close"
+                    severity="secondary"
+                    class="flex-1"
+                    @click="billDialogVisible = false"
+                />
+                <Button
+                    label="Print Bill"
+                    icon="pi pi-print"
+                    class="flex-1 p-button-primary"
+                    @click="printBill"
+                />
+            </div>
+        </div>
+    </Dialog>
+
+    <!-- Payment Dialog -->
+    <Dialog
+        v-model:visible="paymentDialogVisible"
+        header="Generate Bill"
+        :modal="true"
+        :dismissable-mask="true"
+        style="width: 70vh"
+    >
+        <template #header>
+            <div class="font-bold text-xl">
+                Generate Bill for Room {{ selectedRoom?.roomNumber }}
+            </div>
+        </template>
+
+        <div class="p-4 space-y-4">
+            <!-- Total Amount -->
             <div class="bg-gray-50 p-4 rounded-lg">
                 <div class="flex justify-between items-center">
-                    <span class="font-medium">Total :</span>
+                    <span class="font-medium">Total Amount:</span>
                     <span class="font-semibold text-lg">
                         {{
                             formatCurrency(
@@ -1004,26 +1145,72 @@ const isFormValid = computed(() => {
                 </div>
             </div>
 
-            <!-- Action Buttons -->
-            <div class="flex gap-4 mt-6">
-                <Button
-                    label="Cancel"
-                    severity="primary"
-                    class="flex-1"
-                    @click="directCheckInDialogVisible = false"
-                />
-                <Button
-                    label="Confirm Check-In"
-                    icon="pi pi-check"
-                    class="flex-1 p-button-primary"
-                    :disabled="
-                        !directCheckInDetails.guestName ||
-                        !directCheckInDetails.cellphone ||
-                        !directCheckInDetails.selectedHours
-                    "
-                    @click="confirmDirectCheckIn"
+            <!-- Amount Received -->
+            <div class="space-y-2">
+                <label class="block text-sm font-medium text-gray-600">
+                    Amount Received
+                </label>
+                <InputText
+                    v-model="paymentDetails.amountReceived"
+                    placeholder="Enter amount received"
+                    class="w-full"
+                    type="number"
+                    @input="calculateChange"
                 />
             </div>
+
+            <!-- Deposit -->
+            <div class="space-y-2">
+                <label class="block text-sm font-medium text-gray-600">
+                    Deposit
+                </label>
+                <InputText
+                    v-model="paymentDetails.deposit"
+                    placeholder="Enter deposit amount"
+                    class="w-full"
+                    type="number"
+                    @input="calculateChange"
+                />
+            </div>
+
+            <!-- Change -->
+            <div v-if="change !== null" class="space-y-2">
+                <label class="block text-sm font-medium text-gray-600">
+                    Change
+                </label>
+                <InputText
+                    :modelValue="formatCurrency(change)"
+                    readonly
+                    class="w-full bg-gray-100"
+                />
+            </div>
+
+            <div class="space-y-2">
+                <label class="block text-sm font-medium text-gray-600">
+                    Note
+                </label>
+                <Textarea placeholder="Note..." class="w-full" type="text" />
+            </div>
+
+            <!-- Validation Message -->
+            <div v-if="isAmountInsufficient" class="text-red-500 text-sm">
+                The amount received is insufficient. Please provide more funds.
+            </div>
+        </div>
+        <!-- Action Buttons -->
+        <div class="flex gap-4 mt-6">
+            <Button
+                label="Cancel"
+                severity="primary"
+                class="flex-1"
+                @click="paymentDialogVisible = false"
+            />
+            <Button
+                label="Generate Bill"
+                icon="pi pi-check"
+                class="flex-1 p-button-success"
+                @click="openBillDialog"
+            />
         </div>
     </Dialog>
 
@@ -1106,7 +1293,7 @@ const isFormValid = computed(() => {
                 label="Confirm Checkout"
                 icon="pi pi-check"
                 class="flex-1 p-button-primary"
-                :disabled="!selectedRoom.selectedrate"
+                :disabled="selectedRoom.selectedrate == null"
                 @click="confirmCheckout"
             />
         </div>

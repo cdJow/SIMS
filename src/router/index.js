@@ -46,16 +46,26 @@ const router = createRouter({
                 },
 
                 {
-                    path: "/Rooms/CheckOut",
-                    name: " CheckOut",
-                    component: () => import("@/views/pages/Rooms/CheckOut.vue"),
+                    path: "/Rooms/CheckInList",
+                    name: " Check In",
+                    component: () =>
+                        import("@/views/pages/Rooms/CheckInList.vue"),
                 },
 
                 {
-                    path: "/Rooms/CheckInList",
-                    name: " CheckOut",
+                    path: "/Rooms/CheckoutList",
+                    name: " Check Out",
+
                     component: () =>
-                        import("@/views/pages/Rooms/CheckInList.vue"),
+                        import("@/views/pages/Rooms/CheckoutList.vue"),
+                },
+
+                {
+                    path: "/Rooms/CanceledBooking",
+                    name: " Cancelled Booking",
+
+                    component: () =>
+                        import("@/views/pages/Rooms/CanceledBooking.vue"),
                 },
 
                 {

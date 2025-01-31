@@ -63,7 +63,7 @@ export default {
         filteredProducts() {
             const query = this.productSearchQuery.toLowerCase();
             return this.products.filter((product) =>
-                product.name.toLowerCase().includes(query)
+                product.name.toLowerCase().includes(query),
             );
         },
         // Filter transaction history based on the selected date
@@ -83,14 +83,14 @@ export default {
         cartTotal() {
             return this.cart.reduce(
                 (total, item) => total + item.price * item.quantity,
-                0
+                0,
             );
         },
     },
     methods: {
         addToCart(product) {
             const existingItem = this.cart.find(
-                (item) => item.id === product.id
+                (item) => item.id === product.id,
             );
             if (existingItem) {
                 if (existingItem.quantity < product.stock) {
@@ -157,7 +157,7 @@ export default {
 
 <template>
     <div class="p-4 card">
-        <h1 class="text-2xl font-bold mb-4">Mini-Store POS</h1>
+        <h1 class="text-2xl font-bold mb-4">POS</h1>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <!-- Mini-Store Column -->
@@ -290,6 +290,7 @@ export default {
         <Dialog
             v-model:visible="confirmationDialogVisible"
             header="Confirm Checkout"
+            :dismissable-mask="true"
             :modal="true"
             class="w-1/3"
         >
@@ -302,7 +303,7 @@ export default {
                 />
                 <Button
                     label="Cancel"
-                    class="p-button-secondary"
+                    class="p-button-primary"
                     @click="confirmationDialogVisible = false"
                 />
             </div>
@@ -312,8 +313,9 @@ export default {
         <Dialog
             v-model:visible="billDialogVisible"
             header="Bill Summary"
+            :dismissable-mask="true"
             :modal="true"
-            class="w-1/2"
+            class="w-1/4"
         >
             <div v-if="history.length > 0">
                 <h3 class="text-lg font-bold mb-2">Bill Details</h3>
@@ -351,91 +353,6 @@ export default {
             </div>
         </Dialog>
         <!-- Transaction History Section -->
-        <div class="mt-8">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-bold">Transaction History</h2>
-                <div class="flex items-center gap-2">
-                    <!-- Calendar Input for Date Search -->
-                    <Calendar
-                        v-model="historySearchDate"
-                        placeholder="Select date..."
-                        class="w-full max-w-md"
-                        dateFormat="mm/dd/yy"
-                        showIcon
-                        @input="filterHistory"
-                    />
-                </div>
-            </div>
-            <div
-                class="overflow-y-auto max-h-96"
-                style="max-height: 24rem; padding-right: 0.5rem"
-            >
-                <div
-                    v-for="entry in filteredHistory"
-                    :key="entry.timestamp"
-                    class="p-2 border rounded-lg shadow-md mb-4"
-                    style="
-                        max-height: 5rem;
-                        display: flex;
-                        justify-content: space-between;
-                        align-items: center;
-                    "
-                >
-                    <div class="font-bold text-lg">
-                        Date: {{ entry.timestamp }}
-                    </div>
-                    <div class="text-right mt-2">
-                        <Button
-                            label="View Details"
-                            class="p-button-primary"
-                            @click="viewHistoryDetails(entry)"
-                        />
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- History Details Dialog -->
-        <Dialog
-            v-model:visible="historyDialogVisible"
-            header="Transaction Details"
-            :modal="true"
-            class="w-1/2"
-        >
-            <div
-                v-if="selectedHistory"
-                class="max-h-96 overflow-y-auto"
-                style="max-height: 24rem; overflow-y: auto; padding: 1rem"
-            >
-                <h3 class="text-lg font-bold mb-4">Details</h3>
-                <ul>
-                    <li
-                        v-for="item in selectedHistory.items"
-                        :key="item.id"
-                        class="flex justify-between mb-2"
-                    >
-                        <span>{{ item.quantity }} x {{ item.name }}</span>
-                        <span
-                            >₱{{
-                                (item.quantity * item.price).toFixed(2)
-                            }}</span
-                        >
-                    </li>
-                </ul>
-                <hr class="my-4" />
-                <div class="flex justify-between font-bold text-lg">
-                    <span>Total</span>
-                    <span>₱{{ selectedHistory.total.toFixed(2) }}</span>
-                </div>
-            </div>
-            <div class="flex justify-end mt-4">
-                <Button
-                    label="Close"
-                    class="p-button-primary"
-                    @click="historyDialogVisible = false"
-                />
-            </div>
-        </Dialog>
     </div>
 </template>
 

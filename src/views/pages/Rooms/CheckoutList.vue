@@ -97,11 +97,9 @@ function formatCurrency(value) {
 }
 </script>
 
-<!-- Keep the rest of the template and style sections exactly the same -->
-
 <template>
     <div class="card">
-        <div class="font-semibold text-xl mb-4">Check-In List</div>
+        <div class="font-semibold text-xl mb-4">Check-Out List</div>
 
         <!-- Clear and Search -->
         <div class="flex gap-4 mb-4">
@@ -132,11 +130,6 @@ function formatCurrency(value) {
             ></Column>
 
             <Column
-                field="BookingCode"
-                header="Booking Code "
-                style="min-width: 150px"
-            ></Column>
-            <Column
                 field="roomNumber"
                 header="Room Number"
                 style="min-width: 120px"
@@ -159,24 +152,15 @@ function formatCurrency(value) {
                     />
                 </template>
             </Column>
-            <Column
-                field="selectedRate"
-                header="Selected Rate"
-                style="min-width: 150px"
-            >
-                <template #body="{ data }">
-                    {{ formatCurrency(data.selectedRate) }}
-                </template>
-            </Column>
 
             <Column
-                field="checkInDate"
-                header="Check-In Date/Time"
+                field="checkOutDate"
+                header="Check-Out Date/Time"
                 style="min-width: 200px"
-                class="text-green-500"
+                class="text-red-500"
             >
                 <template #body="{ data }">
-                    {{ data.checkInDate.toLocaleString() }}
+                    {{ data.checkOutDate.toLocaleString() }}
                 </template>
             </Column>
 
@@ -242,6 +226,23 @@ function formatCurrency(value) {
                                 class="p-tag-sm px-2 py-1"
                             />
                         </div>
+                    </div>
+                </template>
+            </Column>
+
+            <Column
+                field="ExtraAmenities"
+                header="Extra Amenities"
+                style="min-width: 250px"
+            >
+                <template #body="{ data }">
+                    <div v-if="data.ExtraAmenities" class="flex flex-column">
+                        <span
+                            v-for="(request, index) in data.ExtraAmenities"
+                            :key="index"
+                        >
+                            • {{ request }}
+                        </span>
                     </div>
                 </template>
             </Column>
