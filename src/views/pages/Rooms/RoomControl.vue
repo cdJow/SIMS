@@ -86,6 +86,15 @@ const rooms = ref([
     },
 ]);
 
+// State Variables
+const stats = ref({
+    operationalRooms: 80,
+    underMaintinance: 4,
+    totalRooms: 84,
+    revenue: 5500,
+    revenueIncrease: 12,
+});
+
 // State for available amenities and selected amenities
 const availableAmenities = ref([]);
 const selectedAmenities = ref([]);
@@ -193,7 +202,7 @@ const confirmDeleteRoom = () => {
 
     // Remove the room from the rooms array
     const roomIndex = rooms.value.findIndex(
-        (r) => r.id === roomToDelete.value.id
+        (r) => r.id === roomToDelete.value.id,
     );
     if (roomIndex !== -1) {
         rooms.value.splice(roomIndex, 1); // Delete the room
@@ -263,8 +272,81 @@ const saveRoomDetails = () => {
 </script>
 
 <template>
+    <div class="grid grid-cols-12 gap-4 mb-3">
+        <!-- Total Available Rooms -->
+        <div class="col-span-12 lg:col-span-6 xl:col-span-4">
+            <div class="card mb-0">
+                <div class="flex justify-between mb-4">
+                    <div>
+                        <span class="block text-muted-color font-medium mb-4"
+                            >Operational Rooms</span
+                        >
+                        <div
+                            class="text-green-500 dark:text-surface-0 text-4xl font-semi-bold"
+                        >
+                            {{ stats.operationalRooms }}
+                        </div>
+                    </div>
+                    <div
+                        class="flex items-center justify-center bg-green-100 dark:bg-green-400/10 rounded-border"
+                        style="width: 2.5rem; height: 2.5rem"
+                    >
+                        <i class="pi pi-table text-green-500 !text-xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Total Occupied Rooms -->
+        <div class="col-span-12 lg:col-span-6 xl:col-span-4">
+            <div class="card mb-0">
+                <div class="flex justify-between mb-4">
+                    <div>
+                        <span class="block text-muted-color font-medium mb-4"
+                            >Under Maintinance</span
+                        >
+                        <div
+                            class="text-red-500 dark:text-surface-0 text-4xl font-semi-bold"
+                        >
+                            {{ stats.underMaintinance }}
+                        </div>
+                    </div>
+                    <div
+                        class="flex items-center justify-center bg-red-100 dark:bg-red-400/10 rounded-border"
+                        style="width: 2.5rem; height: 2.5rem"
+                    >
+                        <i class="pi pi-table text-red-500 !text-xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Number of Bookings -->
+        <div class="col-span-12 lg:col-span-6 xl:col-span-4">
+            <div class="card mb-0">
+                <div class="flex justify-between mb-4">
+                    <div>
+                        <span class="block text-muted-color font-medium mb-4"
+                            >Total Rooms</span
+                        >
+                        <div
+                            class="text-blue-900 dark:text-surface-0 text-4xl font-semi-bold"
+                        >
+                            {{ stats.totalRooms }}
+                        </div>
+                    </div>
+                    <div
+                        class="flex items-center justify-center bg-blue-100 dark:bg-blue-400/10 rounded-border"
+                        style="width: 2.5rem; height: 2.5rem"
+                    >
+                        <i class="pi pi-calendar text-blue-500 !text-xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     <div class="card">
-        <div class="font-semibold text-xl mb-4">Room Management</div>
+        <div class="font-semibold text-xl mb-4">Rooms</div>
         <DataView :value="rooms" :layout="layout">
             <!-- Grid Layout -->
             <template #grid="slotProps">

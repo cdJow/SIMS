@@ -11,6 +11,7 @@ const roles = [
     { label: "Front Desk", value: "Super Admin" },
     { label: "Manager", value: "Moderator" },
     { label: "System Admin", value: "Auditor" },
+    { label: "Inventory", value: "Stock Manager" }, // Added Inventory role
 ];
 
 const statuses = [

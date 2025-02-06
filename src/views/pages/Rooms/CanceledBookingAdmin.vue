@@ -155,6 +155,12 @@ function initFilters() {
                             rounded
                             @click="handleClick($event, data)"
                         />
+                        <Button
+                            icon="pi pi-trash"
+                            class="p-button-danger"
+                            outlined
+                            rounded
+                        />
                     </div>
                 </template>
             </Column>

@@ -12,10 +12,12 @@ const mockReservations = [
         guestName: "John Doe",
         roomNumber: "201",
         roomType: "Double Size Bed",
-        selectedHours: 24, // Added selected hours
+        selectedHours: 24,
         selectedRate: 299.99,
         checkInDate: "2023-12-25T15:00:00",
         checkOutDate: "2023-12-30T11:00:00",
+        isCheckOutExtended: true,
+        extendedCheckOutDate: "2023-12-30T15:00:00",
         paymentStatus: {
             ratePaid: true,
             depositAmount: 100.0,
@@ -33,10 +35,11 @@ const mockReservations = [
         guestName: "Jane Smith",
         roomNumber: "305",
         roomType: "Single Size Bed",
-        selectedHours: 12, // Added selected hours
+        selectedHours: 12,
         selectedRate: 399.99,
         checkInDate: "2023-12-24T14:00:00",
         checkOutDate: "2023-12-28T10:00:00",
+        isCheckOutExtended: false,
         paymentStatus: {
             ratePaid: true,
             depositAmount: 150.0,
@@ -50,7 +53,6 @@ const mockReservations = [
         notes: "Lorem Ipsum",
     },
 ];
-
 onBeforeMount(() => {
     reservations.value = mockReservations.map((reservation) => ({
         ...reservation,
@@ -59,6 +61,14 @@ onBeforeMount(() => {
     }));
     initFilters();
 });
+
+const op = ref();
+const selectedReservation = ref(null);
+
+const handleClick = (event, reservation) => {
+    selectedReservation.value = reservation;
+    op.value.toggle(event);
+};
 
 function initFilters() {
     filters.value = {
@@ -74,19 +84,6 @@ function initFilters() {
             constraints: [{ value: null, matchMode: FilterMatchMode.EQUALS }],
         },
     };
-}
-
-function getDepositSeverity(status) {
-    switch (status.toLowerCase()) {
-        case "pending":
-            return "warning";
-        case "refunded":
-            return "success";
-        case "claimed":
-            return "info";
-        default:
-            return "info";
-    }
 }
 
 function formatCurrency(value) {
@@ -121,170 +118,213 @@ function formatCurrency(value) {
             class="mt-6"
             :filters="filters"
         >
-            <Column
-                field="guestName"
-                header="Guest Name"
-                style="min-width: 200px"
-                frozen
-                class="font-bold"
-            ></Column>
-
+            <!-- Visible Columns -->
             <Column
                 field="roomNumber"
                 header="Room Number"
                 style="min-width: 120px"
             ></Column>
+
             <Column
-                field="roomType"
-                header="Room Type"
+                field="BookingCode"
+                header="Booking Code"
                 style="min-width: 150px"
             ></Column>
-            <Column
-                field="selectedHours"
-                header="Selected Hours"
-                style="min-width: 150px"
-            >
-                <template #body="{ data }">
-                    <Tag
-                        :value="`${data.selectedHours}hrs`"
-                        severity="info"
-                        class="font-bold"
-                    />
-                </template>
-            </Column>
 
             <Column
                 field="checkOutDate"
                 header="Check-Out Date/Time"
                 style="min-width: 200px"
-                class="text-red-500"
+                class="text-center text-red-500"
             >
                 <template #body="{ data }">
-                    {{ data.checkOutDate.toLocaleString() }}
-                </template>
-            </Column>
-
-            <Column header="Payment Status" style="min-width: 400px">
-                <template #body="{ data }">
-                    <div
-                        class="flex flex-row items-center justify-between gap-4"
-                    >
-                        <!-- Rate Status -->
-                        <div class="flex-1 text-center min-w-[120px]">
-                            <div class="text-xs font-medium text-gray-500 mb-1">
-                                Rate Status
-                            </div>
-                            <Tag
-                                :severity="
-                                    data.paymentStatus.ratePaid
-                                        ? 'success'
-                                        : 'danger'
-                                "
-                                :icon="
-                                    data.paymentStatus.ratePaid
-                                        ? 'pi pi-check'
-                                        : 'pi pi-times'
-                                "
-                                :value="
-                                    data.paymentStatus.ratePaid
-                                        ? 'Paid'
-                                        : 'Pending'
-                                "
-                                class="p-tag-sm px-2 py-1"
-                            />
-                        </div>
-
-                        <!-- Deposit -->
-                        <div class="flex-1 text-center min-w-[140px]">
-                            <div class="text-xs font-medium text-gray-500 mb-1">
-                                Deposit
-                            </div>
-                            <div class="flex items-center justify-center gap-1">
-                                <span class="font-mono text-sm">
-                                    {{
-                                        formatCurrency(
-                                            data.paymentStatus.depositAmount,
-                                        )
-                                    }}
-                                </span>
-                                <i class="pi pi-wallet ml-1 text-blue-500"></i>
-                            </div>
-                        </div>
-
-                        <!-- Deposit Status -->
-                        <div class="flex-1 text-center min-w-[120px]">
-                            <div class="text-xs font-medium text-gray-500 mb-1">
-                                Deposit Status
-                            </div>
-                            <Tag
-                                :severity="
-                                    getDepositSeverity(
-                                        data.paymentStatus.depositStatus,
-                                    )
-                                "
-                                :value="data.paymentStatus.depositStatus"
-                                class="p-tag-sm px-2 py-1"
-                            />
-                        </div>
-                    </div>
-                </template>
-            </Column>
-
-            <Column
-                field="ExtraAmenities"
-                header="Extra Amenities"
-                style="min-width: 250px"
-            >
-                <template #body="{ data }">
-                    <div v-if="data.ExtraAmenities" class="flex flex-column">
-                        <span
-                            v-for="(request, index) in data.ExtraAmenities"
-                            :key="index"
+                    <div class="flex flex-col items-center gap-1">
+                        <div
+                            v-if="data.isCheckOutExtended"
+                            class="text-red-500"
                         >
-                            • {{ request }}
-                        </span>
+                            {{
+                                new Date(
+                                    data.extendedCheckOutDate,
+                                ).toLocaleString()
+                            }}
+                            <Tag
+                                :value="`+${Math.round((new Date(data.extendedCheckOutDate) - new Date(data.checkOutDate)) / (1000 * 60 * 60))}hrs`"
+                                severity="danger"
+                                class="ml-2 text-xs"
+                            />
+                        </div>
+                        <div
+                            :class="{
+                                'text-gray-400 line-through text-sm':
+                                    data.isCheckOutExtended,
+                            }"
+                        >
+                            {{ new Date(data.checkOutDate).toLocaleString() }}
+                        </div>
                     </div>
                 </template>
             </Column>
 
-            <Column
-                field="contactInfo"
-                header="Contact Info"
-                style="min-width: 200px"
-            ></Column>
-
-            <Column header="Notes" style="min-width: 300px">
+            <!-- Action Column with Popover -->
+            <Column header="Actions" style="min-width: 100px">
                 <template #body="{ data }">
-                    <div class="notes-container">
-                        {{ data.notes || "No special notes" }}
-                    </div>
+                    <Button
+                        icon="pi pi-info-circle"
+                        class="p-button-info"
+                        outlined
+                        rounded
+                        @click="handleClick($event, data)"
+                    />
                 </template>
             </Column>
         </DataTable>
+
+        <!-- Popover Overlay -->
+        <Popover ref="op">
+            <div class="p-4" v-if="selectedReservation">
+                <!-- Main Horizontal Container -->
+                <div class="flex flex-row gap-4">
+                    <!-- Left Column -->
+                    <div class="flex-1 flex flex-col gap-3 min-w-[200px]">
+                        <!-- Guest Name -->
+                        <div class="font-bold text-lg border-b pb-2">
+                            {{ selectedReservation.guestName }}
+                        </div>
+
+                        <!-- Room Details -->
+                        <div class="flex flex-col gap-2">
+                            <div>
+                                <label class="font-medium">Room Type:</label>
+                                <div class="mt-1">
+                                    {{ selectedReservation.roomType }}
+                                </div>
+                            </div>
+                            <div>
+                                <label class="font-medium"
+                                    >Selected Hours:</label
+                                >
+                                <Tag
+                                    :value="`${selectedReservation.selectedHours}hrs`"
+                                    severity="info"
+                                    class="mt-1"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Middle Column -->
+                    <div class="flex-1 flex flex-col gap-3 min-w-[250px]">
+                        <div>
+                            <label> Rate</label>
+                            <div class="flex items-center gap-1">
+                                <i class="pi pi-money-bill text-blue-500"></i>
+                                <span>{{
+                                    formatCurrency(
+                                        selectedReservation.selectedRate,
+                                    )
+                                }}</span>
+                            </div>
+                        </div>
+
+                        <div
+                            v-if="selectedReservation.isCheckOutExtended"
+                            class="bg-orange-50 p-2 rounded"
+                        >
+                            <div
+                                class="flex items-center gap-2 text-orange-700"
+                            >
+                                <i class="pi pi-clock"></i>
+                                <div class="flex flex-col">
+                                    <span class="text-sm font-medium"
+                                        >Extended Check-Out</span
+                                    >
+                                    <span class="text-xs">
+                                        New time:
+                                        {{
+                                            selectedReservation.extendedCheckOutDate.toLocaleString()
+                                        }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Payment Status -->
+
+                        <div class="flex flex-col gap-2">
+                            <label class="font-medium">Deposit</label>
+                            <div class="flex items-center gap-3">
+                                <Tag
+                                    :severity="
+                                        selectedReservation.paymentStatus
+                                            .ratePaid
+                                            ? 'success'
+                                            : 'danger'
+                                    "
+                                    :icon="
+                                        selectedReservation.paymentStatus
+                                            .ratePaid
+                                            ? 'pi pi-check'
+                                            : 'pi pi-times'
+                                    "
+                                    :value="
+                                        selectedReservation.paymentStatus
+                                            .ratePaid
+                                            ? 'Paid'
+                                            : 'Pending'
+                                    "
+                                />
+                                <div class="flex items-center gap-1">
+                                    <i class="pi pi-wallet text-blue-500"></i>
+                                    <span>{{
+                                        formatCurrency(
+                                            selectedReservation.paymentStatus
+                                                .depositAmount,
+                                        )
+                                    }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column -->
+                    <div class="flex-1 flex flex-col gap-3 min-w-[200px]">
+                        <!-- Contact & Amenities -->
+                        <div class="flex flex-col gap-2">
+                            <div>
+                                <label class="font-medium">Contact Info:</label>
+                                <div class="mt-1">
+                                    {{ selectedReservation.contactInfo }}
+                                </div>
+                            </div>
+                            <div>
+                                <label class="font-medium">Amenities:</label>
+                                <div
+                                    v-if="selectedReservation.ExtraAmenities"
+                                    class="mt-1"
+                                >
+                                    <div
+                                        v-for="(
+                                            amenity, index
+                                        ) in selectedReservation.ExtraAmenities"
+                                        :key="index"
+                                    >
+                                        • {{ amenity }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notes (Full Width) -->
+                <div class="mt-4 pt-3 border-t">
+                    <label class="font-medium">Notes:</label>
+                    <div class="p-2 bg-gray-100 rounded mt-1">
+                        {{ selectedReservation.notes || "No special notes" }}
+                    </div>
+                </div>
+            </div>
+        </Popover>
     </div>
 </template>
-
-<style scoped lang="scss">
-:deep(.p-datatable-frozen-tbody) {
-    font-weight: bold;
-    background-color: #f8f9fa;
-}
-
-:deep(.p-datatable-scrollable .p-frozen-column) {
-    background-color: #f8f9fa;
-}
-
-.notes-container {
-    max-width: 300px;
-    white-space: normal;
-    word-wrap: break-word;
-}
-
-.font-bold {
-    font-weight: 700;
-}
-
-.text-red-600 {
-    color: #dc2626;
-}
-</style>

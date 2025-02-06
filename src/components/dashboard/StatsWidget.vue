@@ -25,7 +25,7 @@ export default {
                 <div class="flex justify-between mb-4">
                     <div>
                         <span class="block text-muted-color font-medium mb-4"
-                            >Operational Rooms</span
+                            >Occupied Rooms</span
                         >
                         <div
                             class="text-green-500 dark:text-surface-0 text-4xl font-semi-bold"
@@ -49,7 +49,7 @@ export default {
                 <div class="flex justify-between mb-4">
                     <div>
                         <span class="block text-muted-color font-medium mb-4"
-                            >Under Maintinance</span
+                            >Under Cleaning</span
                         >
                         <div
                             class="text-red-500 dark:text-surface-0 text-4xl font-semi-bold"
@@ -73,7 +73,7 @@ export default {
                 <div class="flex justify-between mb-4">
                     <div>
                         <span class="block text-muted-color font-medium mb-4"
-                            >Total Rooms</span
+                            >Booked Rooms</span
                         >
                         <div
                             class="text-blue-900 dark:text-surface-0 text-4xl font-semi-bold"
@@ -117,7 +117,7 @@ export default {
                 <span class="text-primary font-medium"
                     >{{ stats.revenueIncrease }}%+
                 </span>
-                <span class="text-muted-color">increase this week</span>
+                <span class="text-muted-color text-sm">increase this week</span>
             </div>
         </div>
     </div>

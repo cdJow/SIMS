@@ -59,13 +59,34 @@ const router = createRouter({
                     component: () =>
                         import("@/views/pages/Rooms/CheckoutList.vue"),
                 },
+                {
+                    path: "/FrontDeskMenu",
+                    name: " Check Out",
+
+                    component: () => import("@/views/pages/FrontDeskMenu.vue"),
+                },
+
+                {
+                    path: "/MenuList",
+                    name: " Menu List",
+
+                    component: () => import("@/views/pages/MenuList.vue"),
+                },
 
                 {
                     path: "/Rooms/CanceledBooking",
-                    name: " Cancelled Booking",
+                    name: " Canceled Booking",
 
                     component: () =>
                         import("@/views/pages/Rooms/CanceledBooking.vue"),
+                },
+
+                {
+                    path: "/Rooms/CanceledBookingAdmin",
+                    name: " Cancelled Booking",
+
+                    component: () =>
+                        import("@/views/pages/Rooms/CanceledBookingAdmin.vue"),
                 },
 
                 {
@@ -78,6 +99,33 @@ const router = createRouter({
                     path: "/POS/Extra",
                     name: " Extra",
                     component: () => import("@/views/pages/POS/Extra.vue"),
+                },
+
+                {
+                    path: "/POS/Invoice",
+                    name: " Invoice",
+                    component: () => import("@/views/pages/POS/Invoice.vue"),
+                },
+
+                {
+                    path: "/POS/RoomInvoice",
+                    name: " Room Invoice",
+                    component: () =>
+                        import("@/views/pages/POS/RoomInvoice.vue"),
+                },
+
+                {
+                    path: "/POS/InvoiceAdmin",
+                    name: " Invoice Admin",
+                    component: () =>
+                        import("@/views/pages/POS/InvoiceAdmin.vue"),
+                },
+
+                {
+                    path: "/POS/RoomInvoiceAdmin",
+                    name: " Room AdminInvoice",
+                    component: () =>
+                        import("@/views/pages/POS/RoomInvoiceAdmin.vue"),
                 },
 
                 {
@@ -281,9 +329,9 @@ const router = createRouter({
         },
 
         {
-            path: "/Kioskpage",
-            name: " Kioskpage",
-            component: () => import("@/views/pages/Kioskpage.vue"),
+            path: "/KitchenModule",
+            name: " KitchenModule",
+            component: () => import("@/views/pages/KitchenModule.vue"),
         },
 
         {

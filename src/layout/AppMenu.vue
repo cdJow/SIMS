@@ -6,71 +6,8 @@ import AppMenuItem from "./AppMenuItem.vue";
 
 const model = ref([
     {
-        label: "System Admin",
+        label: " Admin",
         items: [
-            {
-                label: "Inventory",
-                icon: "pi pi-fw pi-table",
-                items: [
-                    {
-                        label: "Manage Inventory",
-                        icon: "pi pi-fw pi-cog",
-                        items: [
-                            {
-                                label: "Add Items",
-                                icon: "pi pi-fw pi-plus",
-                                items: [
-                                    {
-                                        label: "Consumable",
-                                        icon: "pi pi-fw pi-box",
-                                        to: "/Inventory/Additems/ConsumableForm",
-                                    },
-                                    {
-                                        label: "Non-Consumable",
-                                        icon: "pi pi-fw pi-box",
-                                        to: "/Inventory/AddItems/NonConsumableForm",
-                                    },
-                                ],
-                            },
-
-                            {
-                                label: "Item Control",
-                                icon: "pi pi-fw pi-cog",
-                                to: "/Inventory/ManageInventory/ManageItems",
-                            },
-                        ],
-                    },
-
-                    {
-                        label: "Generate Report",
-                        icon: "pi pi-fw pi-file",
-                        items: [
-                            {
-                                label: "Stock History",
-                                icon: "pi pi-fw pi-calendar",
-                                to: "/Inventory/GenerateReport/StockHistory",
-                            },
-                            {
-                                label: "Low Stock Report",
-                                icon: "pi pi-fw pi-exclamation-circle",
-                                to: "/Inventory/GenerateReport/LowstockReport",
-                            },
-                            {
-                                label: "Expired Items Report",
-                                icon: "pi pi-fw pi-times-circle",
-                                to: "/Inventory/GenerateReport/ExpiredItems",
-                            },
-
-                            {
-                                label: "Damaged Items",
-                                icon: "pi pi-fw pi-minus-circle",
-                                to: "/Inventory/GenerateReport/DamagedItems",
-                            },
-                        ],
-                    },
-                ],
-            },
-
             {
                 label: "Manage Rooms",
                 icon: "pi pi-fw pi-cog",
@@ -88,6 +25,12 @@ const model = ref([
                     },
                 ],
             },
+
+            {
+                label: "Menu Management",
+                icon: "pi  pi-cog",
+                to: "/MenuList",
+            },
             {
                 label: "Rates Management",
                 icon: "pi  pi-money-bill",
@@ -97,6 +40,21 @@ const model = ref([
                 label: "Account Management",
                 icon: "pi  pi-users",
                 to: "/Accounts/AccountsPanel",
+            },
+            {
+                label: "Canceled Bookings",
+                icon: "pi pi-fw pi-file",
+                to: "/Rooms/CanceledBookingAdmin",
+            },
+            {
+                label: "POS Invoice",
+                icon: "pi pi-fw pi-file",
+                to: "/POS/InvoiceAdmin",
+            },
+            {
+                label: "Room Invoices",
+                icon: "pi pi-fw pi-file",
+                to: "/POS/RoomInvoiceAdmin",
             },
         ],
     },
@@ -116,9 +74,14 @@ const model = ref([
                 to: "/Inventory/ViewInventory/ViewItems",
             },
             {
-                label: "Billing and Invoices",
+                label: "POS Invoices",
                 icon: "pi pi-fw pi-file",
-                to: "",
+                to: "/POS/Invoice",
+            },
+            {
+                label: "Room Invoices",
+                icon: "pi pi-fw pi-file",
+                to: "/POS/RoomInvoice",
             },
         ],
     },
@@ -127,7 +90,7 @@ const model = ref([
         label: "Front Desk",
         items: [
             {
-                label: "Room List",
+                label: "Rooms ",
                 icon: "pi pi-fw pi-info-circle",
                 to: "/Rooms/RoomList",
             },
@@ -147,9 +110,15 @@ const model = ref([
                 to: "/Rooms/CanceledBooking",
             },
             {
-                label: "Mini-Store ",
+                label: "POS ",
                 icon: "pi pi-fw pi-shopping-cart",
                 to: "/POS/POS",
+            },
+
+            {
+                label: "Orders ",
+                icon: "pi pi-fw pi-book",
+                to: "/FrontDeskMenu",
             },
 
             {
@@ -158,9 +127,87 @@ const model = ref([
                 to: "/POS/Extra",
             },
             {
-                label: "Billing and Invoices",
+                label: "POS Invoices",
                 icon: "pi pi-fw pi-file",
-                to: "",
+                to: "/POS/Invoice",
+            },
+            {
+                label: "Room Invoices",
+                icon: "pi pi-fw pi-file",
+                to: "/POS/RoomInvoice",
+            },
+        ],
+    },
+
+    {
+        label: "Inventory",
+        items: [
+            {
+                label: "Manage Inventory",
+                icon: "pi pi-fw pi-cog",
+                items: [
+                    {
+                        label: "Add Items",
+                        icon: "pi pi-fw pi-plus",
+                        items: [
+                            {
+                                label: "Consumable",
+                                icon: "pi pi-fw pi-box",
+                                to: "/Inventory/Additems/ConsumableForm",
+                            },
+                            {
+                                label: "Non-Consumable",
+                                icon: "pi pi-fw pi-box",
+                                to: "/Inventory/AddItems/NonConsumableForm",
+                            },
+                        ],
+                    },
+
+                    {
+                        label: "Item Control",
+                        icon: "pi pi-fw pi-cog",
+                        to: "/Inventory/ManageInventory/ManageItems",
+                    },
+                ],
+            },
+
+            {
+                label: "Generate Report",
+                icon: "pi pi-fw pi-file",
+                items: [
+                    {
+                        label: "Stock History",
+                        icon: "pi pi-fw pi-calendar",
+                        to: "/Inventory/GenerateReport/StockHistory",
+                    },
+                    {
+                        label: "Low Stock Report",
+                        icon: "pi pi-fw pi-exclamation-circle",
+                        to: "/Inventory/GenerateReport/LowstockReport",
+                    },
+                    {
+                        label: "Expired Items Report",
+                        icon: "pi pi-fw pi-times-circle",
+                        to: "/Inventory/GenerateReport/ExpiredItems",
+                    },
+
+                    {
+                        label: "Damaged Items",
+                        icon: "pi pi-fw pi-minus-circle",
+                        to: "/Inventory/GenerateReport/DamagedItems",
+                    },
+                ],
+            },
+        ],
+    },
+
+    {
+        label: "Kitchen Staff Module",
+        items: [
+            {
+                label: "Kitchen Staff Module",
+                icon: "pi pi-fw pi-globe",
+                to: "/landing",
             },
         ],
     },

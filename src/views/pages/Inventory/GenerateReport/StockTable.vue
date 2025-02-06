@@ -180,15 +180,6 @@ function formatDateTime(dateTime) {
                     </span>
                 </template>
             </Column>
-
-            <!-- Handled By Column -->
-            <Column field="handledBy" header="Handled By" sortable>
-                <template #body="slotProps">
-                    <span class="text-gray-700 dark:text-gray-300 py-2 block">
-                        {{ slotProps.data.handledBy }}
-                    </span>
-                </template>
-            </Column>
         </DataTable>
     </div>
 </template>

@@ -414,7 +414,9 @@ const toggleDataTable = (event) => {
                             </div>
 
                             <!-- Actions -->
-                            <div class="flex items-center gap-2">
+                            <div
+                                class="grid grid-cols-[auto_auto_1fr_auto] items-center gap-2"
+                            >
                                 <!-- Rental Checkbox -->
                                 <Checkbox
                                     v-model="item.isRental"
@@ -424,13 +426,13 @@ const toggleDataTable = (event) => {
                                     Rental
                                 </Checkbox>
 
-                                <!-- Rental Price Input (disabled if batch rental is enabled) -->
+                                <!-- Rental Price Input (Consistent Sizing) -->
                                 <InputText
                                     v-if="item.isRental && !isBatchRental"
                                     type="number"
                                     placeholder="Enter rental price"
                                     v-model="item.price"
-                                    class="ml-2"
+                                    class="w-40"
                                 />
 
                                 <!-- Remove Button -->
