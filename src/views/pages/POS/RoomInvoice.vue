@@ -126,7 +126,7 @@ const showDetails = (event, room) => {
                 </Column>
             </DataTable>
 
-            <OverlayPanel
+            <Popover
                 ref="detailsPanel"
                 appendTo="body"
                 :breakpoints="{ '960px': '75vw', '640px': '90vw' }"
@@ -189,7 +189,7 @@ const showDetails = (event, room) => {
                         }}</span>
                     </div>
                 </div>
-            </OverlayPanel>
+            </Popover>
         </div>
     </div>
 </template>

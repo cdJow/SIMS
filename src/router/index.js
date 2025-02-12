@@ -1,15 +1,16 @@
 import AppLayout from "@/layout/AppLayout.vue";
+import { useAuthStore } from "@/stores/auth";
 import { createRouter, createWebHistory } from "vue-router";
 
 const router = createRouter({
     history: createWebHistory(),
     routes: [
         {
-            path: "/",
+            path: "/dashboard",
             component: AppLayout,
             children: [
                 {
-                    path: "/",
+                    path: "/Dashboard",
                     name: "dashboard",
                     component: () => import("@/views/Dashboard.vue"),
                 },
@@ -54,8 +55,7 @@ const router = createRouter({
 
                 {
                     path: "/Rooms/CheckoutList",
-                    name: " Check Out",
-
+                    name: " Check Out List",
                     component: () =>
                         import("@/views/pages/Rooms/CheckoutList.vue"),
                 },
@@ -306,7 +306,7 @@ const router = createRouter({
             ],
         },
         {
-            path: "/landing",
+            path: "/",
             name: "landing",
             component: () => import("@/views/pages/Landing.vue"),
         },
@@ -325,7 +325,7 @@ const router = createRouter({
         {
             path: "/auth/login",
             name: "login",
-            component: () => import("@/views/pages/auth/Login.vue"),
+            component: () => import("@/views/pages/Login.vue"),
         },
 
         {
@@ -354,3 +354,14 @@ const router = createRouter({
 });
 
 export default router;
+router.beforeEach((to) => {
+    const authStore = useAuthStore();
+
+    if (to.meta.requiresAuth && !authStore.isAuthenticated) {
+        return "/login";
+    }
+
+    if (to.meta.guestOnly && authStore.isAuthenticated) {
+        return "/";
+    }
+});

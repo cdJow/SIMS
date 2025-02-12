@@ -4,31 +4,35 @@ import { useToast } from "primevue/usetoast";
 import { computed, reactive, ref } from "vue";
 
 const confirm = useConfirm();
-const ingredientsPanel = ref();
+
 const toast = useToast();
 const recipes = ref([
     {
         id: 1,
         title: "Classic Spaghetti Carbonara",
         category: "Food",
-        ingredients: [
-            "spaghetti",
-            "eggs",
-            "pancetta",
-            "parmesan",
-            "black pepper",
+        description: [
+            "Al dente spaghetti coated in a rich, creamy egg sauce",
+            "Crispy pancetta adding a savory, smoky depth",
+            "Freshly grated Parmesan cheese for a bold, nutty flavor",
+            "A generous dash of black pepper for warmth and spice",
         ],
         cookingTime: 30,
         difficulty: "Medium",
         instructions:
-            "Traditional Italian pasta dish with creamy egg-based sauce.",
+            "Traditional Italian pasta dish with a creamy egg-based sauce.",
         price: 15.99,
     },
     {
         id: 2,
         title: "Chicken Tikka Masala",
         category: "Food",
-        ingredients: ["chicken", "yogurt", "tomatoes", "garam masala", "cream"],
+        description: [
+            "Juicy, marinated chicken grilled to perfection",
+            "A rich, spiced tomato sauce with creamy yogurt",
+            "Aromatic garam masala bringing warmth and complexity",
+            "Perfectly paired with steamed basmati rice or naan",
+        ],
         cookingTime: 45,
         difficulty: "Hard",
         instructions: "Marinated chicken in a rich, spiced tomato-based sauce.",
@@ -38,12 +42,11 @@ const recipes = ref([
         id: 3,
         title: "Miso Ramen",
         category: "Food",
-        ingredients: [
-            "ramen noodles",
-            "miso paste",
-            "pork",
-            "green onions",
-            "seaweed",
+        description: [
+            "Hearty ramen noodles soaking up a flavorful miso broth",
+            "Tender pork slices adding a melt-in-your-mouth texture",
+            "Green onions for a fresh, vibrant kick",
+            "Crisp seaweed lending an umami depth",
         ],
         cookingTime: 50,
         difficulty: "Hard",
@@ -55,12 +58,11 @@ const recipes = ref([
         id: 4,
         title: "Caesar Salad",
         category: "Food",
-        ingredients: [
-            "romaine lettuce",
-            "croutons",
-            "parmesan",
-            "anchovies",
-            "dressing",
+        description: [
+            "Crisp romaine lettuce tossed in a creamy Caesar dressing",
+            "Golden, crunchy croutons adding a delightful crunch",
+            "Aged Parmesan cheese lending a sharp, nutty taste",
+            "Classic anchovies enhancing the umami richness",
         ],
         cookingTime: 15,
         difficulty: "Easy",
@@ -72,12 +74,11 @@ const recipes = ref([
         id: 5,
         title: "Margherita Pizza",
         category: "Food",
-        ingredients: [
-            "pizza dough",
-            "tomato sauce",
-            "mozzarella",
-            "basil",
-            "olive oil",
+        description: [
+            "Soft, chewy pizza dough with a crispy golden crust",
+            "Sweet and tangy tomato sauce made from ripe tomatoes",
+            "Creamy, melted mozzarella cheese for a perfect bite",
+            "Fresh basil leaves adding a fragrant touch",
         ],
         cookingTime: 25,
         difficulty: "Medium",
@@ -88,7 +89,12 @@ const recipes = ref([
         id: 6,
         title: "Beef Tacos",
         category: "Food",
-        ingredients: ["ground beef", "tortillas", "cheese", "lettuce", "salsa"],
+        description: [
+            "Juicy, seasoned ground beef packed with bold flavors",
+            "Soft, warm tortillas cradling delicious fillings",
+            "Melted cheese adding a rich, creamy texture",
+            "Fresh lettuce and salsa for a refreshing crunch",
+        ],
         cookingTime: 20,
         difficulty: "Easy",
         instructions:
@@ -99,7 +105,12 @@ const recipes = ref([
         id: 7,
         title: "Sushi Rolls",
         category: "Food",
-        ingredients: ["sushi rice", "nori", "salmon", "avocado", "cucumber"],
+        description: [
+            "Perfectly seasoned sushi rice with a delicate texture",
+            "Crisp nori sheets wrapping the fresh fillings",
+            "Premium salmon slices for a buttery, smooth taste",
+            "Creamy avocado and crisp cucumber for balance",
+        ],
         cookingTime: 60,
         difficulty: "Hard",
         instructions: "Japanese sushi rolls with fresh fish and vegetables.",
@@ -109,12 +120,11 @@ const recipes = ref([
         id: 8,
         title: "French Onion Soup",
         category: "Food",
-        ingredients: [
-            "onions",
-            "beef broth",
-            "baguette",
-            "gruyere cheese",
-            "butter",
+        description: [
+            "Slow-cooked caramelized onions bringing a deep, rich sweetness",
+            "Savory beef broth infused with aromatic herbs",
+            "Crispy baguette slices soaking up the flavorful broth",
+            "Melted Gruyère cheese forming a golden, bubbly crust",
         ],
         cookingTime: 40,
         difficulty: "Medium",
@@ -126,12 +136,11 @@ const recipes = ref([
         id: 9,
         title: "Pad Thai",
         category: "Food",
-        ingredients: [
-            "rice noodles",
-            "shrimp",
-            "peanuts",
-            "eggs",
-            "tamarind sauce",
+        description: [
+            "Chewy rice noodles tossed in a tangy tamarind sauce",
+            "Plump shrimp cooked to perfection with a smoky char",
+            "Crunchy peanuts adding texture and nuttiness",
+            "Scrambled eggs folded in for a rich, savory taste",
         ],
         cookingTime: 35,
         difficulty: "Medium",
@@ -142,7 +151,12 @@ const recipes = ref([
         id: 10,
         title: "Chocolate Lava Cake",
         category: "Food",
-        ingredients: ["dark chocolate", "butter", "sugar", "eggs", "flour"],
+        description: [
+            "Rich, dark chocolate melting into a warm, gooey center",
+            "Butter and sugar blending into a soft, moist cake",
+            "A hint of vanilla enhancing the deep cocoa flavor",
+            "Perfectly baked to create a molten surprise inside",
+        ],
         cookingTime: 30,
         difficulty: "Medium",
         instructions: "Decadent dessert with a gooey chocolate center.",
@@ -156,7 +170,7 @@ const defaultRecipe = {
     id: null,
     title: "",
     category: "Food", // New field
-    ingredients: [],
+    description: [],
     cookingTime: 30,
     difficulty: "Easy",
     instructions: "",
@@ -188,7 +202,7 @@ const openNew = () => {
 };
 
 const editRecipe = (rec) => {
-    Object.assign(recipe, { ...rec, ingredients: rec.ingredients.join(", ") });
+    Object.assign(recipe, { ...rec, description: rec.description.join(", ") });
     isEdit.value = true;
     recipeDialog.value = true;
 };
@@ -201,10 +215,10 @@ const hideDialog = () => {
 const saveRecipe = () => {
     submitted.value = true;
 
-    if (recipe.title && recipe.ingredients) {
+    if (recipe.title && recipe.description) {
         const recipeData = {
             ...recipe,
-            ingredients: recipe.ingredients.split(",").map((i) => i.trim()),
+            description: recipe.description.split(",").map((i) => i.trim()),
             id: isEdit.value ? recipe.id : recipes.value.length + 1,
         };
 
@@ -262,7 +276,7 @@ const showToast = (severity, summary, detail) => {
                 <Button
                     label="Add New Recipe"
                     icon="pi pi-plus"
-                    class="p-button-success"
+                    class="p-button-primary"
                     @click="openNew"
                 />
             </div>
@@ -305,32 +319,11 @@ const showToast = (severity, summary, detail) => {
                         </div>
 
                         <div class="mt-4">
-                            <h4 class="font-semibold mb-2">Ingredients:</h4>
-                            <div
-                                class="line-clamp-3 text-sm cursor-pointer hover:underline"
-                                @click="ingredientsPanel.toggle($event)"
-                            >
-                                {{ recipe.ingredients.join(", ") }}
+                            <h4 class="font-semibold mb-2">Description:</h4>
+                            <div class="line-clamp-3 text-sm">
+                                {{ recipe.description.join(", ") }}
                             </div>
                         </div>
-
-                        <OverlayPanel ref="ingredientsPanel">
-                            <div class="p-4">
-                                <h4 class="font-bold mb-3">
-                                    Full Ingredients List
-                                </h4>
-                                <ul class="list-disc pl-4">
-                                    <li
-                                        v-for="(
-                                            ingredient, idx
-                                        ) in recipe.ingredients"
-                                        :key="idx"
-                                    >
-                                        {{ ingredient }}
-                                    </li>
-                                </ul>
-                            </div>
-                        </OverlayPanel>
                     </div>
                 </template>
 
@@ -408,23 +401,23 @@ const showToast = (severity, summary, detail) => {
                 </div>
 
                 <div class="field col-12">
-                    <label for="ingredients"
-                        >Ingredients <span class="text-red-500">*</span></label
+                    <label for="description"
+                        >description <span class="text-red-500">*</span></label
                     >
                     <Textarea
-                        id="ingredients"
-                        v-model="recipe.ingredients"
+                        id="description"
+                        v-model="recipe.description"
                         rows="3"
                         class="w-full"
                         :class="{
-                            'p-invalid': submitted && !recipe.ingredients,
+                            'p-invalid': submitted && !recipe.description,
                         }"
-                        placeholder="Enter ingredients separated by commas"
+                        placeholder="Enter description separated by commas"
                     />
                     <small
-                        v-if="submitted && !recipe.ingredients"
+                        v-if="submitted && !recipe.description"
                         class="p-error"
-                        >Ingredients are required.</small
+                        >description are required.</small
                     >
                 </div>
 
@@ -458,13 +451,13 @@ const showToast = (severity, summary, detail) => {
                 <Button
                     label="Cancel"
                     icon="pi pi-times"
-                    class="p-button-text"
+                    class="p-button-primary"
                     @click="hideDialog"
                 />
                 <Button
                     label="Save"
                     icon="pi pi-check"
-                    class="p-button-success"
+                    class="p-button-primary"
                     @click="saveRecipe"
                 />
             </template>

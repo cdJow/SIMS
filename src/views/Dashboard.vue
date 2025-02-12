@@ -1,164 +1,179 @@
 <script setup>
-import StatsWidget from "@/components/dashboard/StatsWidget.vue";
-import Chart from "primevue/chart";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 
-// Booking Trends Data
-const bookingTrends = ref({
-    labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
-    datasets: [
-        {
-            label: "Bookings",
-            data: [65, 59, 80, 81, 56, 55],
-            fill: false,
-            borderColor: "#3B82F6",
-            tension: 0.4,
-        },
-    ],
+// Individual week offsets for each chart
+const chartWeekOffsets = ref({
+    booking: 0,
+    revenue: 0,
+    occupancy: 0,
+    products: 0,
+    menu: 0,
+    roomSize: 0,
 });
 
-// Revenue Breakdown per Week
-const revenueBreakdown = ref({
-    labels: [
-        "Monday",
-        "Tuesday",
-        "Wednesday",
-        "Thursday",
-        "Friday",
-        "Saturday",
-        "Sunday",
-    ],
-    datasets: [
-        {
-            label: "Room Sales",
-            data: [300, 450, 500, 600, 700, 800, 900],
-            backgroundColor: [
-                "#3B82F6",
-                "#10B981",
-                "#F59E0B",
-                "#EF4444",
-                "#8B5CF6",
-                "#EC4899",
-                "#FACC15",
-            ],
-        },
-    ],
-});
+// Date formatting utilities
+const generateWeeklyLabels = (offset) => {
+    const start = new Date();
+    start.setDate(start.getDate() - start.getDay() - offset * 7);
+    const labels = [];
 
-// Most Availed Room Size (Pie Chart)
-const mostAvailedRoomSize = ref({
+    for (let i = 0; i < 7; i++) {
+        const date = new Date(start);
+        date.setDate(start.getDate() + i);
+        labels.push(
+            date.toLocaleDateString("en-US", {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+            }),
+        );
+    }
+    return labels;
+};
+
+const roomSizeData = ref({
     labels: ["Single Size Bed", "Double Size Bed", "Queen Size Bed"],
     datasets: [
         {
-            data: [450, 600, 350],
+            data: [120, 250, 180],
             backgroundColor: ["#3B82F6", "#10B981", "#F59E0B"],
+            hoverBackgroundColor: ["#2563EB", "#059669", "#D97706"],
         },
     ],
 });
 
-// Occupancy Rate Data
-const occupancyRate = ref({
-    labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-    datasets: [
-        {
-            label: "Occupancy Room",
-            data: [85, 78, 92, 89, 96, 88, 95],
-            fill: true,
-            borderColor: "#3B82F6",
-            backgroundColor: "rgba(59, 130, 246, 0.2)",
-        },
-    ],
-});
-
-// Top Selling Products (Pie Chart)
-const topSellingProducts = ref({
-    labels: ["Snacks", "Beverages", "Extra Amenities"],
-    datasets: [
-        {
-            data: [500, 700, 800],
-            backgroundColor: ["#3B82F6", "#10B981", "#F59E0B", "#EF4444"],
-        },
-    ],
-});
-
-const menuItemPopularity = ref({
-    labels: ["Steak", "Pasta", "Burger", "Cocktail", "Wine"],
-    datasets: [
-        {
-            data: [300, 250, 400, 300, 300],
-            backgroundColor: [
-                "#3B82F6",
-                "#10B981",
-                "#F59E0B",
-                "#EF4444",
-                "#8B5CF6",
-            ],
-        },
-    ],
-});
-
-// Chart Options
-const chartOptions = ref({
+// Add specific options for pie chart
+const pieChartOptions = ref({
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
         legend: {
-            display: true,
-            position: "top",
+            position: "bottom",
             labels: {
-                font: {
-                    size: 12,
-                },
-                padding: 10,
+                usePointStyle: true,
+                padding: 20,
             },
         },
         tooltip: {
-            enabled: true,
-            mode: "index",
-            intersect: false,
-        },
-    },
-    scales: {
-        x: {
-            grid: {
-                display: false,
-            },
-            ticks: {
-                font: {
-                    size: 12,
-                },
-            },
-        },
-        y: {
-            grid: {
-                color: "#E5E7EB",
-            },
-            ticks: {
-                font: {
-                    size: 12,
+            callbacks: {
+                label: (context) => {
+                    const total = context.dataset.data.reduce((a, b) => a + b);
+                    const value = context.raw || 0;
+                    const percentage = ((value / total) * 100).toFixed(1);
+                    return `${context.label}: ${value} (${percentage}%)`;
                 },
             },
         },
     },
 });
+
+const formattedDateRange = (offset) => {
+    const start = new Date();
+    start.setDate(start.getDate() - start.getDay() - offset * 7);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    return `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`;
+};
+
+// Dynamic data generator with individual offsets
+const generateChartData = (baseData, offset) => {
+    return baseData.map((values) => ({
+        ...values,
+        data: values.data.map((v) =>
+            Math.round(v * (1 - offset * 0.1 + Math.random() * 0.1)),
+        ),
+    }));
+};
+
+// Chart data with individual computed properties
+const bookingTrends = computed(() => ({
+    labels: generateWeeklyLabels(chartWeekOffsets.value.booking),
+    datasets: generateChartData(
+        [
+            {
+                label: "Bookings",
+                data: [65, 59, 80, 81, 56, 55, 70],
+                borderColor: "#3B82F6",
+                tension: 0.4,
+                fill: false,
+            },
+        ],
+        chartWeekOffsets.value.booking,
+    ),
+}));
+
+const revenueBreakdown = computed(() => ({
+    labels: generateWeeklyLabels(chartWeekOffsets.value.revenue),
+    datasets: generateChartData(
+        [
+            {
+                label: "Revenue",
+                data: [300, 450, 500, 600, 700, 800, 900],
+                backgroundColor: "#3B82F6",
+            },
+        ],
+        chartWeekOffsets.value.revenue,
+    ),
+}));
+
+const occupancyRate = computed(() => ({
+    labels: generateWeeklyLabels(chartWeekOffsets.value.occupancy),
+    datasets: generateChartData(
+        [
+            {
+                label: "Occupancy",
+                data: [85, 78, 92, 89, 96, 88, 95],
+                borderColor: "#3B82F6",
+                fill: true,
+                backgroundColor: "rgba(59, 130, 246, 0.2)",
+            },
+        ],
+        chartWeekOffsets.value.occupancy,
+    ),
+}));
+
+// Update week offset for individual charts
+const updateWeekOffset = (chartType, delta) => {
+    chartWeekOffsets.value[chartType] = Math.max(
+        0,
+        chartWeekOffsets.value[chartType] + delta,
+    );
+};
 </script>
 
 <template>
-    <div class="col-span-12">
+    <div class="col-span-12 mb-2">
         <StatsWidget />
     </div>
     <div class="grid grid-cols-12 gap-6 pt-2">
-        <!-- Stats Widget -->
-
         <!-- Booking Trends -->
         <div class="col-span-12 md:col-span-6 lg:col-span-6">
             <div class="p-4 bg-white rounded-lg shadow-sm">
-                <h3 class="text-lg font-semibold mb-4">Booking Trends</h3>
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold">Booking Trends</h3>
+                    <div class="flex gap-2 items-center">
+                        <span class="text-sm text-gray-500">
+                            {{ formattedDateRange(chartWeekOffsets.booking) }}
+                        </span>
+                        <button
+                            @click="updateWeekOffset('booking', 1)"
+                            class="p-1 hover:bg-gray-100 rounded"
+                        >
+                            ←
+                        </button>
+                        <button
+                            @click="updateWeekOffset('booking', -1)"
+                            :disabled="chartWeekOffsets.booking === 0"
+                            class="p-1 hover:bg-gray-100 rounded"
+                        >
+                            →
+                        </button>
+                    </div>
+                </div>
                 <Chart
                     type="line"
                     :data="bookingTrends"
                     :options="chartOptions"
-                    class="h-72"
                 />
             </div>
         </div>
@@ -166,80 +181,107 @@ const chartOptions = ref({
         <!-- Revenue Breakdown -->
         <div class="col-span-12 md:col-span-6 lg:col-span-6">
             <div class="p-4 bg-white rounded-lg shadow-sm">
-                <h3 class="text-lg font-semibold mb-4">Revenue Breakdown</h3>
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold">Revenue Breakdown</h3>
+                    <div class="flex gap-2 items-center">
+                        <span class="text-sm text-gray-500">
+                            {{ formattedDateRange(chartWeekOffsets.revenue) }}
+                        </span>
+                        <button
+                            @click="updateWeekOffset('revenue', 1)"
+                            class="p-1 hover:bg-gray-100 rounded"
+                        >
+                            ←
+                        </button>
+                        <button
+                            @click="updateWeekOffset('revenue', -1)"
+                            :disabled="chartWeekOffsets.revenue === 0"
+                            class="p-1 hover:bg-gray-100 rounded"
+                        >
+                            →
+                        </button>
+                    </div>
+                </div>
                 <Chart
                     type="bar"
                     :data="revenueBreakdown"
                     :options="chartOptions"
-                    class="h-72"
                 />
             </div>
         </div>
 
-        <!-- Occupancy Rate -->
+        <!-- Revenue Breakdown -->
         <div class="col-span-12 md:col-span-6 lg:col-span-6">
             <div class="p-4 bg-white rounded-lg shadow-sm">
-                <h3 class="text-lg font-semibold mb-4">Occupancy Rate</h3>
-                <Chart
-                    type="line"
-                    :data="occupancyRate"
-                    :options="chartOptions"
-                    class="h-72"
-                />
-            </div>
-        </div>
-
-        <!-- Top Selling Products -->
-        <div class="col-span-12 md:col-span-6 lg:col-span-6">
-            <div class="p-4 bg-white rounded-lg shadow-sm">
-                <h3 class="text-lg font-semibold mb-4">Top Selling Products</h3>
-                <Chart
-                    type="bar"
-                    :data="topSellingProducts"
-                    :options="chartOptions"
-                    class="h-72"
-                />
-            </div>
-        </div>
-
-        <!-- Menu Item Popularity -->
-        <div class="col-span-12 md:col-span-6 lg:col-span-6">
-            <div class="p-4 bg-white rounded-lg shadow-sm">
-                <h3 class="text-lg font-semibold mb-4">Menu Item Popularity</h3>
-                <Chart
-                    type="bar"
-                    :data="menuItemPopularity"
-                    :options="chartOptions"
-                    class="h-72"
-                />
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold mb-4">Occupancy Rate</h3>
+                    <div class="flex gap-2 items-center">
+                        <span class="text-sm text-gray-500">
+                            {{ formattedDateRange(chartWeekOffsets.occupancy) }}
+                        </span>
+                        <button
+                            @click="updateWeekOffset('occupancy', 1)"
+                            class="p-1 hover:bg-gray-100 rounded"
+                        >
+                            ←
+                        </button>
+                        <button
+                            @click="updateWeekOffset('occupancy', -1)"
+                            :disabled="chartWeekOffsets.occupancy === 0"
+                            class="p-1 hover:bg-gray-100 rounded"
+                        >
+                            →
+                        </button>
+                    </div>
+                </div>
+                <div class="p-4 bg-white rounded-lg shadow-sm">
+                    <Chart
+                        type="line"
+                        :data="occupancyRate"
+                        :options="chartOptions"
+                    />
+                </div>
             </div>
         </div>
 
         <div class="col-span-12 md:col-span-6 lg:col-span-6">
             <div class="p-4 bg-white rounded-lg shadow-sm">
-                <h3 class="text-lg font-semibold mb-4">
-                    Most Availed Room Size
-                </h3>
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold">
+                        Most Availed Room Size
+                    </h3>
+                    <div class="text-sm text-gray-500">Last 30 Days</div>
+                </div>
+
                 <Chart
-                    type="pie"
-                    :data="mostAvailedRoomSize"
-                    :options="chartOptions"
-                    class="h-72"
+                    type="doughnut"
+                    :data="roomSizeData"
+                    :options="pieChartOptions"
                 />
+
+                <div class="mt-4 grid grid-cols-3 gap-4 text-center">
+                    <div
+                        v-for="(label, index) in roomSizeData.labels"
+                        :key="label"
+                    >
+                        <div class="text-sm font-medium text-gray-600">
+                            {{ label }}
+                        </div>
+                        <div
+                            class="text-lg font-semibold"
+                            :style="{
+                                color: roomSizeData.datasets[0].backgroundColor[
+                                    index
+                                ],
+                            }"
+                        >
+                            {{ roomSizeData.datasets[0].data[index] }}
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
+
+        <!-- Repeat similar structure for other charts -->
     </div>
 </template>
-
-<style scoped>
-/* Additional custom styles */
-.bg-white {
-    background-color: #fff;
-}
-.rounded-lg {
-    border-radius: 0.5rem;
-}
-.shadow-sm {
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-</style>

@@ -1,5 +1,7 @@
 <script setup>
+import { useToast } from "primevue/usetoast";
 import { ref } from "vue";
+import { useRouter } from "vue-router";
 
 const responsiveOptions = ref([
     {
@@ -34,6 +36,128 @@ const amenities = ref([
     },
     // Add more amenities...
 ]);
+
+const toast = useToast();
+
+const isLoggedIn = ref(false);
+
+import { useAuthStore } from "@/stores/auth";
+
+const router = useRouter();
+const authStore = useAuthStore();
+
+const showLoginDialog = ref(false);
+const roles = ref([
+    { name: "Admin", value: "admin" },
+    { name: "Manager", value: "manager" },
+    { name: "Front Desk", value: "frontdesk" },
+    { name: "Inventory Manager", value: "inventory" },
+    { name: "Kitchen Staff", value: "kitchen" },
+]);
+
+const loginForm = ref({
+    email: "",
+    password: "",
+    role: "",
+});
+
+const loginErrors = ref({
+    email: "",
+    password: "",
+    role: "",
+});
+
+const validateForm = () => {
+    loginErrors.value = { email: "", password: "", role: "" };
+    let isValid = true;
+
+    if (!loginForm.value.email) {
+        loginErrors.value.email = "Email is required";
+        isValid = false;
+    }
+
+    if (!loginForm.value.password) {
+        loginErrors.value.password = "Password is required";
+        isValid = false;
+    }
+
+    if (!loginForm.value.role) {
+        loginErrors.value.role = "Role is required";
+        isValid = false;
+    }
+
+    return isValid;
+};
+
+const handleLogin = async () => {
+    if (!validateForm()) return;
+
+    try {
+        // Mock authentication - replace with actual API call
+        await mockAuthAPI(loginForm.value);
+
+        authStore.login({
+            email: loginForm.value.email,
+            role: loginForm.value.role,
+            token: "mock-token",
+        });
+
+        // Redirect based on role
+        switch (loginForm.value.role) {
+            case "admin":
+                router.push("/admin-dashboard");
+                break;
+            case "manager":
+                router.push("/manager-dashboard");
+                break;
+            case "frontdesk":
+                router.push("/frontdesk-dashboard");
+                break;
+            case "inventory":
+                router.push("/inventory-dashboard");
+                break;
+            case "kitchen":
+                router.push("/kitchen-dashboard");
+                break;
+            default:
+                router.push("/");
+        }
+
+        showLoginDialog.value = false;
+    } catch (error) {
+        console.error("Login failed:", error);
+    }
+};
+
+// Mock authentication API
+const mockAuthAPI = (credentials) => {
+    return new Promise((resolve, reject) => {
+        setTimeout(() => {
+            const validRoles = [
+                "admin",
+                "manager",
+                "frontdesk",
+                "inventory",
+                "kitchen",
+            ];
+            if (validRoles.includes(credentials.role)) {
+                resolve({ status: 200, data: { user: credentials } });
+            } else {
+                reject(new Error("Invalid role selected"));
+            }
+        }, 1000);
+    });
+};
+// Handle logout
+const handleLogout = () => {
+    isLoggedIn.value = false;
+    toast.add({
+        severity: "info",
+        summary: "Logged Out",
+        detail: "You have been successfully logged out",
+        life: 3000,
+    });
+};
 </script>
 
 <template>
@@ -66,6 +190,18 @@ const amenities = ref([
                         >Contact</a
                     >
                 </nav>
+                <Button
+                    v-if="!isLoggedIn"
+                    label="Login"
+                    class="p-button-text p-button-secondary"
+                    @click="showLoginDialog = true"
+                />
+                <Button
+                    v-else
+                    label="Logout"
+                    class="p-button-text p-button-danger"
+                    @click="handleLogout"
+                />
             </div>
         </header>
 
@@ -273,4 +409,88 @@ const amenities = ref([
             </div>
         </footer>
     </div>
+
+    <!-- Add login dialog -->
+    <Dialog
+        v-model:visible="showLoginDialog"
+        :style="{ width: '400px' }"
+        :modal="true"
+        :dismissableMask="true"
+    >
+        <template #header>
+            <div class="text-center w-full">
+                <h2 class="text-2xl font-bold mb-2">Login!</h2>
+            </div>
+        </template>
+
+        <div class="p-fluid space-y-4">
+            <div class="field">
+                <InputText
+                    id="email"
+                    v-model="loginForm.email"
+                    type="email"
+                    placeholder="Email"
+                    :class="{ 'p-invalid': loginErrors.email }"
+                    class="w-full"
+                />
+                <small v-if="loginErrors.email" class="p-error block mt-1">
+                    {{ loginErrors.email }}
+                </small>
+            </div>
+
+            <div class="field">
+                <InputText
+                    id="password"
+                    v-model="loginForm.password"
+                    type="password"
+                    placeholder="Password"
+                    :class="{ 'p-invalid': loginErrors.password }"
+                    class="w-full"
+                />
+                <small v-if="loginErrors.password" class="p-error block mt-1">
+                    {{ loginErrors.password }}
+                </small>
+            </div>
+
+            <div class="field">
+                <Dropdown
+                    v-model="loginForm.role"
+                    :options="roles"
+                    optionLabel="name"
+                    placeholder="Login As?"
+                    :class="{ 'p-invalid': loginErrors.role }"
+                    class="w-full"
+                />
+                <small v-if="loginErrors.role" class="p-error block mt-1">
+                    {{ loginErrors.role }}
+                </small>
+            </div>
+        </div>
+
+        <template #footer>
+            <div class="w-full space-y-4">
+                <Button
+                    label="Login"
+                    class="w-full p-button-success"
+                    @click="handleLogin"
+                />
+
+                <div class="text-center text-sm">
+                    <span class="text-muted-color"
+                        >Don't have an account?
+                    </span>
+                    <a
+                        href="#"
+                        class="text-primary font-semibold hover:underline"
+                        @click.prevent="showRegisterDialog = true"
+                    >
+                        Create Account
+                    </a>
+                </div>
+            </div>
+        </template>
+    </Dialog>
+
+    <!-- Add toast component -->
+    <Toast />
 </template>

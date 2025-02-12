@@ -37,7 +37,7 @@ const model = ref([
                 to: "/Rates/RatePage",
             },
             {
-                label: "Account Management",
+                label: "Admin Account ",
                 icon: "pi  pi-users",
                 to: "/Accounts/AccountsPanel",
             },
@@ -62,7 +62,7 @@ const model = ref([
     {
         label: "Manager",
         items: [
-            { label: "Dashboard", icon: "pi pi-fw pi-home", to: "/" },
+            { label: "Dashboard", icon: "pi pi-fw pi-home", to: "/Dashboard" },
             {
                 label: "Inventory Summary",
                 icon: "pi pi-fw pi-file-pdf",
@@ -207,23 +207,7 @@ const model = ref([
             {
                 label: "Kitchen Staff Module",
                 icon: "pi pi-fw pi-globe",
-                to: "/landing",
-            },
-        ],
-    },
-
-    {
-        label: "Landing Page",
-        items: [
-            {
-                label: "Landing",
-                icon: "pi pi-fw pi-globe",
-                to: "/landing",
-            },
-            {
-                label: "Login",
-                icon: "pi pi-fw pi-sign-in",
-                to: "/auth/login",
+                to: "/KitchenModule",
             },
         ],
     },
@@ -244,8 +228,6 @@ const model = ref([
         </template>
     </ul>
 </template>
-
-<style lang="scss" scoped></style>
 
 <!--
 
