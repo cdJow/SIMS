@@ -1,5 +1,4 @@
 import AppLayout from "@/layout/AppLayout.vue";
-import { useAuthStore } from "@/stores/auth";
 import { createRouter, createWebHistory } from "vue-router";
 
 const router = createRouter({
@@ -59,6 +58,14 @@ const router = createRouter({
                     component: () =>
                         import("@/views/pages/Rooms/CheckoutList.vue"),
                 },
+
+                {
+                    path: "/Rooms/DamageReport",
+                    name: " Damage Report",
+                    component: () =>
+                        import("@/views/pages/Rooms/DamageReport.vue"),
+                },
+
                 {
                     path: "/FrontDeskMenu",
                     name: " Check Out",
@@ -354,14 +361,3 @@ const router = createRouter({
 });
 
 export default router;
-router.beforeEach((to) => {
-    const authStore = useAuthStore();
-
-    if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-        return "/login";
-    }
-
-    if (to.meta.guestOnly && authStore.isAuthenticated) {
-        return "/";
-    }
-});

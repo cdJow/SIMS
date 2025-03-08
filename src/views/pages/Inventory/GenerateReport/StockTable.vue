@@ -91,7 +91,6 @@ function formatDateTime(dateTime) {
                     id="datePicker"
                     :showIcon="true"
                     :showButtonBar="true"
-                    v-model="calendarValue"
                     class="w-60"
                 ></DatePicker>
             </div>

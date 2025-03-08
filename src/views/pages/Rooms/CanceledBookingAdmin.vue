@@ -1,10 +1,6 @@
 <script setup>
-import { FilterMatchMode, FilterOperator } from "@primevue/core/api";
-import { onBeforeMount, ref } from "vue";
-
-const canceledBookings = ref(null);
-
-const filters = ref(null);
+import { useToast } from "primevue/usetoast";
+import { computed, onBeforeMount, ref } from "vue";
 
 const mockCanceledBookings = [
     {
@@ -53,12 +49,48 @@ const mockCanceledBookings = [
     },
 ];
 
-const op = ref();
-const selectedBooking = ref(null);
+// Add these filter-related variables
+const filters = ref({
+    searchQuery: "",
+    dateRange: [null, null],
+    roomType: null,
+});
 
-const handleClick = (event, bookingData) => {
-    selectedBooking.value = bookingData;
-    op.value.toggle(event);
+// Add computed filtered bookings
+const filteredBookings = computed(() => {
+    return canceledBookings.value.filter((booking) => {
+        // Search filter
+        const searchMatches =
+            booking.BookingCode.toLowerCase().includes(
+                filters.value.searchQuery.toLowerCase()
+            ) ||
+            booking.guestName
+                .toLowerCase()
+                .includes(filters.value.searchQuery.toLowerCase());
+
+        // Date range filter
+        const dateMatches =
+            !filters.value.dateRange[0] ||
+            (booking.cancellationDate >= new Date(filters.value.dateRange[0]) &&
+                booking.cancellationDate <=
+                    new Date(filters.value.dateRange[1]));
+
+        // Room type filter
+        const roomTypeMatches =
+            !filters.value.roomType ||
+            booking.roomType === filters.value.roomType;
+
+        return searchMatches && dateMatches && roomTypeMatches;
+    });
+});
+
+// Add clear filters function
+const clearFilters = () => {
+    filters.value = {
+        searchQuery: "",
+        dateRange: [null, null],
+        roomType: null,
+    };
 };
 
 onBeforeMount(() => {
@@ -66,56 +98,92 @@ onBeforeMount(() => {
         ...booking,
         checkInDate: new Date(booking.checkInDate),
         checkOutDate: new Date(booking.checkOutDate),
-        cancellationDate: new Date(booking.cancellationDate), // Parse cancellation date
+        cancellationDate: new Date(booking.cancellationDate),
     }));
-    initFilters();
+    console.log("Canceled Bookings Loaded:", canceledBookings.value);
 });
 
-function initFilters() {
-    filters.value = {
-        global: { value: null, matchMode: FilterMatchMode.CONTAINS },
-        guestName: {
-            operator: FilterOperator.AND,
-            constraints: [
-                { value: null, matchMode: FilterMatchMode.STARTS_WITH },
-            ],
-        },
-        roomNumber: {
-            operator: FilterOperator.AND,
-            constraints: [{ value: null, matchMode: FilterMatchMode.EQUALS }],
-        },
-    };
-}
+const canceledBookings = ref([]); // Initialize as empty array instead of null
+const toast = useToast();
+const deleteDialogVisible = ref(false);
+
+const selectedBookingToDelete = ref(null);
+
+// Add delete confirmation functions
+const confirmDelete = (booking) => {
+    selectedBookingToDelete.value = booking;
+    deleteDialogVisible.value = true;
+};
+
+const executeDelete = () => {
+    if (selectedBookingToDelete.value) {
+        canceledBookings.value = canceledBookings.value.filter(
+            (b) => b.BookingCode !== selectedBookingToDelete.value.BookingCode
+        );
+        deleteDialogVisible.value = false;
+        selectedBookingToDelete.value = null;
+    }
+
+    // Show success toast
+    toast.add({
+        severity: "error",
+        summary: "Deleted",
+        detail: "Deleted successfully",
+        life: 3000,
+    });
+};
+
+const cancelDelete = () => {
+    deleteDialogVisible.value = false;
+    selectedBookingToDelete.value = null;
+};
+const op = ref();
+const selectedBooking = ref(null);
+
+const handleClick = (event, bookingData) => {
+    selectedBooking.value = bookingData;
+    op.value.toggle(event);
+};
 </script>
 
 <template>
-    <div class="p-4 bg-white rounded-lg shadow-sm">
+    <div class="card p-4 rounded-lg shadow-sm">
         <div class="text-xl font-semibold mb-4">Canceled Bookings</div>
 
-        <!-- Clear and Search -->
-        <div class="flex gap-4 mb-4">
-            <Button
-                type="button"
-                icon="pi pi-filter-slash"
-                label="Clear"
-                outlined
-                class="mb-4"
-            />
-            <div class="flex-1">
-                <InputText
-                    placeholder="Keyword Search"
-                    class="p-2 border rounded-lg"
-                />
+        <!-- Enhanced Filter Section -->
+        <div>
+            <div class="mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    <!-- Search -->
+                    <div>
+                        <div class="flex gap-2">
+                            <Button
+                                type="button"
+                                icon="pi pi-filter-slash"
+                                label="Clear"
+                                outlined
+                                class="whitespace-nowrap"
+                                @click="clearFilters"
+                            />
+                            <InputText
+                                placeholder="Enter Booking Code"
+                                class="flex-1 p-3 border rounded-lg"
+                                v-model="filters.searchQuery"
+                            />
+                        </div>
+                    </div>
+                    <!-- Date Range -->
+                </div>
             </div>
-        </div>
 
+            <!-- DataTable and other content -->
+        </div>
         <!-- DataTable -->
         <DataTable
-            :value="canceledBookings"
+            :value="filteredBookings"
             scrollable
             scrollHeight="600px"
             class="mt-6"
-            :filters="filters"
         >
             <!-- Booking Code -->
             <Column
@@ -154,12 +222,15 @@ function initFilters() {
                             outlined
                             rounded
                             @click="handleClick($event, data)"
+                            v-tooltip="'View Guest Info'"
                         />
                         <Button
                             icon="pi pi-trash"
                             class="p-button-danger"
                             outlined
                             rounded
+                            @click="confirmDelete(data)"
+                            v-tooltip="'Delete Booking'"
                         />
                     </div>
                 </template>
@@ -189,4 +260,40 @@ function initFilters() {
             </div>
         </Popover>
     </div>
+
+    <Dialog
+        v-model:visible="deleteDialogVisible"
+        :style="{ width: '450px' }"
+        header="Confirm Deletion"
+        :modal="true"
+    >
+        <div class="confirmation-content">
+            <i
+                class="pi pi-exclamation-triangle mr-3"
+                style="font-size: 2rem"
+            />
+            <span v-if="selectedBookingToDelete">
+                Are you sure you want to delete booking
+                <strong class="text-red-500">{{
+                    selectedBookingToDelete.BookingCode
+                }}</strong
+                >?
+            </span>
+        </div>
+        <template #footer>
+            <Button
+                label="No"
+                icon="pi pi-times"
+                class="p-button-primary"
+                @click="cancelDelete"
+            />
+            <Button
+                label="Yes"
+                icon="pi pi-check"
+                class="p-button-danger"
+                @click="executeDelete"
+            />
+        </template>
+    </Dialog>
+    <toast />
 </template>

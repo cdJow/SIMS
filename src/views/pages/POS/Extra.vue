@@ -100,15 +100,11 @@ export default {
                     <div
                         v-for="product in filteredProducts"
                         :key="product.id"
-                        class="p-4 border rounded-lg shadow bg-gray-50"
+                        class="p-4 border rounded-lg shadow"
                     >
                         <h3 class="font-bold text-lg">{{ product.name }}</h3>
-                        <p class="text-sm text-gray-600">
-                            Price: ₱{{ product.price }}
-                        </p>
-                        <p class="text-sm text-gray-600">
-                            Stock: {{ product.stock }}
-                        </p>
+                        <p class="text-sm">Price: ₱{{ product.price }}</p>
+                        <p class="text-sm">Stock: {{ product.stock }}</p>
                         <Button
                             label="Add to Cart"
                             icon="pi pi-plus"
@@ -133,8 +129,8 @@ export default {
                         :key="room.id"
                         :class="[
                             selectedRoom === room
-                                ? 'p-4 border-green-500 border bg-green-100'
-                                : 'p-4 bg-gray-100',
+                                ? 'p-4 border-green-500 border '
+                                : 'p-4 ',
                         ]"
                         class="rounded-lg shadow cursor-pointer"
                         @click="selectRoom(room)"
@@ -142,9 +138,7 @@ export default {
                         <h3 class="font-bold text-lg">
                             Room {{ room.roomNumber }}
                         </h3>
-                        <p class="text-sm text-gray-600">
-                            Status: {{ room.status }}
-                        </p>
+                        <p class="text-sm">Status: {{ room.status }}</p>
                     </div>
                 </div>
             </div>
@@ -183,12 +177,3 @@ export default {
         </div>
     </div>
 </template>
-
-<style scoped>
-.card {
-    background: #fff;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 16px;
-}
-</style>

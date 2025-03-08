@@ -54,7 +54,7 @@ const handleLogin = async () => {
             <div>
                 <img
                     class="mx-auto h-12 w-auto"
-                    src="@/assets/logo.png"
+                    src="@/assets/main.png"
                     alt="Hotel Logo"
                 />
                 <h2

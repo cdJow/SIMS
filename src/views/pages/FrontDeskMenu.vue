@@ -148,7 +148,7 @@ const getStatusSeverity = (status) => {
 <template>
     <div class="p-4 space-y-8">
         <!-- Order Creation Section -->
-        <div class="bg-white p-6 rounded-lg shadow-md">
+        <div class="card p-6 rounded-lg">
             <h2 class="text-2xl font-bold mb-6">New Order</h2>
 
             <!-- Room Selection -->
@@ -181,7 +181,7 @@ const getStatusSeverity = (status) => {
                                     <h3 class="font-semibold">
                                         {{ item.name }}
                                     </h3>
-                                    <p class="text-sm text-gray-600">
+                                    <p class="text-sm">
                                         {{ item.description }}
                                     </p>
                                     <p class="text-primary font-medium mt-2">
@@ -259,7 +259,7 @@ const getStatusSeverity = (status) => {
         </div>
 
         <!-- Active Orders Section -->
-        <div class="bg-white p-6 rounded-lg shadow-md">
+        <div class="card p-6 rounded-lg shadow-md">
             <h2 class="text-2xl font-bold mb-6">Active Orders</h2>
             <DataTable :value="activeOrders" class="p-datatable-sm">
                 <Column field="orderNumber" header="Order #" sortable></Column>

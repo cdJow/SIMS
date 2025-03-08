@@ -3,6 +3,48 @@ import { useToast } from "primevue/usetoast";
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 
+const roomRates = ref([
+    {
+        type: "Single Size Bed",
+        durations: [
+            { hours: 6, price: 200 },
+            { hours: 12, price: 400 },
+            { hours: 24, price: 800 },
+        ],
+    },
+    {
+        type: "Double Size Bed",
+        durations: [
+            { hours: 6, price: 200 },
+            { hours: 12, price: 400 },
+            { hours: 24, price: 800 },
+        ],
+    },
+    {
+        type: "Queen Size Bed",
+        durations: [
+            { hours: 6, price: 200 },
+            { hours: 12, price: 400 },
+            { hours: 24, price: 800 },
+        ],
+    },
+]);
+
+const showBookingDialog = ref(false);
+const selectedRoom = ref(null);
+
+// Add this method
+const handleBookNow = () => {
+    showBookingDialog.value = true;
+};
+
+// Add this method to handle room selection
+const selectRoom = (room) => {
+    selectedRoom.value = room;
+    showBookingDialog.value = false;
+    router.push("/booking-form"); // Replace with your actual booking route
+};
+
 const responsiveOptions = ref([
     {
         breakpoint: "1400px",
@@ -18,23 +60,43 @@ const responsiveOptions = ref([
 
 const rooms = ref([
     {
-        name: "Deluxe Suite",
-        price: "$299",
-        description:
-            "Spacious suite with panoramic city views and premium amenities.",
-        image: "https://source.unsplash.com/random/800x600/?hotel-room",
+        name: "Double Size Bed - Standard",
+        description: "Perfect for two guests with additional space.",
+        occupancy: "2 person(s)",
     },
-    // Add more rooms...
+    {
+        name: "Double Size Bed - Standard",
+        description: "Perfect for two guests with additional space.",
+        occupancy: "2 person(s)",
+    },
+    {
+        name: "Double Size Bed - Standard",
+        description: "Perfect for two guests with additional space.",
+        occupancy: "2 person(s)",
+    },
+    {
+        name: "Double Size Bed - Standard",
+        description: "Perfect for two guests with additional space.",
+        occupancy: "2 person(s)",
+    },
+    {
+        name: "Double Size Bed - Standard",
+        description: "Perfect for two guests with additional space.",
+        occupancy: "2 person(s)",
+    },
 ]);
 
 const amenities = ref([
     {
         icon: "pi pi-wifi",
-        title: "High-Speed WiFi",
-        description:
-            "Complimentary high-speed internet access throughout the hotel",
+        title: "Free Wi-Fi",
+        description: "Stay connected with complimentary high-speed internet.",
     },
-    // Add more amenities...
+    {
+        icon: "pi pi-car",
+        title: "Parking",
+        description: "Safe and convenient on-site parking for all guests.",
+    },
 ]);
 
 const toast = useToast();
@@ -47,13 +109,6 @@ const router = useRouter();
 const authStore = useAuthStore();
 
 const showLoginDialog = ref(false);
-const roles = ref([
-    { name: "Admin", value: "admin" },
-    { name: "Manager", value: "manager" },
-    { name: "Front Desk", value: "frontdesk" },
-    { name: "Inventory Manager", value: "inventory" },
-    { name: "Kitchen Staff", value: "kitchen" },
-]);
 
 const loginForm = ref({
     email: "",
@@ -168,7 +223,7 @@ const handleLogout = () => {
                 class="container mx-auto px-6 py-4 flex justify-between items-center"
             >
                 <div class="text-2xl font-bold text-primary">
-                    Woodland<span class="text-green-500">Suite</span> Hotel
+                    Woodland<span class="text-red-500">Suites</span>
                 </div>
                 <nav class="hidden md:flex space-x-8">
                     <a href="#rooms" class="hover:text-accent transition-colors"
@@ -179,15 +234,13 @@ const handleLogout = () => {
                         class="hover:text-accent transition-colors"
                         >Amenities</a
                     >
-                    <a
-                        href="#offers"
-                        class="hover:text-accent transition-colors"
-                        >Offers</a
+                    <a href="#rates" class="hover:text-accent transition-colors"
+                        >Rates</a
                     >
                     <a
-                        href="#contact"
+                        href="#location"
                         class="hover:text-accent transition-colors"
-                        >Contact</a
+                        >Location</a
                     >
                 </nav>
                 <Button
@@ -206,16 +259,16 @@ const handleLogout = () => {
         </header>
 
         <!-- Hero Section -->
-        <!-- Hero Section -->
         <section class="relative h-screen">
-            <div class="container h-full mx-auto px-6">
+            <div class="card h-full mx-auto px-6">
                 <div class="grid md:grid-cols-2 h-full gap-12 items-center">
                     <!-- Left Side - Text Content -->
                     <div class="text-white relative z-10">
                         <h1
                             class="text-4xl md:text-6xl font-bold mb-6 leading-tight"
                         >
-                            Experience Luxury Redefined
+                            <span class="text-red-500">EXPERIENCE</span> LUXURY
+                            REDEFINED
                         </h1>
                         <p
                             class="text-xl mb-8 md:text-2xl md:mb-12 text-gray-500"
@@ -225,6 +278,7 @@ const handleLogout = () => {
                         <Button
                             label="Book Now"
                             class="p-button-lg p-button-success hover:bg-green-600 transition-all"
+                            @click="handleBookNow"
                         />
                     </div>
 
@@ -233,8 +287,8 @@ const handleLogout = () => {
                         class="relative h-full rounded-lg overflow-hidden shadow-2xl"
                     >
                         <img
-                            src="@/assets/images/1.jpg"
-                            class="w-full h-full object-cover transform hover:scale-105 transition-transform duration-500"
+                            src="@/assets/images/main.jpg"
+                            class="w-full h-full rounded-lg object-cover transform hover:scale-105 transition-transform duration-500"
                             alt="Luxury Suite"
                         />
                         <div
@@ -248,9 +302,7 @@ const handleLogout = () => {
         <!-- Rooms & Suites -->
         <section id="rooms" class="py-20">
             <div class="container mx-auto px-6">
-                <h2 class="text-3xl font-bold mb-12 text-center">
-                    Rooms & Suites
-                </h2>
+                <h2 class="text-3xl font-bold mb-12 text-center">Rooms</h2>
                 <Carousel
                     :value="rooms"
                     :numVisible="3"
@@ -262,30 +314,95 @@ const handleLogout = () => {
                             <Card class="shadow-lg">
                                 <template #header>
                                     <img
-                                        :src="room.data.image"
-                                        class="w-full h-64 object-cover"
-                                        :alt="room.data.name"
+                                        src="@/assets/images/2.jpg"
+                                        class="w-full h-full object-cover transform hover:scale-105 transition-transform duration-500"
+                                        alt="Luxury Suite"
                                     />
                                 </template>
                                 <template #title>{{ room.data.name }}</template>
-                                <template #subtitle
-                                    >{{ room.data.price }}/night</template
-                                >
                                 <template #content>
-                                    <p class="text-gray-600 line-clamp-3">
-                                        {{ room.data.description }}
-                                    </p>
-                                </template>
-                                <template #footer>
-                                    <Button
-                                        label="View Details"
-                                        class="p-button-outlined p-button-primary w-full"
-                                    />
+                                    <div class="space-y-3">
+                                        <p class="text-gray-600">
+                                            {{ room.data.description }}
+                                        </p>
+                                        <div class="text-sm text-gray-500">
+                                            Occupancy: {{ room.data.occupancy }}
+                                        </div>
+                                        <div class="grid grid-cols-3 gap-2">
+                                            <div
+                                                v-for="(duration, index) in room
+                                                    .data.durations"
+                                                :key="index"
+                                                class="p-4 border shadow-md rounded-md text-center w-full"
+                                            >
+                                                <span
+                                                    class="text-gray-600 block"
+                                                >
+                                                    {{ duration.hours }}hrs:
+                                                </span>
+                                                <span
+                                                    class="font-semibold text-green-600"
+                                                >
+                                                    ₱{{ duration.price }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </template>
                             </Card>
                         </div>
                     </template>
                 </Carousel>
+            </div>
+        </section>
+
+        <section id="rates" class="py-20">
+            <div class="container mx-auto px-6">
+                <h2 class="text-3xl font-bold mb-12 text-center">
+                    Room Prices
+                </h2>
+                <div class="grid md:grid-cols-3 gap-8">
+                    <div
+                        v-for="(room, index) in roomRates"
+                        :key="index"
+                        class="p-6 bg-white rounded-lg shadow-md transition-shadow border-l-4 border-indigo-500"
+                    >
+                        <div class="flex items-center mb-4">
+                            <!-- Room type icon -->
+                            <svg
+                                class="w-8 h-8 text-indigo-500 mr-3"
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
+                            >
+                                <!-- Example bed icon -->
+                                <path
+                                    d="M2 10a4 4 0 014-4h8a4 4 0 014 4v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2z"
+                                />
+                                <path d="M6 12V7a1 1 0 011-1h6a1 1 0 011 1v5" />
+                            </svg>
+                            <h3 class="text-xl font-semibold text-gray-800">
+                                {{ room.type }}
+                            </h3>
+                        </div>
+                        <div class="space-y-3">
+                            <div
+                                v-for="(duration, dIndex) in room.durations"
+                                :key="dIndex"
+                                class="flex justify-between items-center"
+                            >
+                                <div class="flex items-center">
+                                    <!-- Duration icon -->
+                                    <span class="text-gray-600">
+                                        {{ duration.hours }} hours
+                                    </span>
+                                </div>
+                                <span class="font-semibold text-gray-700">
+                                    {{ duration.price }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -315,7 +432,7 @@ const handleLogout = () => {
         </section>
 
         <!-- Contact & Location -->
-        <section id="contact" class="py-20 bg-white">
+        <section id="location" class="py-20 bg-white">
             <div id="highlights" class="py-6 px-6 lg:px-20 mx-0 my-12 lg:mx-20">
                 <div class="text-center">
                     <div
@@ -376,20 +493,13 @@ const handleLogout = () => {
                                 >Amenities</a
                             >
                         </li>
-                        <li>
-                            <a
-                                href="#offers"
-                                class="hover:text-accent transition-colors"
-                                >Special Offers</a
-                            >
-                        </li>
                     </ul>
                 </div>
                 <div>
                     <h3 class="font-semibold mb-4 text-white">Contact</h3>
                     <p class="text-gray-300">
-                        123 Luxury Avenue<br />Metropolis City<br />Phone: (555)
-                        123-4567<br />Email: info@grandluxe.com
+                        Poblacion Iligan <br />Iligan City<br />Phone: (555)
+                        123-4567<br />Email: woodlandsuite@gmail.com
                     </p>
                 </div>
                 <div>
@@ -409,6 +519,72 @@ const handleLogout = () => {
             </div>
         </footer>
     </div>
+
+    <Dialog
+        v-model:visible="showBookingDialog"
+        :style="{ width: '90vw', maxWidth: '1200px' }"
+        :modal="true"
+        :dismissableMask="true"
+    >
+        <template #header>
+            <div class="text-center w-full">
+                <h2 class="text-3xl font-bold text-gray-800">
+                    Available Rooms
+                </h2>
+                <p class="text-gray-600 mt-2">
+                    Select your preferred accommodation
+                </p>
+            </div>
+        </template>
+
+        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div
+                v-for="(room, index) in rooms"
+                :key="index"
+                class="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 border-t-4 border-indigo-500"
+            >
+                <div class="p-6 h-full flex flex-col">
+                    <div class="mb-4 relative overflow-hidden rounded-lg">
+                        <img
+                            :src="room.image"
+                            class="w-full h-48 object-cover transform hover:scale-105 transition-transform duration-500"
+                            alt="Room Image"
+                        />
+                    </div>
+                    <h3 class="text-xl font-semibold text-gray-800 mb-2">
+                        {{ room.name }}
+                    </h3>
+                    <p class="text-gray-600 mb-3 flex-grow">
+                        {{ room.description }}
+                    </p>
+                    <div class="text-sm text-gray-500 mb-4">
+                        <i class="pi pi-users mr-2"></i>{{ room.occupancy }}
+                    </div>
+
+                    <div class="space-y-3 mb-4">
+                        <div
+                            v-for="(duration, dIndex) in room.durations"
+                            :key="dIndex"
+                            class="flex justify-between items-center px-4 py-2 bg-gray-50 rounded-md"
+                        >
+                            <span class="text-gray-600"
+                                >{{ duration.hours }} hours</span
+                            >
+                            <span class="font-semibold text-indigo-600"
+                                >₱{{ duration.price }}</span
+                            >
+                        </div>
+                    </div>
+
+                    <Button
+                        label="Select Room"
+                        class="w-full p-button-success"
+                        @click="selectRoom(room)"
+                    />
+                </div>
+            </div>
+        </div>
+    </Dialog>
 
     <!-- Add login dialog -->
     <Dialog
@@ -449,20 +625,6 @@ const handleLogout = () => {
                 />
                 <small v-if="loginErrors.password" class="p-error block mt-1">
                     {{ loginErrors.password }}
-                </small>
-            </div>
-
-            <div class="field">
-                <Dropdown
-                    v-model="loginForm.role"
-                    :options="roles"
-                    optionLabel="name"
-                    placeholder="Login As?"
-                    :class="{ 'p-invalid': loginErrors.role }"
-                    class="w-full"
-                />
-                <small v-if="loginErrors.role" class="p-error block mt-1">
-                    {{ loginErrors.role }}
                 </small>
             </div>
         </div>

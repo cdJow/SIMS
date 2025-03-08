@@ -1,7 +1,7 @@
 <script setup>
 import { ProductService } from "@/service/ProductService";
 import { useToast } from "primevue/usetoast";
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 
 // State Variables
 const layout = ref("grid");
@@ -94,6 +94,60 @@ const stats = ref({
     revenue: 5500,
     revenueIncrease: 12,
 });
+
+// Add these filter-related state variables
+const selectedFilter = ref({
+    searchQuery: "",
+    roomType: null,
+    status: {
+        Available: false,
+        Occupied: false,
+        Cleaning: false,
+    },
+});
+
+// Add computed properties for filtering
+const filteredRooms = computed(() => {
+    return rooms.value.filter((room) => {
+        // Search filter
+        const matchesSearch = room.roomNumber
+            .toLowerCase()
+            .includes(selectedFilter.value.searchQuery.toLowerCase());
+
+        // Room type filter
+        const matchesType =
+            !selectedFilter.value.roomType ||
+            room.type === selectedFilter.value.roomType;
+
+        // Status filter
+        const statusFilters = Object.entries(selectedFilter.value.status)
+            .filter(([, checked]) => checked)
+            .map(([status]) => status);
+
+        const matchesStatus =
+            statusFilters.length === 0 || statusFilters.includes(room.status);
+
+        return matchesSearch && matchesType && matchesStatus;
+    });
+});
+
+// Add computed property for room types
+const roomTypes = computed(() => {
+    return [...new Set(rooms.value.map((room) => room.type))];
+});
+
+// Add clear filters function
+const clearFilters = () => {
+    selectedFilter.value = {
+        searchQuery: "",
+        roomType: null,
+        status: {
+            Available: false,
+            Occupied: false,
+            Cleaning: false,
+        },
+    };
+};
 
 // State for available amenities and selected amenities
 const availableAmenities = ref([]);
@@ -345,127 +399,223 @@ const saveRoomDetails = () => {
             </div>
         </div>
     </div>
-    <div class="card">
-        <div class="font-semibold text-xl mb-4">Rooms</div>
-        <DataView :value="rooms" :layout="layout">
-            <!-- Grid Layout -->
-            <template #grid="slotProps">
-                <div class="grid grid-cols-2 gap-4">
-                    <div
-                        v-for="(room, index) in slotProps.items"
-                        :key="index"
-                        class="border rounded-lg shadow-md p-4 card"
-                    >
-                        <!-- Room Image and Status -->
-                        <div class="relative flex justify-center mb-4">
-                            <img
-                                class="rounded-md w-full h-48 object-cover"
-                                :src="room.image"
-                                :alt="room.name"
-                            />
-                            <Tag
-                                :value="room.status"
-                                :severity="getSeverity(room)"
-                                class="absolute top-2 left-2"
-                            />
-                        </div>
 
-                        <!-- Room Info -->
-                        <div class="mb-4">
-                            <div class="text-lg font-bold">{{ room.type }}</div>
-                            <div class="text-sm">
-                                {{ room.category }}
-                            </div>
-                            <div class="text-sm mt-2">
-                                {{ room.description }}
-                            </div>
-                            <div class="text-sm mt-2 gap-2">
-                                <i class="pi pi-user"></i> Occupancy:
-                                {{ room.occupancy }} person(s)
-                            </div>
-                        </div>
+    <div class="flex flex-col md:flex-row gap-4">
+        <div
+            class="w-full md:w-1/3 lg:w-1/4 xl:w-1/5 p-2 md:p-4 card rounded-lg order-first md:order-last"
+        >
+            <h3 class="text-base md:text-lg font-bold mb-2 md:mb-4">Filters</h3>
 
-                        <!-- Rates -->
-                        <div
-                            class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4 p-4"
+            <!-- Clear and Search -->
+            <div class="mb-2 md:mb-4 space-y-2">
+                <Button
+                    type="button"
+                    icon="pi pi-filter-slash"
+                    label="Clear"
+                    outlined
+                    class="w-full text-sm md:text-base"
+                    @click="clearFilters"
+                />
+                <IconField class="w-full">
+                    <InputIcon class="mt-1">
+                        <i class="pi pi-search text-sm md:text-base" />
+                    </InputIcon>
+                    <InputText
+                        placeholder="Search Room Number"
+                        class="w-full text-sm md:text-base"
+                        v-model="selectedFilter.searchQuery"
+                    />
+                </IconField>
+            </div>
+
+            <!-- Room Type Filter -->
+            <div class="mb-2 md:mb-4">
+                <Select
+                    v-model="selectedFilter.roomType"
+                    :options="roomTypes"
+                    placeholder="Room Type"
+                    class="w-full text-sm md:text-base"
+                />
+            </div>
+
+            <!-- Status Filters -->
+            <div class="mb-2 md:mb-4">
+                <h4 class="font-bold text-sm md:text-base mb-1 md:mb-2">
+                    Status
+                </h4>
+                <div class="flex flex-col gap-1 md:gap-2">
+                    <div class="flex items-center">
+                        <Checkbox
+                            v-model="selectedFilter.status.Available"
+                            :binary="true"
+                            class="h-4 w-4 md:h-5 md:w-5"
+                        />
+                        <label class="text-sm md:text-base ml-2"
+                            >Available</label
                         >
-                            <div
-                                class="p-4 bg-white dark:bg-slate-900 rounded-md shadow-md flex flex-col items-center"
-                            >
-                                <div
-                                    class="text-sm font-semibold text-gray-700 dark:text-gray-200"
-                                >
-                                    6hrs:
-                                </div>
-                                <div
-                                    class="text-sm text-green-600 font-semibold"
-                                >
-                                    {{ formatPrice(room.price["6 Hours"]) }}
-                                </div>
-                            </div>
-                            <div
-                                class="p-4 bg-white dark:bg-slate-900 rounded-md shadow-md flex flex-col items-center"
-                            >
-                                <div
-                                    class="text-sm font-semibold text-gray-700 dark:text-gray-200"
-                                >
-                                    12hrs:
-                                </div>
-                                <div
-                                    class="text-sm text-green-600 font-semibold"
-                                >
-                                    {{ formatPrice(room.price["12 Hours"]) }}
-                                </div>
-                            </div>
-                            <div
-                                class="p-4 bg-white dark:bg-slate-900 rounded-md shadow-md flex flex-col items-center"
-                            >
-                                <div
-                                    class="text-sm font-semibold text-gray-700 dark:text-gray-200"
-                                >
-                                    24hrs:
-                                </div>
-                                <div
-                                    class="text-sm text-green-600 font-semibold"
-                                >
-                                    {{ formatPrice(room.price["24 Hours"]) }}
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Actions -->
-                        <div class="flex gap-2">
-                            <!-- Edit Button -->
-                            <Button
-                                icon="pi pi-pencil"
-                                label="Edit"
-                                :disabled="room.status === 'Occupied'"
-                                @click="openEditDialog(room)"
-                                class="flex-auto"
-                            ></Button>
-
-                            <!-- Delete Button -->
-                            <Button
-                                icon="pi pi-trash"
-                                label="Delete"
-                                :disabled="room.status === 'Occupied'"
-                                @click="openDeleteDialog(room)"
-                                severity="primary"
-                                class="flex-auto"
-                            ></Button>
-
-                            <!-- Details Button -->
-                            <Button
-                                icon="pi pi-info-circle"
-                                label="Details"
-                                @click="openDetailsDialog(room)"
-                                class="flex-auto"
-                            ></Button>
-                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        <Checkbox
+                            v-model="selectedFilter.status.Occupied"
+                            :binary="true"
+                            class="h-4 w-4 md:h-5 md:w-5"
+                        />
+                        <label class="text-sm md:text-base ml-2"
+                            >Occupied</label
+                        >
+                    </div>
+                    <div class="flex items-center">
+                        <Checkbox
+                            v-model="selectedFilter.status.Cleaning"
+                            :binary="true"
+                            class="h-4 w-4 md:h-5 md:w-5"
+                        />
+                        <label class="text-sm md:text-base ml-2"
+                            >Cleaning</label
+                        >
                     </div>
                 </div>
-            </template>
-        </DataView>
+            </div>
+        </div>
+
+        <div class="flex-1">
+            <div class="card">
+                <div class="font-semibold text-xl mb-4">Rooms</div>
+                <DataView :value="filteredRooms" :layout="layout">
+                    <!-- Grid Layout -->
+                    <template #grid="slotProps">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div
+                                v-for="(room, index) in slotProps.items"
+                                :key="index"
+                                class="border rounded-lg shadow-md p-4 card"
+                            >
+                                <!-- Room Image and Status -->
+                                <div class="relative flex justify-center mb-4">
+                                    <img
+                                        class="rounded-md w-full h-48 object-cover"
+                                        :src="room.image"
+                                        :alt="room.name"
+                                    />
+                                    <Tag
+                                        :value="room.status"
+                                        :severity="getSeverity(room)"
+                                        class="absolute top-2 left-2"
+                                    />
+                                </div>
+
+                                <!-- Room Info -->
+                                <div class="mb-4">
+                                    <div class="text-lg font-bold">
+                                        {{ room.type }}
+                                    </div>
+                                    <div class="text-sm">
+                                        {{ room.category }}
+                                    </div>
+                                    <div class="text-sm mt-2">
+                                        {{ room.description }}
+                                    </div>
+                                    <div class="text-sm mt-2 gap-2">
+                                        <i class="pi pi-user"></i> Occupancy:
+                                        {{ room.occupancy }} person(s)
+                                    </div>
+                                </div>
+
+                                <!-- Rates -->
+                                <div
+                                    class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4 p-4"
+                                >
+                                    <div
+                                        class="p-4 bg-white dark:bg-slate-900 rounded-md shadow-md flex flex-col items-center"
+                                    >
+                                        <div
+                                            class="text-sm font-semibold text-gray-700 dark:text-gray-200"
+                                        >
+                                            6hrs:
+                                        </div>
+                                        <div
+                                            class="text-sm text-green-600 font-semibold"
+                                        >
+                                            {{
+                                                formatPrice(
+                                                    room.price["6 Hours"],
+                                                )
+                                            }}
+                                        </div>
+                                    </div>
+                                    <div
+                                        class="p-4 bg-white dark:bg-slate-900 rounded-md shadow-md flex flex-col items-center"
+                                    >
+                                        <div
+                                            class="text-sm font-semibold text-gray-700 dark:text-gray-200"
+                                        >
+                                            12hrs:
+                                        </div>
+                                        <div
+                                            class="text-sm text-green-600 font-semibold"
+                                        >
+                                            {{
+                                                formatPrice(
+                                                    room.price["12 Hours"],
+                                                )
+                                            }}
+                                        </div>
+                                    </div>
+                                    <div
+                                        class="p-4 bg-white dark:bg-slate-900 rounded-md shadow-md flex flex-col items-center"
+                                    >
+                                        <div
+                                            class="text-sm font-semibold text-gray-700 dark:text-gray-200"
+                                        >
+                                            24hrs:
+                                        </div>
+                                        <div
+                                            class="text-sm text-green-600 font-semibold"
+                                        >
+                                            {{
+                                                formatPrice(
+                                                    room.price["24 Hours"],
+                                                )
+                                            }}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Actions -->
+                                <div class="flex gap-2">
+                                    <!-- Edit Button -->
+                                    <Button
+                                        icon="pi pi-pencil"
+                                        label="Edit"
+                                        :disabled="room.status === 'Occupied'"
+                                        @click="openEditDialog(room)"
+                                        class="flex-auto"
+                                    ></Button>
+
+                                    <!-- Delete Button -->
+                                    <Button
+                                        icon="pi pi-trash"
+                                        label="Delete"
+                                        :disabled="room.status === 'Occupied'"
+                                        @click="openDeleteDialog(room)"
+                                        severity="primary"
+                                        class="flex-auto"
+                                    ></Button>
+
+                                    <!-- Details Button -->
+                                    <Button
+                                        icon="pi pi-info-circle"
+                                        label="Details"
+                                        @click="openDetailsDialog(room)"
+                                        class="flex-auto"
+                                    ></Button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </DataView>
+            </div>
+        </div>
     </div>
 
     <!-- Details Dialog -->

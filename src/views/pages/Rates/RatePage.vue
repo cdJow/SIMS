@@ -143,7 +143,7 @@ const filteredRoomTypes = computed(() => {
     // Filter by category
     if (selectedCategoryId.value !== null) {
         filtered = filtered.filter(
-            (type) => type.categoryId === selectedCategoryId.value,
+            (type) => type.categoryId === selectedCategoryId.value
         );
     }
 
@@ -151,7 +151,7 @@ const filteredRoomTypes = computed(() => {
     if (typeFilter.value.trim()) {
         const keyword = typeFilter.value.trim().toLowerCase();
         filtered = filtered.filter((type) =>
-            type.name.toLowerCase().includes(keyword),
+            type.name.toLowerCase().includes(keyword)
         );
     }
 
@@ -171,7 +171,7 @@ function closeDeleteDialog() {
 function confirmDelete() {
     if (deleteType.value) {
         const index = roomTypes.value.findIndex(
-            (type) => type.id === deleteType.value.id,
+            (type) => type.id === deleteType.value.id
         );
         if (index !== -1) {
             roomTypes.value.splice(index, 1); // Remove the selected type
@@ -179,7 +179,7 @@ function confirmDelete() {
 
         // Toast notification
         toast.add({
-            severity: "success",
+            severity: "error",
             summary: "Delete Successful",
             detail: `Room type "${deleteType.value.name}" has been successfully deleted.`,
             life: 3000,
@@ -204,7 +204,7 @@ function closeEditDialog() {
 function saveEdit() {
     if (editType.value) {
         const index = roomTypes.value.findIndex(
-            (type) => type.id === editType.value.id,
+            (type) => type.id === editType.value.id
         );
         if (index !== -1) {
             roomTypes.value.splice(index, 1, editType.value); // Replace with updated type
@@ -237,7 +237,7 @@ function closeRemoveDiscountDialog() {
 function confirmRemoveDiscount() {
     if (discountType.value) {
         const index = roomTypes.value.findIndex(
-            (type) => type.id === discountType.value.id,
+            (type) => type.id === discountType.value.id
         );
         if (index !== -1) {
             const updatedType = { ...roomTypes.value[index] };
@@ -292,7 +292,7 @@ function applyDiscount() {
 
     // Find and update the specific type in the roomTypes array
     const index = roomTypes.value.findIndex(
-        (type) => type.id === selectedType.value.id,
+        (type) => type.id === selectedType.value.id
     );
 
     if (index !== -1) {
@@ -485,7 +485,7 @@ function applyDiscount() {
                             {{
                                 roomCategories.find(
                                     (category) =>
-                                        category.id === type.categoryId,
+                                        category.id === type.categoryId
                                 )?.category || "Unknown Category"
                             }}
                         </p>
@@ -519,7 +519,7 @@ function applyDiscount() {
                                     <span v-else>
                                         ₱{{
                                             type.rates["6hrs"].toLocaleString(
-                                                "en-PH",
+                                                "en-PH"
                                             )
                                         }}
                                     </span>
@@ -549,7 +549,7 @@ function applyDiscount() {
                                     <span v-else>
                                         ₱{{
                                             type.rates["12hrs"].toLocaleString(
-                                                "en-PH",
+                                                "en-PH"
                                             )
                                         }}
                                     </span>
@@ -579,7 +579,7 @@ function applyDiscount() {
                                     <span v-else>
                                         ₱{{
                                             type.rates["24hrs"].toLocaleString(
-                                                "en-PH",
+                                                "en-PH"
                                             )
                                         }}
                                     </span>

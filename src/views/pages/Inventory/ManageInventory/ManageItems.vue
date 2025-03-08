@@ -73,9 +73,9 @@ function deleteConsumable() {
         product.batches.some((batch) =>
             batch.serialNumbers.some(
                 (sn) =>
-                    sn.serialNumber === consumableToDelete.value.serialNumber,
-            ),
-        ),
+                    sn.serialNumber === consumableToDelete.value.serialNumber
+            )
+        )
     );
 
     if (consumableIndex !== -1) {
@@ -83,14 +83,14 @@ function deleteConsumable() {
         const batch = product.batches.find((batch) =>
             batch.serialNumbers.some(
                 (sn) =>
-                    sn.serialNumber === consumableToDelete.value.serialNumber,
-            ),
+                    sn.serialNumber === consumableToDelete.value.serialNumber
+            )
         );
 
         if (batch) {
             const serialIndex = batch.serialNumbers.findIndex(
                 (sn) =>
-                    sn.serialNumber === consumableToDelete.value.serialNumber,
+                    sn.serialNumber === consumableToDelete.value.serialNumber
             );
 
             if (serialIndex !== -1) {
@@ -98,7 +98,7 @@ function deleteConsumable() {
                 batch.serialNumbers.splice(serialIndex, 1);
                 console.log(
                     "Consumable item deleted successfully:",
-                    consumableToDelete.value,
+                    consumableToDelete.value
                 );
 
                 // Show success toast
@@ -146,10 +146,9 @@ function saveEditConsumable() {
         product.batches.some((batch) =>
             batch.serialNumbers.some(
                 (sn) =>
-                    sn.serialNumber ===
-                    editingConsumableData.value.serialNumber,
-            ),
-        ),
+                    sn.serialNumber === editingConsumableData.value.serialNumber
+            )
+        )
     );
 
     if (consumableIndex !== -1) {
@@ -157,13 +156,11 @@ function saveEditConsumable() {
         const batch = product.batches.find((batch) =>
             batch.serialNumbers.some(
                 (sn) =>
-                    sn.serialNumber ===
-                    editingConsumableData.value.serialNumber,
-            ),
+                    sn.serialNumber === editingConsumableData.value.serialNumber
+            )
         );
         const serial = batch.serialNumbers.find(
-            (sn) =>
-                sn.serialNumber === editingConsumableData.value.serialNumber,
+            (sn) => sn.serialNumber === editingConsumableData.value.serialNumber
         );
 
         if (serial) {
@@ -174,7 +171,7 @@ function saveEditConsumable() {
 
     console.log(
         "Consumable data updated successfully:",
-        editingConsumableData.value,
+        editingConsumableData.value
     );
 
     // Show success toast notification
@@ -210,7 +207,7 @@ function submitDamageReport() {
     console.log(
         "Damage report for item:",
         selectedDamageItem.value,
-        damageDetails.value,
+        damageDetails.value
     );
 
     // Update the item's status to "Damaged"
@@ -223,7 +220,7 @@ function submitDamageReport() {
 
     // Update the data in serialNumbers array (or your data source)
     const itemIndex = serialNumbers.value.findIndex(
-        (item) => item.serialNumber === selectedDamageItem.value.serialNumber,
+        (item) => item.serialNumber === selectedDamageItem.value.serialNumber
     );
     if (itemIndex !== -1) {
         serialNumbers.value[itemIndex] = { ...selectedDamageItem.value }; // Update the item data
@@ -266,7 +263,7 @@ function reassignItem() {
 
     // Update the data in serialNumbers array
     const itemIndex = serialNumbers.value.findIndex(
-        (item) => item.serialNumber === selectedItem.value.serialNumber,
+        (item) => item.serialNumber === selectedItem.value.serialNumber
     );
     if (itemIndex !== -1) {
         serialNumbers.value.splice(itemIndex, 1, { ...selectedItem.value });
@@ -303,7 +300,7 @@ function moveToStockroom() {
 
     // Update the data in serialNumbers array
     const itemIndex = serialNumbers.value.findIndex(
-        (item) => item.serialNumber === selectedItem.value.serialNumber,
+        (item) => item.serialNumber === selectedItem.value.serialNumber
     );
     if (itemIndex !== -1) {
         serialNumbers.value.splice(itemIndex, 1, { ...selectedItem.value });
@@ -425,7 +422,7 @@ function saveEditedSerial(serialData) {
             console.log("Checking Batch:", batch);
 
             matchedSerial = batch.serialNumbers?.find(
-                (sn) => sn.serialNumber === serialData.serialNumber,
+                (sn) => sn.serialNumber === serialData.serialNumber
             );
 
             if (matchedSerial) {
@@ -528,7 +525,7 @@ function deleteSerial() {
 
     // Locate the product
     const productIndex = products.value.findIndex(
-        (product) => product.id === productId,
+        (product) => product.id === productId
     );
     if (productIndex === -1) {
         console.error("Product not found for deletion.");
@@ -537,7 +534,7 @@ function deleteSerial() {
 
     // Locate the batch within the product
     const batchIndex = products.value[productIndex].batches.findIndex(
-        (batch) => batch.batchId === batchId,
+        (batch) => batch.batchId === batchId
     );
     if (batchIndex === -1) {
         console.error("Batch not found for deletion.");
@@ -556,7 +553,7 @@ function deleteSerial() {
     // Delete the serial from the batch
     products.value[productIndex].batches[batchIndex].serialNumbers.splice(
         serialIndex,
-        1,
+        1
     );
 
     console.log("Serial deleted successfully:", serialNumber);
@@ -579,7 +576,7 @@ function saveProduct() {
         if (product.value.id) {
             // Update existing product
             const index = products.value.findIndex(
-                (p) => p.id === product.value.id,
+                (p) => p.id === product.value.id
             );
             if (index !== -1) {
                 products.value[index] = product.value;
@@ -643,13 +640,13 @@ function saveNonConsumableBatchDetails() {
     // Find the product containing the batch
     const productIndex = products.value.findIndex((product) =>
         product.batches?.some(
-            (batch) => batch.batchId === selectedBatch.value.batchId,
-        ),
+            (batch) => batch.batchId === selectedBatch.value.batchId
+        )
     );
 
     if (productIndex !== -1) {
         const batchIndex = products.value[productIndex].batches.findIndex(
-            (batch) => batch.batchId === selectedBatch.value.batchId,
+            (batch) => batch.batchId === selectedBatch.value.batchId
         );
 
         if (batchIndex !== -1) {
@@ -734,14 +731,14 @@ function saveBatchDetails() {
     // Find the product containing the batch
     const productIndex = products.value.findIndex((product) =>
         product.batches?.some(
-            (batch) => batch.batchId === selectedBatch.value.batchId,
-        ),
+            (batch) => batch.batchId === selectedBatch.value.batchId
+        )
     );
 
     if (productIndex !== -1) {
         // Find the batch within the product's batches
         const batchIndex = products.value[productIndex].batches.findIndex(
-            (batch) => batch.batchId === selectedBatch.value.batchId,
+            (batch) => batch.batchId === selectedBatch.value.batchId
         );
 
         if (batchIndex !== -1) {
@@ -751,7 +748,7 @@ function saveBatchDetails() {
             };
             console.log(
                 "Batch updated successfully:",
-                products.value[productIndex].batches[batchIndex],
+                products.value[productIndex].batches[batchIndex]
             );
         } else {
             // Add a new batch to the product's batches
@@ -761,7 +758,7 @@ function saveBatchDetails() {
             });
             console.log(
                 "New batch added to product:",
-                products.value[productIndex],
+                products.value[productIndex]
             );
         }
     } else {
@@ -793,7 +790,7 @@ function confirmDeleteProduct(prod) {
 function deleteProduct() {
     if (product.value) {
         const index = products.value.findIndex(
-            (p) => p.id === product.value.id,
+            (p) => p.id === product.value.id
         );
         if (index !== -1) {
             products.value.splice(index, 1); // Remove the product from the list
@@ -887,20 +884,20 @@ const filters = ref({
 
 onBeforeMount(() => {
     ProductService.getProductsWithOrdersSmall().then(
-        (data) => (products.value = data),
+        (data) => (products.value = data)
     );
     CustomerService.getCustomersLarge().then((data) => {
         customers1.value = data;
         loading1.value = false;
         customers1.value.forEach(
-            (customer) => (customer.date = new Date(customer.date)),
+            (customer) => (customer.date = new Date(customer.date))
         );
     });
     CustomerService.getCustomersLarge().then(
-        (data) => (customers2.value = data),
+        (data) => (customers2.value = data)
     );
     CustomerService.getCustomersMedium().then(
-        (data) => (customers3.value = data),
+        (data) => (customers3.value = data)
     );
     initFilters();
 });
@@ -965,7 +962,7 @@ function initFilters() {
 function expandAll() {
     expandedRows.value = products.value.reduce(
         (acc, p) => (acc[p.id] = true) && acc,
-        {},
+        {}
     );
 }
 
@@ -981,7 +978,7 @@ function confirmDeleteBatch(batch) {
 
     // Attach the productId to the batch for easier lookup
     const productContainingBatch = products.value.find((product) =>
-        product.batches?.some((b) => b.batchId === batch.batchId),
+        product.batches?.some((b) => b.batchId === batch.batchId)
     );
 
     if (!productContainingBatch) {
@@ -1011,7 +1008,7 @@ function deleteBatch() {
 
     // Find the product containing the batch
     const productIndex = products.value.findIndex(
-        (product) => product.id === selectedBatchForDeletion.value.productId,
+        (product) => product.id === selectedBatchForDeletion.value.productId
     );
 
     if (productIndex === -1) {
@@ -1021,7 +1018,7 @@ function deleteBatch() {
 
     // Find the batch within the product's batch list
     const batchIndex = products.value[productIndex].batches.findIndex(
-        (batch) => batch.batchId === selectedBatchForDeletion.value.batchId,
+        (batch) => batch.batchId === selectedBatchForDeletion.value.batchId
     );
 
     if (batchIndex === -1) {
@@ -1140,7 +1137,11 @@ function formatPrice(value) {
             </template>
 
             <Column expander style="width: 2rem" />
-            <Column field="name" header="Item Name" style="min-width:"></Column>
+            <Column
+                field="name"
+                header="Item Name"
+                style="min-width: "
+            ></Column>
             <Column field="brand" sortable header="Brand"></Column>
             <Column field="quantity" sortable header="Quantity"></Column>
             <Column field="description" sortable header="Description"></Column>
@@ -1370,7 +1371,7 @@ function formatPrice(value) {
                                                 <template #body="slotProps">
                                                     {{
                                                         formatCurrency(
-                                                            slotProps.data.srp,
+                                                            slotProps.data.srp
                                                         )
                                                     }}
                                                 </template>
@@ -1416,7 +1417,7 @@ function formatPrice(value) {
                                                         class="mr-2"
                                                         @click="
                                                             openEditConsumableDialog(
-                                                                slotProps.data,
+                                                                slotProps.data
                                                             )
                                                         "
                                                     />
@@ -1427,7 +1428,7 @@ function formatPrice(value) {
                                                         severity="danger"
                                                         @click="
                                                             confirmDeleteConsumable(
-                                                                slotProps.data,
+                                                                slotProps.data
                                                             )
                                                         "
                                                     />
@@ -1557,7 +1558,7 @@ function formatPrice(value) {
                                         class="mr-2"
                                         @click="
                                             openNonConsumableBatchDialog(
-                                                slotProps.data,
+                                                slotProps.data
                                             )
                                         "
                                     />
@@ -1588,7 +1589,9 @@ function formatPrice(value) {
                                     />
                                     <Dialog
                                         v-model:visible="isDialog2Visible"
-                                        :header="`Items for Batch | ${slotProps.data?.batchNumber || 'N/A'}`"
+                                        :header="`Items for Batch | ${
+                                            slotProps.data?.batchNumber || 'N/A'
+                                        }`"
                                         :breakpoints="{ '960px': '75vw' }"
                                         :style="{ width: '60vw' }"
                                         :modal="true"
@@ -1655,7 +1658,7 @@ function formatPrice(value) {
                                                                 getStatusTextColor(
                                                                     slotProps
                                                                         .data
-                                                                        .status,
+                                                                        .status
                                                                 )
                                                             "
                                                             class="font-bold"
@@ -1681,7 +1684,7 @@ function formatPrice(value) {
                                                         {{
                                                             formatPrice(
                                                                 slotProps.data
-                                                                    .rentalPrice,
+                                                                    .rentalPrice
                                                             )
                                                         }}
                                                     </template>
@@ -1711,7 +1714,7 @@ function formatPrice(value) {
                                                                 rounded
                                                                 @click="
                                                                     editSerial(
-                                                                        slotProps.data,
+                                                                        slotProps.data
                                                                     )
                                                                 "
                                                                 v-tooltip="
@@ -1735,7 +1738,7 @@ function formatPrice(value) {
                                                                 severity="danger"
                                                                 @click="
                                                                     confirmDeleteSerial(
-                                                                        slotProps.data,
+                                                                        slotProps.data
                                                                     )
                                                                 "
                                                                 v-tooltip="
@@ -1755,7 +1758,7 @@ function formatPrice(value) {
                                                                 severity="success"
                                                                 @click="
                                                                     openAssignItemDialog(
-                                                                        slotProps.data,
+                                                                        slotProps.data
                                                                     )
                                                                 "
                                                                 v-tooltip="
@@ -1775,7 +1778,7 @@ function formatPrice(value) {
                                                                 severity="info"
                                                                 @click="
                                                                     reassign(
-                                                                        slotProps.data,
+                                                                        slotProps.data
                                                                     )
                                                                 "
                                                                 v-tooltip="
@@ -1796,7 +1799,7 @@ function formatPrice(value) {
                                                                 severity="danger"
                                                                 @click="
                                                                     reportDamage(
-                                                                        slotProps.data,
+                                                                        slotProps.data
                                                                     )
                                                                 "
                                                                 v-tooltip="
@@ -2531,7 +2534,9 @@ function formatPrice(value) {
     <Dialog
         v-model:visible="damageDialogVisible"
         :dismissableMask="true"
-        :header="`Report Damaged Item - ${selectedDamageItem?.serialNumber || 'N/A'}`"
+        :header="`Report Damaged Item - ${
+            selectedDamageItem?.serialNumber || 'N/A'
+        }`"
         :modal="true"
         :style="{ width: '400px' }"
     >
@@ -2551,7 +2556,7 @@ function formatPrice(value) {
             <!-- Damage Type -->
             <div class="grid grid-cols-1 gap-2 mt-3">
                 <label for="damageType">Damage Type</label>
-                <Dropdown
+                <Select
                     id="damageType"
                     v-model="damageDetails.type"
                     :options="damageTypes"

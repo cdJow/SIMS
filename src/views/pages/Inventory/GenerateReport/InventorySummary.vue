@@ -9,7 +9,7 @@ import SummaryWidget from "./SummaryWidget.vue";
     <div>
         <SummaryWidget />
     </div>
-    <div class="grid grid-cols-2 gap-6">
+    <div class="grid grid-cols-2 gap-4">
         <StockMovement />
         <LowStockAlert />
         <Chart1 />

@@ -9,7 +9,7 @@ const model = ref([
         label: " Admin",
         items: [
             {
-                label: "Manage Rooms",
+                label: "Room Management",
                 icon: "pi pi-fw pi-cog",
                 items: [
                     {
@@ -37,7 +37,7 @@ const model = ref([
                 to: "/Rates/RatePage",
             },
             {
-                label: "Admin Account ",
+                label: "Account Management ",
                 icon: "pi  pi-users",
                 to: "/Accounts/AccountsPanel",
             },
@@ -110,6 +110,11 @@ const model = ref([
                 to: "/Rooms/CanceledBooking",
             },
             {
+                label: "Damage Report",
+                icon: "pi pi-fw pi-minus-circle",
+                to: "/Rooms/DamageReport",
+            },
+            {
                 label: "POS ",
                 icon: "pi pi-fw pi-shopping-cart",
                 to: "/POS/POS",
@@ -143,60 +148,47 @@ const model = ref([
         label: "Inventory",
         items: [
             {
-                label: "Manage Inventory",
-                icon: "pi pi-fw pi-cog",
+                label: "Add Items",
+                icon: "pi pi-fw pi-plus",
                 items: [
                     {
-                        label: "Add Items",
-                        icon: "pi pi-fw pi-plus",
-                        items: [
-                            {
-                                label: "Consumable",
-                                icon: "pi pi-fw pi-box",
-                                to: "/Inventory/Additems/ConsumableForm",
-                            },
-                            {
-                                label: "Non-Consumable",
-                                icon: "pi pi-fw pi-box",
-                                to: "/Inventory/AddItems/NonConsumableForm",
-                            },
-                        ],
+                        label: "Consumable",
+                        icon: "pi pi-fw pi-box",
+                        to: "/Inventory/Additems/ConsumableForm",
                     },
-
                     {
-                        label: "Item Control",
-                        icon: "pi pi-fw pi-cog",
-                        to: "/Inventory/ManageInventory/ManageItems",
+                        label: "Non-Consumable",
+                        icon: "pi pi-fw pi-box",
+                        to: "/Inventory/AddItems/NonConsumableForm",
                     },
                 ],
             },
 
             {
-                label: "Generate Report",
-                icon: "pi pi-fw pi-file",
-                items: [
-                    {
-                        label: "Stock History",
-                        icon: "pi pi-fw pi-calendar",
-                        to: "/Inventory/GenerateReport/StockHistory",
-                    },
-                    {
-                        label: "Low Stock Report",
-                        icon: "pi pi-fw pi-exclamation-circle",
-                        to: "/Inventory/GenerateReport/LowstockReport",
-                    },
-                    {
-                        label: "Expired Items Report",
-                        icon: "pi pi-fw pi-times-circle",
-                        to: "/Inventory/GenerateReport/ExpiredItems",
-                    },
+                label: "Item Control",
+                icon: "pi pi-fw pi-cog",
+                to: "/Inventory/ManageInventory/ManageItems",
+            },
+            {
+                label: "Stock History",
+                icon: "pi pi-fw pi-calendar",
+                to: "/Inventory/GenerateReport/StockHistory",
+            },
+            {
+                label: "Low Stock Report",
+                icon: "pi pi-fw pi-exclamation-circle",
+                to: "/Inventory/GenerateReport/LowstockReport",
+            },
+            {
+                label: "Expired Items Report",
+                icon: "pi pi-fw pi-times-circle",
+                to: "/Inventory/GenerateReport/ExpiredItems",
+            },
 
-                    {
-                        label: "Damaged Items",
-                        icon: "pi pi-fw pi-minus-circle",
-                        to: "/Inventory/GenerateReport/DamagedItems",
-                    },
-                ],
+            {
+                label: "Damaged Items",
+                icon: "pi pi-fw pi-minus-circle",
+                to: "/Inventory/GenerateReport/DamagedItems",
             },
         ],
     },

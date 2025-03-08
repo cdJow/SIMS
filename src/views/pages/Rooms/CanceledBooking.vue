@@ -89,7 +89,7 @@ function initFilters() {
 </script>
 
 <template>
-    <div class="p-4 bg-white rounded-lg shadow-sm">
+    <div class="p-4 card rounded-lg shadow-sm">
         <div class="text-xl font-semibold mb-4">Canceled Bookings</div>
 
         <!-- Clear and Search -->

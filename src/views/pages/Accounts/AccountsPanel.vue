@@ -2,7 +2,14 @@
 import { AccountService } from "@/service/AccountService";
 import { Button, Dialog, InputText, Tag } from "primevue";
 import { useToast } from "primevue/usetoast"; // Import useToast
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import {
+    computed,
+    nextTick,
+    onBeforeUnmount,
+    onMounted,
+    onUnmounted,
+    ref,
+} from "vue";
 
 // Fetch accounts from AccountService
 const accounts = ref(AccountService.getAccounts());
@@ -20,6 +27,20 @@ const statuses = [
     { label: "Disabled", value: "Disabled" },
 ];
 
+// Date and time handling
+const currentTime = ref("");
+let timeInterval;
+
+// Lifecycle hooks
+onMounted(() => {
+    timeInterval = setInterval(() => {
+        currentTime.value = new Date().toLocaleTimeString();
+    }, 1000);
+});
+
+onBeforeUnmount(() => {
+    clearInterval(timeInterval);
+});
 const isEditDialogVisible = ref(false);
 const isEditing = ref(false);
 const accountForm = ref({});
@@ -28,6 +49,8 @@ const isDetailsDialogVisible = ref(false); // Account details dialog visibility
 // State variables
 const isDeleteDialogVisible = ref(false);
 const accountToDelete = ref(null);
+
+const currentPassword = ref("");
 
 const selectedAccount = ref(null);
 
@@ -60,6 +83,74 @@ function updateCurrentDate() {
     });
 }
 
+// Dummy logs data
+const logs = ref([
+    { date: new Date(2024, 0, 1), action: "login", timestamp: "09:00:00" },
+    { date: new Date(2024, 0, 1), action: "logout", timestamp: "17:30:00" },
+    { date: new Date(2024, 0, 2), action: "login", timestamp: "08:45:00" },
+    { date: new Date(2024, 0, 2), action: "logout", timestamp: "16:15:00" },
+    { date: new Date(2024, 0, 5), action: "login", timestamp: "10:00:00" },
+    { date: new Date(2024, 0, 5), action: "logout", timestamp: "18:00:00" },
+]);
+
+// Event filter
+const selectedFilter = ref(null);
+const eventTypes = ref([
+    { label: "All", value: null },
+    { label: "Login", value: "login" },
+    { label: "Logout", value: "logout" },
+]);
+
+// Formatting functions
+const formatDate = (date) => {
+    return date.toLocaleDateString("en-US", {
+        weekday: "short",
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+    });
+};
+
+const closeResetPasswordDialog = () => {
+    isResetPasswordDialogVisible.value = false;
+    currentPassword.value = ""; // Reset current password
+    newPassword.value = ""; // Reset new password
+};
+
+const formatTime = (timeString) => {
+    const [hours, minutes] = timeString.split(":");
+    return new Date(0, 0, 0, hours, minutes).toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+    });
+};
+
+// Filtered logs
+const filteredLogs = computed(() => {
+    return logs.value
+        .filter(
+            (log) =>
+                !selectedFilter.value?.value ||
+                log.action === selectedFilter.value.value
+        )
+        .sort((a, b) => b.date - a.date);
+});
+
+// Group logs by date
+const groupedLogs = computed(() => {
+    return filteredLogs.value.reduce((groups, log) => {
+        const dateKey = log.date.toDateString();
+        if (!groups[dateKey]) {
+            groups[dateKey] = {
+                date: log.date,
+                entries: [],
+            };
+        }
+        groups[dateKey].entries.push(log);
+        return groups;
+    }, {});
+});
+
 // Map mock events to PrimeVue's calendar events format
 onMounted(() => {
     updateCurrentDate();
@@ -73,39 +164,62 @@ onMounted(() => {
 
 // Handle date selection
 
-// Open the reset password dialog
+// Open the reset password dialog// In script setup
+const passwordInputRef = ref(null);
+
 function openResetPasswordDialog(account) {
     selectedAccount.value = account;
     isResetPasswordDialogVisible.value = true;
-}
 
+    nextTick(() => {
+        // Add a 50ms delay to ensure PrimeVue's dialog finishes rendering
+        setTimeout(() => {
+            if (passwordInputRef.value?.$el) {
+                passwordInputRef.value.$el.focus();
+            }
+        }, 50);
+    });
+}
 // Close the reset password dialog
-function closeResetPasswordDialog() {
-    isResetPasswordDialogVisible.value = false;
-    newPassword.value = ""; // Clear the password
-}
 
-// Confirm password reset
 // Confirm Reset Password
-function confirmResetPassword() {
-    generatePassword(); // Generate a new password
+const confirmResetPassword = async () => {
+    if (!currentPassword.value || !newPassword.value) return;
 
-    // Add log entry for the password reset
-    selectedAccount.value.logs.push({
-        action: "Password Reset",
-        timestamp: new Date().toLocaleString(), // Add current date and time
-    });
+    try {
+        // First verify current password
+        const isValid = await currentPassword(
+            selectedAccount.value.id,
+            currentPassword.value
+        );
 
-    // Notify admin via toast
-    toast.add({
-        severity: "success",
-        summary: "Password Reset",
-        detail: `Password reset for ${selectedAccount.value.name}`,
-        life: 5000,
-    });
-
-    closeResetPasswordDialog();
-}
+        if (isValid) {
+            // Proceed with password reset
+            await resetPassword(selectedAccount.value.id, newPassword.value);
+            closeResetPasswordDialog();
+            toast.add({
+                severity: "success",
+                summary: "Success",
+                detail: "Password updated",
+                life: 3000,
+            });
+        } else {
+            toast.add({
+                severity: "error",
+                summary: "Error",
+                detail: "Current password is incorrect",
+                life: 3000,
+            });
+        }
+    } catch (error) {
+        toast.add({
+            severity: "error",
+            summary: "Error",
+            detail: "Password update failed",
+            life: 3000,
+        });
+    }
+};
 
 // State variables
 
@@ -146,7 +260,7 @@ function confirmDeleteAccount() {
 
         // Simulate removing from the list
         accounts.value = accounts.value.filter(
-            (acc) => acc.id !== accountToDelete.value.id,
+            (acc) => acc.id !== accountToDelete.value.id
         );
 
         // Show success toast
@@ -230,39 +344,29 @@ function openEditDialog(account) {
 // Save User Handler
 function saveAccount() {
     if (isEditing.value) {
-        // Update user logic
         const index = accounts.value.findIndex(
-            (account) => account.id === accountForm.value.id,
+            (account) => account.id === accountForm.value.id
         );
+
         if (index !== -1) {
+            // Create a NEW object to trigger reactivity
             accounts.value[index] = {
                 ...accountForm.value,
                 role: { ...accountForm.value.role },
                 status: { ...accountForm.value.status },
             };
-        }
-        if (isEditing.value) {
-            // Update account details
-            const account = accounts.value.find(
-                (acc) => acc.id === selectedAccount.value.id,
-            );
 
-            if (account) {
-                Object.assign(account, selectedAccount.value); // Update details
-
-                // Add log entry for edit
-                account.logs.push({
-                    action: "Account Edited",
-                    timestamp: new Date().toLocaleString(),
-                });
-            }
+            // Add log entry directly to the updated account
+            accounts.value[index].logs.push({
+                action: "Account Edited",
+                timestamp: new Date().toLocaleString(),
+            });
         }
 
-        // Show success toast
         toast.add({
             severity: "success",
             summary: "Account Updated",
-            detail: `Account "${accountForm.value.name}" has been updated successfully.`,
+            detail: `Account "${accountForm.value.name}" updated`,
             life: 3000,
         });
     } else {
@@ -302,34 +406,6 @@ function getAccountStatusSeverity(statusValue) {
 // Dialog visibility
 const isCalendarDialogVisible = ref(false);
 
-// Current time
-const currentTime = ref("");
-
-// Navigation month and year
-const selectedMonth = ref(new Date().getMonth());
-const selectedYear = ref(new Date().getFullYear());
-
-// Event filter
-const eventTypes = [
-    { label: "All Events", value: null },
-    { label: "Login", value: "Login" },
-    { label: "Logout", value: "Logout" },
-    { label: "Meeting", value: "Meeting" },
-    { label: "Task", value: "Task" },
-];
-const selectedFilter = ref(null);
-
-// Days of the week
-const daysOfWeek = [
-    "Sunday",
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-];
-
 // Mock activity data
 const mockEvents = [
     {
@@ -349,64 +425,6 @@ const mockEvents = [
     },
 ];
 
-// Compute the current month and year
-const currentMonthYear = computed(() => {
-    const monthNames = [
-        "January",
-        "February",
-        "March",
-        "April",
-        "May",
-        "June",
-        "July",
-        "August",
-        "September",
-        "October",
-        "November",
-        "December",
-    ];
-    return `${monthNames[selectedMonth.value]} ${selectedYear.value}`;
-});
-
-// Calendar data generation
-const calendarDays = computed(() => {
-    const firstDay = new Date(selectedYear.value, selectedMonth.value, 1);
-    const lastDay = new Date(selectedYear.value, selectedMonth.value + 1, 0);
-
-    const startDay = new Date(firstDay);
-    startDay.setDate(firstDay.getDate() - firstDay.getDay());
-
-    const endDay = new Date(lastDay);
-    endDay.setDate(lastDay.getDate() + (6 - lastDay.getDay()));
-
-    const days = [];
-    for (let d = new Date(startDay); d <= endDay; d.setDate(d.getDate() + 1)) {
-        const dateString = d.toISOString().split("T")[0];
-        days.push({
-            date: d.getDate(),
-            isCurrentMonth: d.getMonth() === selectedMonth.value,
-            activities: mockEvents
-                .filter((event) => event.date === dateString)
-                .flatMap((event) => event.activities),
-        });
-    }
-
-    return days;
-});
-
-// Filtered calendar days
-const filteredCalendarDays = computed(() => {
-    if (!selectedFilter.value) {
-        return calendarDays.value;
-    }
-    return calendarDays.value.map((day) => ({
-        ...day,
-        activities: day.activities.filter(
-            (activity) => activity.type === selectedFilter.value,
-        ),
-    }));
-});
-
 // Update the current time
 function updateCurrentTime() {
     const now = new Date();
@@ -418,39 +436,6 @@ function updateCurrentTime() {
 }
 
 // Navigation
-function navigateMonth(step) {
-    selectedMonth.value += step;
-    if (selectedMonth.value < 0) {
-        selectedMonth.value = 11;
-        selectedYear.value -= 1;
-    } else if (selectedMonth.value > 11) {
-        selectedMonth.value = 0;
-        selectedYear.value += 1;
-    }
-}
-
-// Popover handling
-const popover = ref({
-    visible: false,
-    activities: [],
-    x: 0,
-    y: 0,
-});
-
-function showPopover(day, event) {
-    if (!day.activities.length) return;
-
-    popover.value = {
-        visible: true,
-        activities: day.activities,
-        x: event.clientX + 10,
-        y: event.clientY + 10,
-    };
-}
-
-function hidePopover() {
-    popover.value.visible = false;
-}
 
 // Initialize
 onMounted(() => {
@@ -477,7 +462,7 @@ onMounted(() => {
             >
                 <div
                     v-for="(account, index) in accounts"
-                    :key="index"
+                    :key="account.id"
                     class="relative shadow-md border border-white rounded-xl p-4"
                 >
                     <!-- Profile Image -->
@@ -490,7 +475,7 @@ onMounted(() => {
                             alt="Profile Picture"
                             class="w-full h-full object-cover rounded-full"
                         />
-                        <i v-else class="pi pi-user text-4xl text-gray-400"></i>
+                        <i v-else class="pi pi-user text-4xl"></i>
                     </div>
 
                     <!-- Account Info -->
@@ -505,7 +490,7 @@ onMounted(() => {
                                 :value="account.status.label"
                                 :severity="
                                     getAccountStatusSeverity(
-                                        account.status.value,
+                                        account.status.value
                                     )
                                 "
                             />
@@ -547,19 +532,37 @@ onMounted(() => {
     <!-- Reset Password Dialog -->
     <Dialog
         v-model:visible="isResetPasswordDialogVisible"
+        @hide="closeResetPasswordDialog"
         header="Reset Password"
+        :dismissable-mask="true"
         :modal="true"
         :closable="true"
         :style="{ width: '30vw' }"
     >
         <div v-if="selectedAccount">
-            <p class="text-sm">
+            <p class="text-sm mb-4">
                 You are resetting the password for
                 <strong>{{ selectedAccount.name }}</strong
                 >.
             </p>
+
+            <!-- Current Password Input -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">
+                    Current Password
+                </label>
+                <InputText
+                    v-model="currentPassword"
+                    type="password"
+                    placeholder="Enter current password"
+                    ref="passwordInputRef"
+                    class="w-full"
+                    @keyup.enter="confirmResetPassword"
+                />
+            </div>
+
             <!-- New Password Input -->
-            <div class="mt-4">
+            <div class="mb-4">
                 <label class="block text-sm font-medium mb-2">
                     New Password
                 </label>
@@ -568,31 +571,92 @@ onMounted(() => {
                     type="password"
                     placeholder="Enter new password"
                     class="w-full"
+                    @keyup.enter="confirmResetPassword"
                 />
             </div>
-            <!-- Generate Password Button -->
-            <div class="mt-2 flex justify-end">
-                <Button
-                    label="Generate Password"
-                    icon="pi pi-refresh"
-                    class="p-button-secondary"
-                    @click="generatePassword"
-                />
-            </div>
-            <div class="flex justify-end mt-4 gap-2">
+
+            <div class="flex justify-end gap-2">
                 <Button
                     label="Cancel"
                     icon="pi pi-times"
                     class="p-button-secondary"
                     @click="closeResetPasswordDialog"
+                    :autoFocus="false"
                 />
                 <Button
                     label="Confirm Reset"
                     icon="pi pi-key"
                     class="p-button-warning"
-                    :disabled="!newPassword"
+                    :disabled="!currentPassword || !newPassword"
                     @click="confirmResetPassword"
                 />
+            </div>
+        </div>
+    </Dialog>
+
+    <Dialog
+        v-model:visible="isCalendarDialogVisible"
+        header="Log History"
+        :modal="true"
+        :closable="true"
+        :style="{ width: '40vw', height: '80vh' }"
+    >
+        <div class="flex flex-col h-full">
+            <!-- Filter Section -->
+            <div class="flex justify-between items-center mb-4">
+                <Select
+                    v-model="selectedFilter"
+                    :options="eventTypes"
+                    optionLabel="label"
+                    placeholder="Filter by Log Type"
+                    class="w-48"
+                />
+            </div>
+
+            <!-- Logs List -->
+            <div class="flex-1 overflow-auto">
+                <div
+                    v-for="(group, date) in groupedLogs"
+                    :key="date"
+                    class="mb-4"
+                >
+                    <div class="font-semibold bg-gray-100 p-2 rounded-t">
+                        {{ formatDate(group.date) }}
+                    </div>
+                    <div class="border-x border-b rounded-b p-2">
+                        <div
+                            v-for="(log, index) in group.entries"
+                            :key="index"
+                            class="flex items-center justify-between py-2 border-b last:border-b-0"
+                        >
+                            <div class="flex items-center gap-2">
+                                <span
+                                    class="w-20 text-sm font-medium"
+                                    :class="{
+                                        'text-green-600':
+                                            log.action === 'login',
+                                        'text-red-600': log.action === 'logout',
+                                    }"
+                                >
+                                    {{ log.action.toUpperCase() }}
+                                </span>
+                                <span class="text-sm">
+                                    {{ formatTime(log.timestamp) }}
+                                </span>
+                            </div>
+                            <span class="text-xs">
+                                {{ log.date.toLocaleTimeString() }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div
+                    v-if="Object.keys(groupedLogs).length === 0"
+                    class="text-center py-4"
+                >
+                    No logs found for selected filter
+                </div>
             </div>
         </div>
     </Dialog>
@@ -609,7 +673,7 @@ onMounted(() => {
         <div v-if="selectedAccount">
             <!-- Account Info -->
             <h3 class="text-lg font-semibold">{{ selectedAccount.name }}</h3>
-            <p class="text-sm text-gray-600">{{ selectedAccount.email }}</p>
+            <p class="text-sm">{{ selectedAccount.email }}</p>
             <p class="text-sm mt-2">
                 Role:
                 <Tag :value="selectedAccount.role.label" severity="info" />
@@ -637,106 +701,6 @@ onMounted(() => {
                     @click="openCalendar"
                 />
             </div>
-        </div>
-    </Dialog>
-
-    <!-- Account Calendar Logs Dialog -->
-
-    <Dialog
-        v-model:visible="isCalendarDialogVisible"
-        header="Logs"
-        :modal="true"
-        :closable="true"
-        :style="{ width: '90vw', height: '80vh' }"
-    >
-        <!-- Real-Time Date and Time -->
-        <div class="flex justify-between items-center mb-4">
-            <!-- Current Month and Time -->
-            <div class="font-semibold">
-                <p class="text-xl">{{ currentMonthYear }}</p>
-                <p class="text-xs">Current Time: {{ currentTime }}</p>
-            </div>
-
-            <!-- Event Filter and Navigation -->
-            <div class="flex gap-4">
-                <!-- Event Filter -->
-                <Select
-                    v-model="selectedFilter"
-                    :options="eventTypes"
-                    optionLabel="label"
-                    placeholder="Filter by Event Type"
-                    class="w-48"
-                />
-                <!-- Navigation Buttons -->
-                <div class="flex gap-2">
-                    <Button
-                        icon="pi pi-chevron-left"
-                        class="p-button-outlined"
-                        @click="navigateMonth(-1)"
-                    />
-                    <Button
-                        icon="pi pi-chevron-right"
-                        class="p-button-outlined"
-                        @click="navigateMonth(1)"
-                    />
-                </div>
-            </div>
-        </div>
-
-        <!-- Calendar Header -->
-        <div class="grid grid-cols-7 text-center font-bold bg-gray-100 py-2">
-            <div v-for="day in daysOfWeek" :key="day">{{ day }}</div>
-        </div>
-
-        <!-- Calendar Grid -->
-        <div class="grid grid-cols-7 gap-1">
-            <div
-                v-for="(day, index) in filteredCalendarDays"
-                :key="index"
-                class="border rounded-lg p-2 h-28 relative"
-                :class="{
-                    'bg-gray-200': !day.isCurrentMonth,
-                    'bg-white': day.isCurrentMonth,
-                }"
-                @mouseover="showPopover(day, $event)"
-                @mouseleave="hidePopover"
-            >
-                <!-- Date Number -->
-                <div class="text-sm font-bold mb-1 text-left">
-                    {{ day.date || "" }}
-                </div>
-
-                <!-- Events -->
-                <div v-if="day.activities.length" class="text-xs text-gray-700">
-                    <ul>
-                        <li
-                            v-for="(activity, i) in day.activities"
-                            :key="i"
-                            class="truncate"
-                        >
-                            {{ activity.type }} - {{ activity.detail }}
-                        </li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-
-        <!-- Popover -->
-        <div
-            v-if="popover.visible"
-            class="absolute bg-white shadow-lg border p-4 rounded-lg z-50"
-            :style="{ top: `${popover.y}px`, left: `${popover.x}px` }"
-        >
-            <h4 class="font-bold text-md mb-2">Event Details</h4>
-            <ul>
-                <li
-                    v-for="(activity, index) in popover.activities"
-                    :key="index"
-                    class="text-sm"
-                >
-                    <strong>{{ activity.type }}:</strong> {{ activity.detail }}
-                </li>
-            </ul>
         </div>
     </Dialog>
 
@@ -798,7 +762,7 @@ onMounted(() => {
                     type="file"
                     accept="image/*"
                     @change="onImageUpload"
-                    class="block w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                 />
                 <div class="mt-2">
                     <img

@@ -184,7 +184,7 @@ const selectedCategory = ref("All");
 const filteredRecipes = computed(() => {
     if (selectedCategory.value === "All") return recipes.value;
     return recipes.value.filter(
-        (recipe) => recipe.category === selectedCategory.value,
+        (recipe) => recipe.category === selectedCategory.value
     );
 });
 
@@ -233,23 +233,38 @@ const saveRecipe = () => {
         showToast(
             "success",
             "Success",
-            `Recipe ₱{isEdit.value ? "updated" : "added"} successfully`,
+            `Recipe ₱{isEdit.value ? "updated" : "added"} successfully`
         );
     }
 };
 
+//Reactive state
+const deleteDialogVisible = ref(false);
+const selectedRecipe = ref(null);
+
+// Delete confirmation handler
 const confirmDelete = (recipe) => {
-    confirm.require({
-        message: `Are you sure you want to delete ₱{recipe.title}?`,
-        header: "Confirm Deletion",
-        icon: "pi pi-exclamation-triangle",
-        accept: () => deleteRecipe(recipe),
-    });
+    selectedRecipe.value = recipe;
+    deleteDialogVisible.value = true;
 };
 
-const deleteRecipe = (recipe) => {
-    recipes.value = recipes.value.filter((r) => r.id !== recipe.id);
-    showToast("success", "Success", "Recipe deleted successfully");
+// Actual delete function
+const deleteRecipe = () => {
+    if (selectedRecipe.value) {
+        // Your delete logic here
+        console.log("Deleting recipe:", selectedRecipe.value.title);
+
+        // Close dialog
+        deleteDialogVisible.value = false;
+        selectedRecipe.value = null;
+    }
+
+    toast.add({
+        severity: "error",
+        summary: "Deleted Successfully",
+        detail: "Recipe deleted successfully",
+        life: 3000,
+    });
 };
 
 const showToast = (severity, summary, detail) => {
@@ -265,9 +280,9 @@ const showToast = (severity, summary, detail) => {
 <template>
     <div class="card">
         <div class="mb-6 flex justify-between items-center">
-            <h1 class="text-2xl font-bold text-gray-800">Recipe Management</h1>
+            <h1 class="text-2xl font-bold">Recipe Management</h1>
             <div class="flex gap-4">
-                <Dropdown
+                <Select
                     v-model="selectedCategory"
                     :options="['All', ...categories]"
                     placeholder="Filter by Category"
@@ -287,7 +302,7 @@ const showToast = (severity, summary, detail) => {
             <Card
                 v-for="(recipe, index) in filteredRecipes"
                 :key="index"
-                class="shadow-lg hover:shadow-xl transition-shadow duration-300"
+                class="shadow-lg hover:shadow-xl transition-shadow duration-300 border border-white"
             >
                 <template #title>
                     <div class="flex justify-between items-start">
@@ -371,7 +386,7 @@ const showToast = (severity, summary, detail) => {
                     <label for="category"
                         >Category <span class="text-red-500">*</span></label
                     >
-                    <Dropdown
+                    <Select
                         id="category"
                         v-model="recipe.category"
                         :options="categories"
@@ -463,6 +478,41 @@ const showToast = (severity, summary, detail) => {
             </template>
         </Dialog>
 
-        <ConfirmDialog></ConfirmDialog>
+        <Dialog
+            v-model:visible="deleteDialogVisible"
+            header="Confirm Deletion"
+            :style="{ width: '450px' }"
+            :modal="true"
+        >
+            <div class="flex align-items-center gap-3 p-3">
+                <i
+                    class="pi pi-exclamation-triangle text-red-500"
+                    style="font-size: 2rem"
+                />
+                <span v-if="selectedRecipe">
+                    Are you sure you want to delete
+                    <strong class="text-red-500">{{
+                        selectedRecipe.title
+                    }}</strong
+                    >?
+                </span>
+            </div>
+
+            <template #footer>
+                <Button
+                    label="Cancel"
+                    icon="pi pi-times"
+                    class="p-button-text"
+                    @click="deleteDialogVisible = false"
+                />
+                <Button
+                    label="Delete"
+                    icon="pi pi-trash"
+                    class="p-button-danger"
+                    @click="deleteRecipe"
+                />
+            </template>
+        </Dialog>
     </div>
+    <toast />
 </template>

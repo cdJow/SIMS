@@ -21,7 +21,7 @@ const newRoom = ref({
     imageUrl: "", // Stores the uploaded image URL
     typeId: null,
     categoryId: null,
-    description: "",
+    Rdescription: "",
     occupancy: 0,
     rates: { "6hrs": 0, "12hrs": 0, "24hrs": 0 },
     amenities: [],
@@ -30,7 +30,10 @@ const newRoom = ref({
 // Stepper State
 const currentStep = ref(1);
 const showDialog = ref(false);
-const closeDialog = ref(false);
+
+const closeDialog = () => {
+    showDialog.value = false;
+};
 
 // State to track selected items
 const selectedItems = ref([]);
@@ -63,7 +66,6 @@ const roomTypes = ref([
             "24hrs": 80 - 80 * 0.05,
         },
         discountPercentage: 5, // Added discount percentage
-        description: "Ideal for solo travelers with basic needs.",
     },
     {
         id: 2,
@@ -71,7 +73,6 @@ const roomTypes = ref([
         name: "Double",
         occupancy: 2,
         rates: { "6hrs": 50, "12hrs": 80, "24hrs": 120 },
-        description: "Perfect for two guests with additional space.",
     },
     {
         id: 3,
@@ -79,7 +80,6 @@ const roomTypes = ref([
         name: "King",
         occupancy: 2,
         rates: { "6hrs": 100, "12hrs": 150, "24hrs": 200 },
-        description: "Luxurious king-size bed for ultimate comfort.",
     },
     {
         id: 4,
@@ -87,7 +87,6 @@ const roomTypes = ref([
         name: "Family",
         occupancy: 4,
         rates: { "6hrs": 200, "12hrs": 250, "24hrs": 300 },
-        description: "Spacious room to accommodate the whole family.",
     },
 ]);
 
@@ -343,7 +342,7 @@ function saveRoom() {
         imageUrl: "",
         typeId: null,
         categoryId: null,
-        description: "",
+        Rdescription: "",
         occupancy: 0,
         rates: { "6hrs": 0, "12hrs": 0, "24hrs": 0 },
         amenities: [],
@@ -460,6 +459,18 @@ function goToStep(step) {
                     :options="floorOptions"
                     optionLabel="label"
                     placeholder="Select Floor Number"
+                    class="w-full"
+                />
+            </div>
+
+            <div>
+                <label for="Rdescription" class="block mb-1 font-medium"
+                    >Description</label
+                >
+                <Textarea
+                    v-model="newRoom.Rdescription"
+                    id="Rdescription"
+                    placeholder="Enter Description"
                     class="w-full"
                 />
             </div>
@@ -977,6 +988,11 @@ function goToStep(step) {
                     {{ newRoom.floorNumber?.label || "Not specified" }}
                 </p>
 
+                <p>
+                    <strong>Description:</strong>
+                    {{ newRoom.Rdescription }}
+                </p>
+
                 <!-- Room Image -->
                 <div v-if="newRoom.imageUrl" class="mt-4">
                     <h4 class="text-lg font-bold mb-2">Room Image</h4>
@@ -1001,10 +1017,7 @@ function goToStep(step) {
                         )?.category || "Unknown Category"
                     }}
                 </p>
-                <p>
-                    <strong>Description:</strong>
-                    {{ selectedRoomType.description }}
-                </p>
+
                 <p>
                     <strong>Occupancy:</strong>
                     {{ selectedRoomType.occupancy }} person(s)
