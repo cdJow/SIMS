@@ -1,20 +1,17 @@
 <script setup>
-import { CustomerService } from "@/service/CustomerService";
 import { ProductService } from "@/service/ProductService";
 import { RoomService } from "@/service/RoomService";
 import { FilterMatchMode, FilterOperator } from "@primevue/core/api";
 import { InputNumber } from "primevue";
 
-import { onBeforeMount, ref } from "vue";
+import { onBeforeMount, onMounted, ref } from "vue";
 
-const customers1 = ref(null);
-const customers2 = ref(null);
-const customers3 = ref(null);
-const loading1 = ref(null);
 const expandedRows = ref([]);
 const batchExpandedRows = ref([]);
 const toast = ref(null);
 const NonConsumablebatchDialog = ref(false);
+const assignItemDialogVisible = ref(false); // For assigning items
+const reassignItemDialogVisible = ref(false); // For re-assigning items
 
 const deleteProductDialog = ref(false); // State for delete dialog
 const deleteBatchDialog = ref(false);
@@ -28,9 +25,6 @@ const productDialog = ref(false);
 const submitted = ref(false);
 
 const selectedBatch = ref({});
-
-// State variables
-const assignItemDialogVisible = ref(false); // Dialog visibility
 
 const products = ref([]); // Products for the DataTable
 const selectedProduct = ref(null); // Selected product from the DataTable
@@ -48,10 +42,25 @@ const damageDetails = ref({
     reason: "",
 });
 const damageTypes = ref([
-    { label: "Physical Damage", value: "physical" },
-    { label: "Malfunction", value: "malfunction" },
-    { label: "Wear and Tear", value: "wear_and_tear" },
-    { label: "Other", value: "other" },
+    { name: "Broken", value: "broken" },
+    { name: "Stained", value: "stained" },
+    { name: "Malfunctioning", value: "malfunction" },
+    { name: "Water Damage", value: "water_damage" },
+    { name: "Burn Marks", value: "burn_marks" },
+    { name: "Scratches", value: "scratches" },
+    { name: "Torn Fabric", value: "torn_fabric" },
+    { name: "Pest Infestation", value: "pest_infestation" },
+    { name: "Odor Issues", value: "odor_issues" },
+    { name: "Electrical Fault", value: "electrical_fault" },
+    { name: "Plumbing Issue", value: "plumbing_issue" },
+    { name: "Furniture Damage", value: "furniture_damage" },
+    { name: "Wall Damage", value: "wall_damage" },
+    { name: "Carpet Stains", value: "carpet_stains" },
+    { name: "Bed Frame Issue", value: "bed_frame_issue" },
+    { name: "HVAC Malfunction", value: "hvac_malfunction" },
+    { name: "Window Damage", value: "window_damage" },
+    { name: "Door Lock Issue", value: "door_lock_issue" },
+    { name: "Lighting Issue", value: "lighting_issue" },
 ]);
 
 const deleteConsumableDialogVisible = ref(false); // Dialog visibility state
@@ -121,6 +130,75 @@ function deleteConsumable() {
     deleteConsumableDialogVisible.value = false; // Close the dialog
 }
 
+// Add filter function with proper error handling
+const ConsumableBatchSearch = ref("");
+const NonConsumableBatchSearch = ref("");
+
+// Separate filter functions
+const filterConsumableBatches = (batches) => {
+    try {
+        if (!Array.isArray(batches)) return [];
+        const query = ConsumableBatchSearch.value.toLowerCase().trim();
+        return query
+            ? batches.filter((batch) =>
+                  Object.values(batch).some((value) =>
+                      String(value).toLowerCase().includes(query)
+                  )
+              )
+            : batches;
+    } catch (error) {
+        console.error("Consumable batch filter error:", error);
+        return batches || [];
+    }
+};
+
+onMounted(async () => {
+    try {
+        const data = await ProductService.getProductsWithOrdersSmall();
+        products.value = Array.isArray(data) ? data : [];
+        initFilters();
+    } catch (error) {
+        console.error("Data loading failed:", error);
+        showErrorToast("Failed to load product data");
+        products.value = []; // Ensure empty array state
+    }
+});
+
+const showErrorToast = (message) => {
+    if (toast.value) {
+        toast.value.add({
+            severity: "error",
+            summary: "Error",
+            detail: message,
+            life: 3000,
+        });
+    }
+};
+
+const filterNonConsumableBatches = (batches) => {
+    try {
+        if (!Array.isArray(batches)) return [];
+        const query = NonConsumableBatchSearch.value.toLowerCase().trim();
+        return query
+            ? batches.filter((batch) =>
+                  Object.values(batch).some((value) =>
+                      String(value).toLowerCase().includes(query)
+                  )
+              )
+            : batches;
+    } catch (error) {
+        console.error("Non-consumable batch filter error:", error);
+        return batches || [];
+    }
+};
+// Separate clear functions
+const clearConsumableFilter = () => {
+    ConsumableBatchSearch.value = "";
+};
+
+const clearNonConsumableBatchFilter = () => {
+    NonConsumableBatchSearch.value = "";
+};
 const editConsumableDialogVisible = ref(false); // Dialog visibility state
 const editingConsumableData = ref({
     serialNumber: "",
@@ -290,42 +368,56 @@ function moveToStockroom() {
         return;
     }
 
-    // Set the selected item's status to 'Available'
-    selectedItem.value.status = "Available";
-
-    // Remove the assigned room number
-    selectedItem.value.roomNumber = null;
-
-    console.log("Item after moving to stockroom:", selectedItem.value);
-
-    // Update the data in serialNumbers array
-    const itemIndex = serialNumbers.value.findIndex(
-        (item) => item.serialNumber === selectedItem.value.serialNumber
+    // Find the product and batch containing the item
+    let targetProduct = products.value.find((product) =>
+        product.batches.some((batch) =>
+            batch.serialNumbers.some(
+                (sn) => sn.serialNumber === selectedItem.value.serialNumber
+            )
+        )
     );
-    if (itemIndex !== -1) {
-        serialNumbers.value.splice(itemIndex, 1, { ...selectedItem.value });
+
+    if (targetProduct) {
+        let targetBatch = targetProduct.batches.find((batch) =>
+            batch.serialNumbers.some(
+                (sn) => sn.serialNumber === selectedItem.value.serialNumber
+            )
+        );
+
+        if (targetBatch) {
+            // Update the item in the original data structure
+            let targetItem = targetBatch.serialNumbers.find(
+                (sn) => sn.serialNumber === selectedItem.value.serialNumber
+            );
+
+            if (targetItem) {
+                targetItem.status = "Available";
+                targetItem.roomNumber = null;
+
+                // Force UI update
+                products.value = [...products.value];
+
+                // Close dialog and show success
+                assignItemDialogVisible.value = false;
+                toast.value.add({
+                    severity: "success",
+                    summary: "Success",
+                    detail: `Item ${selectedItem.value.serialNumber} moved to stockroom`,
+                    life: 3000,
+                });
+                return;
+            }
+        }
     }
 
-    // Close the dialog
-    assignItemDialogVisible.value = false;
-
-    // Reset the selected room
-    selectedRoom.value = null;
-
-    // Optional: Toast notification
-    toast.value.add({
-        severity: "success",
-        summary: "Success",
-        detail: `Item ${selectedItem.value.serialNumber} moved to stockroom and status set to Available.`,
-        life: 3000,
-    });
+    console.error("Item not found in products structure");
 }
 
 // Function to open the dialog for reassignment
 function reassign(item) {
     console.log("Reassigning item:", item); // Debugging
     selectedItem.value = { ...item }; // Clone the item to avoid direct mutations
-    assignItemDialogVisible.value = true; // Open the dialog
+    reassignItemDialogVisible.value = true; // Open the dialog
 }
 
 // Function to toggle the popover visibility
@@ -882,26 +974,6 @@ const filters = ref({
     inventoryStatus: { value: null, matchMode: FilterMatchMode.EQUALS },
 });
 
-onBeforeMount(() => {
-    ProductService.getProductsWithOrdersSmall().then(
-        (data) => (products.value = data)
-    );
-    CustomerService.getCustomersLarge().then((data) => {
-        customers1.value = data;
-        loading1.value = false;
-        customers1.value.forEach(
-            (customer) => (customer.date = new Date(customer.date))
-        );
-    });
-    CustomerService.getCustomersLarge().then(
-        (data) => (customers2.value = data)
-    );
-    CustomerService.getCustomersMedium().then(
-        (data) => (customers3.value = data)
-    );
-    initFilters();
-});
-
 function editbatch(batchData) {
     if (!batchData) {
         console.error("Batch data is not defined");
@@ -1182,8 +1254,20 @@ function formatPrice(value) {
                     />
                 </template>
             </Column>
+
             <template #expansion="slotProps">
-                <div class="p-4">
+                <!--Consumable Batch Table-->
+                <DataTable
+                    class="p-datatable-sm"
+                    :paginator="true"
+                    :rows="10"
+                    v-model:expandedRows="batchExpandedRows"
+                    :value="
+                        filterConsumableBatches(slotProps.data?.batches || [])
+                    "
+                    dataKey="batchId"
+                    v-if="slotProps.data?.category === 'Consumable'"
+                >
                     <div class="flex items-center gap-2 mb-4">
                         <h5>Batch List for {{ slotProps.data.name }}</h5>
                         <Button
@@ -1191,211 +1275,433 @@ function formatPrice(value) {
                             icon="pi pi-filter-slash"
                             label="Clear"
                             outlined
-                            @click="clearFilter()"
+                            @click="clearConsumableFilter"
                         />
                         <IconField>
                             <InputIcon>
                                 <i class="pi pi-search" />
                             </InputIcon>
                             <InputText
-                                v-model="filters['global'].value"
-                                placeholder="Keyword Search"
+                                v-model="ConsumableBatchSearch"
+                                placeholder="Search consumable batches..."
+                                class="w-full"
                             />
                         </IconField>
                     </div>
-
-                    <!--Consumable Batch Table-->
-                    <DataTable
-                        class="p-datatable-sm"
-                        v-model:expandedRows="batchExpandedRows"
-                        :value="slotProps.data.batches"
-                        dataKey="batchId"
-                        v-if="slotProps.data.category === 'Consumable'"
+                    <Column
+                        field="batchNumber"
+                        header="Batch Number"
+                        sortable
+                    ></Column>
+                    <Column
+                        field="quantity"
+                        header="Quantity"
+                        sortable
+                    ></Column>
+                    <Column
+                        field="purchaseDate"
+                        header="Purchase Date"
+                        sortable
+                    ></Column>
+                    <Column
+                        field="purchasePrice"
+                        header="Purchase Price"
+                        sortable
                     >
-                        <Column
-                            field="batchNumber"
-                            header="Batch Number"
-                            sortable
-                        ></Column>
-                        <Column
-                            field="quantity"
-                            header="Quantity"
-                            sortable
-                        ></Column>
-                        <Column
-                            field="purchaseDate"
-                            header="Purchase Date"
-                            sortable
-                        ></Column>
-                        <Column
-                            field="purchasePrice"
-                            header="Purchase Price"
-                            sortable
-                        >
-                            <template #body="slotProps">
-                                <span>{{
-                                    formatPrice(slotProps.data.purchasePrice)
-                                }}</span>
-                            </template>
-                        </Column>
+                        <template #body="slotProps">
+                            <span>{{
+                                formatPrice(slotProps.data.purchasePrice)
+                            }}</span>
+                        </template>
+                    </Column>
 
-                        <Column field="srp" header="SRP" sortable>
-                            <template #body="slotProps">
-                                <span
-                                    >₱{{ slotProps.data.srp.toFixed(2) }}</span
-                                >
-                            </template>
-                        </Column>
-                        <Column field="unit" header="Unit" sortable></Column>
-                        <Column
-                            field="supplier"
-                            header="Supplier"
-                            sortable
-                        ></Column>
+                    <Column field="srp" header="SRP" sortable>
+                        <template #body="slotProps">
+                            <span>₱{{ slotProps.data.srp.toFixed(2) }}</span>
+                        </template>
+                    </Column>
+                    <Column field="unit" header="Unit" sortable></Column>
+                    <Column
+                        field="supplier"
+                        header="Supplier"
+                        sortable
+                    ></Column>
 
-                        <Column field="expDate" header="Exp Date" sortable>
-                            <template #body="slotProps">
-                                <span style="color: red">{{
-                                    formatDate(slotProps.data.expDate)
-                                }}</span>
-                            </template>
-                        </Column>
-                        <Column field="status" header="Status" sortable>
-                            <template #body="slotProps">
-                                <Tag
-                                    :value="slotProps.data.status"
-                                    :severity="getOrderSeverity(slotProps.data)"
+                    <Column field="expDate" header="Exp Date" sortable>
+                        <template #body="slotProps">
+                            <span style="color: red">{{
+                                formatDate(slotProps.data.expDate)
+                            }}</span>
+                        </template>
+                    </Column>
+                    <Column field="status" header="Status" sortable>
+                        <template #body="slotProps">
+                            <Tag
+                                :value="slotProps.data.status"
+                                :severity="getOrderSeverity(slotProps.data)"
+                            />
+                        </template>
+                    </Column>
+                    <Column
+                        field="Actions"
+                        header="Actions"
+                        :exportable="false"
+                        style="min-width: 3rem"
+                        class="gap-2"
+                    >
+                        <template #body="slotProps">
+                            <div class="flex">
+                                <Button
+                                    icon="pi pi-pencil"
+                                    outlined
+                                    rounded
+                                    class="mb-1 mr-2"
+                                    @click="editbatch(slotProps.data)"
                                 />
-                            </template>
-                        </Column>
-                        <Column
-                            field="Actions"
-                            header="Actions"
-                            :exportable="false"
-                            style="min-width: 3rem"
-                            class="gap-2"
-                        >
-                            <template #body="slotProps">
-                                <div class="flex">
-                                    <Button
-                                        icon="pi pi-pencil"
-                                        outlined
-                                        rounded
-                                        class="mb-1 mr-2"
-                                        @click="editbatch(slotProps.data)"
-                                    />
-                                    <Button
-                                        icon="pi pi-trash"
-                                        outlined
-                                        rounded
-                                        severity="danger"
-                                        @click="
-                                            confirmDeleteBatch(slotProps.data)
-                                        "
-                                    />
-                                </div>
-                            </template>
-                        </Column>
+                                <Button
+                                    icon="pi pi-trash"
+                                    outlined
+                                    rounded
+                                    severity="danger"
+                                    @click="confirmDeleteBatch(slotProps.data)"
+                                />
+                            </div>
+                        </template>
+                    </Column>
 
-                        <column header="Items">
-                            <template #body="slotProps">
-                                <div class="flex flex-wrap gap-2">
-                                    <Button
-                                        type="button"
-                                        icon="pi pi-list"
-                                        @click="toggleDataTable(slotProps.data)"
-                                        rounded
-                                        class="mr-2"
-                                    />
-                                    <Dialog
-                                        header="Items"
-                                        v-model:visible="isDialogVisible"
-                                        :breakpoints="{ '960px': '75vw' }"
-                                        :style="{ width: '40vw' }"
-                                        :modal="true"
-                                        :dismissable-mask="true"
+                    <column header="Items">
+                        <template #body="slotProps">
+                            <div class="flex flex-wrap gap-2">
+                                <Button
+                                    type="button"
+                                    icon="pi pi-list"
+                                    @click="toggleDataTable(slotProps.data)"
+                                    rounded
+                                    class="mr-2"
+                                />
+                                <Dialog
+                                    header="Items"
+                                    v-model:visible="isDialogVisible"
+                                    :breakpoints="{ '960px': '75vw' }"
+                                    :style="{ width: '40vw' }"
+                                    :modal="true"
+                                    :dismissable-mask="true"
+                                >
+                                    <!-- Header Section -->
+                                    <template #header>
+                                        <div class="flex items-center gap-2">
+                                            <p class="font-semibold text-lg">
+                                                Items per Batch |
+                                                {{
+                                                    slotProps?.data?.batchNumber
+                                                }}
+                                            </p>
+                                        </div>
+                                    </template>
+
+                                    <!-- Nested Data Table -->
+                                    <DataTable
+                                        class="p-datatable-sm"
+                                        :value="slotProps?.data?.serialNumbers"
                                     >
-                                        <!-- Header Section -->
-                                        <template #header>
-                                            <div
-                                                class="flex items-center gap-2"
-                                            >
-                                                <h6>
-                                                    Items for
-                                                    {{
-                                                        slotProps?.data
-                                                            ?.batchNumber
-                                                    }}
-                                                </h6>
-                                                <Button
-                                                    type="button"
-                                                    icon="pi pi-filter-slash"
-                                                    label="Clear"
-                                                    outlined
-                                                    @click="clearFilter()"
-                                                />
-                                                <IconField>
-                                                    <InputIcon>
-                                                        <i
-                                                            class="pi pi-search"
-                                                        />
-                                                    </InputIcon>
-                                                    <InputText
-                                                        v-model="
-                                                            filters['global']
-                                                                .value
-                                                        "
-                                                        placeholder="Keyword Search"
-                                                    />
-                                                </IconField>
-                                            </div>
-                                        </template>
+                                        <Column
+                                            field="serialNumber"
+                                            header="Serial Number"
+                                            sortable
+                                        />
+                                        <Column
+                                            field="srp"
+                                            header="Suggested Retail Price (SRP)"
+                                            sortable
+                                        >
+                                            <template #body="slotProps">
+                                                {{
+                                                    formatCurrency(
+                                                        slotProps.data.srp
+                                                    )
+                                                }}
+                                            </template>
+                                        </Column>
 
-                                        <!-- Nested Data Table -->
+                                        <!-- Status Column -->
+                                        <Column
+                                            field="status"
+                                            header="Status"
+                                            sortable
+                                            style="min-width: 8rem"
+                                        >
+                                            <template #body="slotProps">
+                                                <span
+                                                    :class="{
+                                                        'text-green-500':
+                                                            slotProps.data
+                                                                .status ===
+                                                            'Available',
+                                                        'text-red-500':
+                                                            slotProps.data
+                                                                .status ===
+                                                            'Sold',
+                                                    }"
+                                                >
+                                                    {{ slotProps.data.status }}
+                                                </span>
+                                            </template>
+                                        </Column>
+
+                                        <Column
+                                            :exportable="false"
+                                            style="min-width: 12rem"
+                                        >
+                                            <template #body="slotProps">
+                                                <Button
+                                                    icon="pi pi-pencil"
+                                                    outlined
+                                                    rounded
+                                                    v-tooltip="'Edit  Details'"
+                                                    class="mr-2"
+                                                    :disabled="
+                                                        slotProps.data
+                                                            .status === 'Sold'
+                                                    "
+                                                    @click="
+                                                        openEditConsumableDialog(
+                                                            slotProps.data
+                                                        )
+                                                    "
+                                                />
+                                                <Button
+                                                    icon="pi pi-trash"
+                                                    outlined
+                                                    rounded
+                                                    severity="danger"
+                                                    v-tooltip="'Delete  '"
+                                                    @click="
+                                                        confirmDeleteConsumable(
+                                                            slotProps.data
+                                                        )
+                                                    "
+                                                />
+                                            </template>
+                                        </Column>
+                                    </DataTable>
+
+                                    <!-- Main Data Table -->
+                                    <DataTable
+                                        v-model:selection="selectedProduct"
+                                        :value="products"
+                                        selectionMode="single"
+                                        paginator
+                                        :rows="5"
+                                        :totalRecords="products.length"
+                                        @row-select="onProductSelect"
+                                    >
+                                    </DataTable>
+
+                                    <!-- Footer Section -->
+                                    <template #footer>
+                                        <Button
+                                            label="Close"
+                                            @click="isDialogVisible = false"
+                                        />
+                                    </template>
+                                </Dialog>
+                            </div>
+                        </template>
+                    </column>
+                </DataTable>
+
+                <!--Non-Consumable Batch Table-->
+                <DataTable
+                    class="p-datatable-sm"
+                    :paginator="true"
+                    :rows="10"
+                    v-model:expandedRows="batchExpandedRows"
+                    :value="
+                        filterNonConsumableBatches(
+                            slotProps.data?.batches || []
+                        )
+                    "
+                    dataKey="batchId"
+                    v-if="slotProps.data?.category === 'Non-Consumable'"
+                >
+                    <div class="flex items-center gap-2 mb-4">
+                        <h5>Batch List for {{ slotProps.data.name }}</h5>
+                        <Button
+                            type="button"
+                            icon="pi pi-filter-slash"
+                            label="Clear"
+                            outlined
+                            @click="clearNonConsumableBatchFilter"
+                        />
+                        <IconField>
+                            <InputIcon>
+                                <i class="pi pi-search" />
+                            </InputIcon>
+                            <InputText
+                                v-model="NonConsumableBatchSearch"
+                                placeholder="Search Nonconsumable batches..."
+                                class="w-full"
+                            />
+                        </IconField>
+                    </div>
+                    <Column
+                        field="batchNumber"
+                        header="Batch Number"
+                        sortable
+                    ></Column>
+
+                    <Column
+                        field="purchaseDate"
+                        header="Purchase Date"
+                        sortable
+                    ></Column>
+                    <Column
+                        field="purchasePrice"
+                        header="Purchase Price"
+                        sortable
+                    >
+                        <template #body="slotProps">
+                            <span>{{
+                                formatPrice(slotProps.data.purchasePrice)
+                            }}</span>
+                        </template>
+                    </Column>
+                    <Column field="unit" header="Unit" sortable></Column>
+
+                    <Column
+                        field="supplier"
+                        header="Supplier"
+                        sortable
+                    ></Column>
+
+                    <Column field="rental" header="Rental" sortable></Column>
+
+                    <Column
+                        field="rentalprice"
+                        header="Rental Price"
+                        sortable
+                    ></Column>
+
+                    <Column field="warranty" header="Warranty" sortable>
+                        <template #body="slotProps">
+                            <span
+                                >{{ slotProps.data.warrantyValue }}
+                                {{ slotProps.data.warrantyUnit }}</span
+                            >
+                        </template>
+                    </Column>
+                    <Column
+                        field="quantity"
+                        header="Quantity"
+                        sortable
+                    ></Column>
+
+                    <Column
+                        field="minimumstocks"
+                        header="Minimum Stocks"
+                        sortable
+                    ></Column>
+                    <Column
+                        field="stocklimit"
+                        header="Stock Limit"
+                        sortable
+                    ></Column>
+                    <Column field="status" header="Status" sortable>
+                        <template #body="slotProps">
+                            <Tag
+                                :value="slotProps.data.status"
+                                :severity="getOrderSeverity(slotProps.data)"
+                            />
+                        </template>
+                    </Column>
+                    <Column
+                        field="Actions"
+                        header="Actions"
+                        :exportable="false"
+                        style="min-width: 3rem"
+                    >
+                        <template #body="slotProps">
+                            <div class="flex">
+                                <Button
+                                    icon="pi pi-pencil"
+                                    outlined
+                                    rounded
+                                    class="mr-2"
+                                    @click="
+                                        openNonConsumableBatchDialog(
+                                            slotProps.data
+                                        )
+                                    "
+                                />
+                                <Button
+                                    icon="pi pi-trash"
+                                    outlined
+                                    rounded
+                                    severity="danger"
+                                    @click="confirmDeleteBatch(slotProps.data)"
+                                />
+                            </div>
+                        </template>
+                    </Column>
+
+                    <column header="Items">
+                        <template #body="slotProps">
+                            <div class="flex flex-wrap gap-2">
+                                <Button
+                                    type="button"
+                                    icon="pi pi-list"
+                                    @click="toggleDataTable2(slotProps.data)"
+                                    rounded
+                                    class="mr-2"
+                                />
+                                <Dialog
+                                    v-model:visible="isDialog2Visible"
+                                    :header="`Items per Batch | ${
+                                        slotProps.data?.batchNumber || 'N/A'
+                                    }`"
+                                    :breakpoints="{ '960px': '75vw' }"
+                                    :style="{ width: '60vw' }"
+                                    :modal="true"
+                                    :dismissable-mask="true"
+                                >
+                                    <DataTable
+                                        v-model:selection="selectedProduct"
+                                        :value="serialNumbers"
+                                        selectionMode="single"
+                                    >
                                         <DataTable
-                                            class="p-datatable-sm"
+                                            class="p-datatable-xl"
                                             :value="
-                                                slotProps?.data?.serialNumbers
+                                                slotProps.data.serialNumbers
                                             "
+                                            :totalRecords="
+                                                slotProps.data.serialNumbers
+                                                    .length
+                                            "
+                                            :rows="5"
+                                            paginator
+                                            @row-select="onProductSelect"
                                         >
                                             <Column
                                                 field="serialNumber"
                                                 header="Serial Number"
                                                 sortable
-                                            />
-                                            <Column
-                                                field="srp"
-                                                header="Suggested Retail Price (SRP)"
-                                                sortable
-                                            >
-                                                <template #body="slotProps">
-                                                    {{
-                                                        formatCurrency(
-                                                            slotProps.data.srp
-                                                        )
-                                                    }}
-                                                </template>
-                                            </Column>
-
-                                            <!-- Status Column -->
+                                            ></Column>
                                             <Column
                                                 field="status"
                                                 header="Status"
                                                 sortable
-                                                style="min-width: 8rem"
                                             >
+                                                <!-- Custom Template for Status -->
                                                 <template #body="slotProps">
                                                     <span
-                                                        :class="{
-                                                            'text-green-500':
+                                                        :class="
+                                                            getStatusTextColor(
                                                                 slotProps.data
-                                                                    .status ===
-                                                                'Available',
-                                                            'text-red-500':
-                                                                slotProps.data
-                                                                    .status ===
-                                                                'Sold',
-                                                        }"
+                                                                    .status
+                                                            )
+                                                        "
+                                                        class="font-bold"
                                                     >
                                                         {{
                                                             slotProps.data
@@ -1404,419 +1710,152 @@ function formatPrice(value) {
                                                     </span>
                                                 </template>
                                             </Column>
-
                                             <Column
-                                                :exportable="false"
-                                                style="min-width: 12rem"
+                                                field="rental"
+                                                header="Rental"
+                                                sortable
+                                            ></Column>
+                                            <Column
+                                                field="rentalPrice"
+                                                header="Rental Price"
+                                                sortable
                                             >
                                                 <template #body="slotProps">
-                                                    <Button
-                                                        icon="pi pi-pencil"
-                                                        outlined
-                                                        rounded
-                                                        class="mr-2"
-                                                        @click="
-                                                            openEditConsumableDialog(
-                                                                slotProps.data
-                                                            )
-                                                        "
-                                                    />
-                                                    <Button
-                                                        icon="pi pi-trash"
-                                                        outlined
-                                                        rounded
-                                                        severity="danger"
-                                                        @click="
-                                                            confirmDeleteConsumable(
-                                                                slotProps.data
-                                                            )
-                                                        "
-                                                    />
+                                                    {{
+                                                        formatPrice(
+                                                            slotProps.data
+                                                                .rentalPrice
+                                                        )
+                                                    }}
+                                                </template>
+                                            </Column>
+
+                                            <Column
+                                                field="roomNumber"
+                                                header="Assigned Room"
+                                                sortable
+                                            ></Column>
+                                            <Column
+                                                :exportable="false"
+                                                header="Actions"
+                                            >
+                                                <template #body="slotProps">
+                                                    <div class="flex gap-2">
+                                                        <!-- Edit Button -->
+                                                        <Button
+                                                            v-if="
+                                                                slotProps.data.status.toLowerCase() ===
+                                                                    'available' ||
+                                                                slotProps.data.status.toLowerCase() ===
+                                                                    'assigned'
+                                                            "
+                                                            icon="pi pi-pencil"
+                                                            outlined
+                                                            rounded
+                                                            @click="
+                                                                editSerial(
+                                                                    slotProps.data
+                                                                )
+                                                            "
+                                                            v-tooltip="
+                                                                'Edit Serial Details'
+                                                            "
+                                                        />
+
+                                                        <!-- Delete Button -->
+                                                        <Button
+                                                            v-if="
+                                                                slotProps.data.status.toLowerCase() ===
+                                                                    'available' ||
+                                                                slotProps.data.status.toLowerCase() ===
+                                                                    'assigned' ||
+                                                                slotProps.data.status.toLowerCase() ===
+                                                                    'damaged'
+                                                            "
+                                                            icon="pi pi-trash"
+                                                            outlined
+                                                            rounded
+                                                            severity="danger"
+                                                            @click="
+                                                                confirmDeleteSerial(
+                                                                    slotProps.data
+                                                                )
+                                                            "
+                                                            v-tooltip="
+                                                                'Delete Item'
+                                                            "
+                                                        />
+
+                                                        <!-- Conditional Assign Button -->
+                                                        <Button
+                                                            v-if="
+                                                                slotProps.data.status.toLowerCase() ===
+                                                                'available'
+                                                            "
+                                                            icon="pi pi-arrow-up-right"
+                                                            outlined
+                                                            rounded
+                                                            severity="success"
+                                                            @click="
+                                                                openAssignItemDialog(
+                                                                    slotProps.data
+                                                                )
+                                                            "
+                                                            v-tooltip="
+                                                                'Assign Item to Room'
+                                                            "
+                                                        />
+
+                                                        <!-- Button Visible for 'Assigned' Status -->
+                                                        <Button
+                                                            v-if="
+                                                                slotProps.data.status.toLowerCase() ===
+                                                                'assigned'
+                                                            "
+                                                            icon="pi pi-arrows-h"
+                                                            outlined
+                                                            rounded
+                                                            severity="info"
+                                                            @click="
+                                                                reassign(
+                                                                    slotProps.data
+                                                                )
+                                                            "
+                                                            v-tooltip="
+                                                                'Re-Assign Item'
+                                                            "
+                                                        ></Button>
+                                                        <!-- Damaged Button -->
+                                                        <Button
+                                                            v-if="
+                                                                slotProps.data.status.toLowerCase() ===
+                                                                    'available' ||
+                                                                slotProps.data.status.toLowerCase() ===
+                                                                    'assigned'
+                                                            "
+                                                            icon="pi pi-exclamation-triangle"
+                                                            outlined
+                                                            rounded
+                                                            severity="danger"
+                                                            @click="
+                                                                reportDamage(
+                                                                    slotProps.data
+                                                                )
+                                                            "
+                                                            v-tooltip="
+                                                                'Report Damage'
+                                                            "
+                                                        />
+                                                    </div>
                                                 </template>
                                             </Column>
                                         </DataTable>
-
-                                        <!-- Main Data Table -->
-                                        <DataTable
-                                            v-model:selection="selectedProduct"
-                                            :value="products"
-                                            selectionMode="single"
-                                            paginator
-                                            :rows="5"
-                                            :totalRecords="products.length"
-                                            @row-select="onProductSelect"
-                                        >
-                                        </DataTable>
-
-                                        <!-- Footer Section -->
-                                        <template #footer>
-                                            <Button
-                                                label="Close"
-                                                @click="isDialogVisible = false"
-                                            />
-                                        </template>
-                                    </Dialog>
-                                </div>
-                            </template>
-                        </column>
-                    </DataTable>
-
-                    <!--Non-Consumable Batch Table-->
-                    <DataTable
-                        class="p-datatable-sm"
-                        v-model:expandedRows="batchExpandedRows"
-                        :value="slotProps.data.batches"
-                        dataKey="batchId"
-                        v-if="slotProps.data.category === 'Non-Consumable'"
-                    >
-                        <Column
-                            field="batchNumber"
-                            header="Batch Number"
-                            sortable
-                        ></Column>
-
-                        <Column
-                            field="purchaseDate"
-                            header="Purchase Date"
-                            sortable
-                        ></Column>
-                        <Column
-                            field="purchasePrice"
-                            header="Purchase Price"
-                            sortable
-                        >
-                            <template #body="slotProps">
-                                <span>{{
-                                    formatPrice(slotProps.data.purchasePrice)
-                                }}</span>
-                            </template>
-                        </Column>
-                        <Column field="unit" header="Unit" sortable></Column>
-
-                        <Column
-                            field="supplier"
-                            header="Supplier"
-                            sortable
-                        ></Column>
-
-                        <Column
-                            field="rental"
-                            header="Rental"
-                            sortable
-                        ></Column>
-
-                        <Column
-                            field="rentalprice"
-                            header="Rental Price"
-                            sortable
-                        ></Column>
-
-                        <Column field="warranty" header="Warranty" sortable>
-                            <template #body="slotProps">
-                                <span
-                                    >{{ slotProps.data.warrantyValue }}
-                                    {{ slotProps.data.warrantyUnit }}</span
-                                >
-                            </template>
-                        </Column>
-                        <Column
-                            field="quantity"
-                            header="Quantity"
-                            sortable
-                        ></Column>
-
-                        <Column
-                            field="minimumstocks"
-                            header="Minimum Stocks"
-                            sortable
-                        ></Column>
-                        <Column
-                            field="stocklimit"
-                            header="Stock Limit"
-                            sortable
-                        ></Column>
-                        <Column field="status" header="Status" sortable>
-                            <template #body="slotProps">
-                                <Tag
-                                    :value="slotProps.data.status"
-                                    :severity="getOrderSeverity(slotProps.data)"
-                                />
-                            </template>
-                        </Column>
-                        <Column
-                            field="Actions"
-                            header="Actions"
-                            :exportable="false"
-                            style="min-width: 3rem"
-                        >
-                            <template #body="slotProps">
-                                <div class="flex">
-                                    <Button
-                                        icon="pi pi-pencil"
-                                        outlined
-                                        rounded
-                                        class="mr-2"
-                                        @click="
-                                            openNonConsumableBatchDialog(
-                                                slotProps.data
-                                            )
-                                        "
-                                    />
-                                    <Button
-                                        icon="pi pi-trash"
-                                        outlined
-                                        rounded
-                                        severity="danger"
-                                        @click="
-                                            confirmDeleteBatch(slotProps.data)
-                                        "
-                                    />
-                                </div>
-                            </template>
-                        </Column>
-
-                        <column header="Items">
-                            <template #body="slotProps">
-                                <div class="flex flex-wrap gap-2">
-                                    <Button
-                                        type="button"
-                                        icon="pi pi-list"
-                                        @click="
-                                            toggleDataTable2(slotProps.data)
-                                        "
-                                        rounded
-                                        class="mr-2"
-                                    />
-                                    <Dialog
-                                        v-model:visible="isDialog2Visible"
-                                        :header="`Items for Batch | ${
-                                            slotProps.data?.batchNumber || 'N/A'
-                                        }`"
-                                        :breakpoints="{ '960px': '75vw' }"
-                                        :style="{ width: '60vw' }"
-                                        :modal="true"
-                                        :dismissable-mask="true"
-                                    >
-                                        <DataTable
-                                            v-model:selection="selectedProduct"
-                                            :value="serialNumbers"
-                                            selectionMode="single"
-                                        >
-                                            <div
-                                                class="flex items-center gap-2"
-                                            >
-                                                <Button
-                                                    type="button"
-                                                    icon="pi pi-filter-slash"
-                                                    label="Clear"
-                                                    outlined
-                                                    @click="clearFilter()"
-                                                />
-                                                <IconField>
-                                                    <InputIcon>
-                                                        <i
-                                                            class="pi pi-search"
-                                                        />
-                                                    </InputIcon>
-                                                    <InputText
-                                                        v-model="
-                                                            filters['global']
-                                                                .value
-                                                        "
-                                                        placeholder="Keyword Search"
-                                                    />
-                                                </IconField>
-                                            </div>
-
-                                            <DataTable
-                                                class="p-datatable-xl"
-                                                :value="
-                                                    slotProps.data.serialNumbers
-                                                "
-                                                :totalRecords="
-                                                    slotProps.data.serialNumbers
-                                                        .length
-                                                "
-                                                :rows="5"
-                                                paginator
-                                                @row-select="onProductSelect"
-                                            >
-                                                <Column
-                                                    field="serialNumber"
-                                                    header="Serial Number"
-                                                    sortable
-                                                ></Column>
-                                                <Column
-                                                    field="status"
-                                                    header="Status"
-                                                    sortable
-                                                >
-                                                    <!-- Custom Template for Status -->
-                                                    <template #body="slotProps">
-                                                        <span
-                                                            :class="
-                                                                getStatusTextColor(
-                                                                    slotProps
-                                                                        .data
-                                                                        .status
-                                                                )
-                                                            "
-                                                            class="font-bold"
-                                                        >
-                                                            {{
-                                                                slotProps.data
-                                                                    .status
-                                                            }}
-                                                        </span>
-                                                    </template>
-                                                </Column>
-                                                <Column
-                                                    field="rental"
-                                                    header="Rental"
-                                                    sortable
-                                                ></Column>
-                                                <Column
-                                                    field="rentalPrice"
-                                                    header="Rental Price"
-                                                    sortable
-                                                >
-                                                    <template #body="slotProps">
-                                                        {{
-                                                            formatPrice(
-                                                                slotProps.data
-                                                                    .rentalPrice
-                                                            )
-                                                        }}
-                                                    </template>
-                                                </Column>
-
-                                                <Column
-                                                    field="roomNumber"
-                                                    header="Assigned Room"
-                                                    sortable
-                                                ></Column>
-                                                <Column
-                                                    :exportable="false"
-                                                    header="Actions"
-                                                >
-                                                    <template #body="slotProps">
-                                                        <div class="flex gap-2">
-                                                            <!-- Edit Button -->
-                                                            <Button
-                                                                v-if="
-                                                                    slotProps.data.status.toLowerCase() ===
-                                                                        'available' ||
-                                                                    slotProps.data.status.toLowerCase() ===
-                                                                        'assigned'
-                                                                "
-                                                                icon="pi pi-pencil"
-                                                                outlined
-                                                                rounded
-                                                                @click="
-                                                                    editSerial(
-                                                                        slotProps.data
-                                                                    )
-                                                                "
-                                                                v-tooltip="
-                                                                    'Edit Serial Details'
-                                                                "
-                                                            />
-
-                                                            <!-- Delete Button -->
-                                                            <Button
-                                                                v-if="
-                                                                    slotProps.data.status.toLowerCase() ===
-                                                                        'available' ||
-                                                                    slotProps.data.status.toLowerCase() ===
-                                                                        'assigned' ||
-                                                                    slotProps.data.status.toLowerCase() ===
-                                                                        'damaged'
-                                                                "
-                                                                icon="pi pi-trash"
-                                                                outlined
-                                                                rounded
-                                                                severity="danger"
-                                                                @click="
-                                                                    confirmDeleteSerial(
-                                                                        slotProps.data
-                                                                    )
-                                                                "
-                                                                v-tooltip="
-                                                                    'Delete Item'
-                                                                "
-                                                            />
-
-                                                            <!-- Conditional Assign Button -->
-                                                            <Button
-                                                                v-if="
-                                                                    slotProps.data.status.toLowerCase() ===
-                                                                    'available'
-                                                                "
-                                                                icon="pi pi-arrow-up-right"
-                                                                outlined
-                                                                rounded
-                                                                severity="success"
-                                                                @click="
-                                                                    openAssignItemDialog(
-                                                                        slotProps.data
-                                                                    )
-                                                                "
-                                                                v-tooltip="
-                                                                    'Assign Item to Room'
-                                                                "
-                                                            />
-
-                                                            <!-- Button Visible for 'Assigned' Status -->
-                                                            <Button
-                                                                v-if="
-                                                                    slotProps.data.status.toLowerCase() ===
-                                                                    'assigned'
-                                                                "
-                                                                icon="pi pi-arrows-h"
-                                                                outlined
-                                                                rounded
-                                                                severity="info"
-                                                                @click="
-                                                                    reassign(
-                                                                        slotProps.data
-                                                                    )
-                                                                "
-                                                                v-tooltip="
-                                                                    'Re-Assign Item'
-                                                                "
-                                                            ></Button>
-                                                            <!-- Damaged Button -->
-                                                            <Button
-                                                                v-if="
-                                                                    slotProps.data.status.toLowerCase() ===
-                                                                        'available' ||
-                                                                    slotProps.data.status.toLowerCase() ===
-                                                                        'assigned'
-                                                                "
-                                                                icon="pi pi-exclamation-triangle"
-                                                                outlined
-                                                                rounded
-                                                                severity="danger"
-                                                                @click="
-                                                                    reportDamage(
-                                                                        slotProps.data
-                                                                    )
-                                                                "
-                                                                v-tooltip="
-                                                                    'Report Damage'
-                                                                "
-                                                            />
-                                                        </div>
-                                                    </template>
-                                                </Column>
-                                            </DataTable>
-                                        </DataTable>
-                                    </Dialog>
-                                </div>
-                            </template>
-                        </column>
-                    </DataTable>
-                </div>
+                                    </DataTable>
+                                </Dialog>
+                            </div>
+                        </template>
+                    </column>
+                </DataTable>
             </template>
         </DataTable>
     </div>
@@ -2433,7 +2472,7 @@ function formatPrice(value) {
 
     <!-- Re-Assign Room Dialog -->
     <Dialog
-        v-model:visible="assignItemDialogVisible"
+        v-model:visible="reassignItemDialogVisible"
         :dismissableMask="true"
         :style="{ width: '450px' }"
         :header="`Re-Assign Item - ${selectedItem?.serialNumber || 'N/A'}`"
@@ -2520,7 +2559,7 @@ function formatPrice(value) {
                 label="Cancel"
                 icon="pi pi-times"
                 text
-                @click="assignItemDialogVisible = false"
+                @click="reassignItemDialogVisible = false"
             />
             <Button
                 label="Re-Assign"
@@ -2595,6 +2634,7 @@ function formatPrice(value) {
         </template>
     </Dialog>
 
+    <!-- Delete Consumable Dialog -->
     <Dialog
         v-model:visible="deleteConsumableDialogVisible"
         :dismissableMask="true"

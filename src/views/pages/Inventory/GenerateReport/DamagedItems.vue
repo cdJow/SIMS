@@ -1,11 +1,33 @@
 <script setup>
 import { InventoryService } from "@/service/InventoryService"; // Inventory service
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 
 // Reactive variables
 const damagedItems = ref([]); // Stores the list of damaged items
 const isLoading = ref(true); // Loading state
 const errorMessage = ref(""); // Error message for API errors
+const searchQuery = ref(""); // Search input
+
+const products = [
+    {
+        serialNumbers: "SN-12345",
+        reportedDate: "2024-02-15",
+        damageType: "Cracked Screen",
+        reason: "Dropped by staff",
+    },
+    {
+        serialNumbers: "SN-67890",
+        reportedDate: "2024-02-12",
+        damageType: "Water Damage",
+        reason: "Spilled liquid",
+    },
+    {
+        serialNumbers: "SN-54321",
+        reportedDate: "2024-02-18",
+        damageType: "Burnt Circuit",
+        reason: "Power surge",
+    },
+];
 
 // Fetch damaged items on mount
 onMounted(() => {
@@ -26,6 +48,25 @@ function fetchDamagedItems() {
         .finally(() => {
             isLoading.value = false;
         });
+}
+
+// Computed property to filter damaged items based on search query
+const filteredDamagedItems = computed(() => {
+    if (!searchQuery.value) {
+        return damagedItems.value;
+    }
+    const query = searchQuery.value.toLowerCase();
+    return damagedItems.value.filter(
+        (item) =>
+            item.itemName.toLowerCase().includes(query) ||
+            item.supplier.toLowerCase().includes(query) ||
+            item.damageType.toLowerCase().includes(query)
+    );
+});
+
+// Clear search input
+function clearSearch() {
+    searchQuery.value = "";
 }
 
 const op2 = ref(null);
@@ -58,6 +99,7 @@ function toggleDataTable(event) {
                     label="Clear"
                     outlined
                     class="mr-2"
+                    @click="clearSearch"
                 />
             </div>
 
@@ -69,24 +111,11 @@ function toggleDataTable(event) {
                     </InputIcon>
                     <InputText
                         id="search"
+                        v-model:model-value="searchQuery"
                         placeholder="Keyword Search"
                         class="w-60"
                     />
                 </IconField>
-            </div>
-
-            <!-- Date Picker -->
-            <div class="flex items-center">
-                <span for="datePicker" class="font-bold pr-2">
-                    Select Date:
-                </span>
-                <DatePicker
-                    id="datePicker"
-                    :showIcon="true"
-                    :showButtonBar="true"
-                    v-model="calendarValue"
-                    class="w-60"
-                ></DatePicker>
             </div>
         </div>
 
@@ -101,7 +130,7 @@ function toggleDataTable(event) {
         <!-- Data Table -->
         <DataTable
             v-else
-            :value="damagedItems"
+            :value="filteredDamagedItems"
             :rows="10"
             paginator
             responsiveLayout="scroll"
@@ -124,13 +153,6 @@ function toggleDataTable(event) {
                             {{ slotProps.data.quantityDamaged }}
                         </span>
                         <!-- Button on the right -->
-                        <Button
-                            type="button"
-                            icon="pi pi-list"
-                            outlined
-                            class="ml-2"
-                            @click="toggleDataTable"
-                        />
                     </div>
                 </template>
             </Column>
@@ -141,6 +163,18 @@ function toggleDataTable(event) {
                     <span class="text-gray-600">{{
                         slotProps.data.supplier
                     }}</span>
+                </template>
+            </Column>
+
+            <Column>
+                <template #body="slotProps">
+                    <Button
+                        type="button"
+                        icon="pi pi-list"
+                        outlined
+                        class="ml-2"
+                        @click="toggleDataTable"
+                    />
                 </template>
             </Column>
         </DataTable>
@@ -166,7 +200,7 @@ function toggleDataTable(event) {
                         <span class="text-gray-600">
                             {{
                                 new Date(
-                                    slotProps.data.reportedDate,
+                                    slotProps.data.reportedDate
                                 ).toLocaleDateString()
                             }}
                         </span>
@@ -178,15 +212,6 @@ function toggleDataTable(event) {
                         <span class="font-medium text-red-500">
                             {{ slotProps.data.damageType }}
                         </span>
-                    </template>
-                </Column>
-
-                <!-- Reason -->
-                <Column field="reason" header="Reason" sortable>
-                    <template #body="slotProps">
-                        <span class="text-gray-600">{{
-                            slotProps.data.reason
-                        }}</span>
                     </template>
                 </Column>
             </DataTable>

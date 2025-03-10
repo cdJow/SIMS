@@ -1,10 +1,12 @@
 <script setup>
 import { InventoryService } from "@/service/InventoryService"; // Inventory service
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 
-const stockMovements = ref([]); // Reactive data for stock movements
-const isLoading = ref(true); // Loading state for the table
-const errorMessage = ref(""); // Error state for API call
+const stockMovements = ref([]); // Full stock movement data
+const filteredStockMovements = ref([]); // Filtered stock movement data
+const isLoading = ref(true);
+const errorMessage = ref("");
+const searchQuery = ref(""); // Reactive search query
 
 // Fetch stock movements data
 onMounted(() => {
@@ -13,20 +15,39 @@ onMounted(() => {
 
 // Fetch function with error handling
 function fetchStockMovements() {
-    isLoading.value = true; // Set loading to true
+    isLoading.value = true;
     InventoryService.getStockMovements()
         .then((data) => {
             stockMovements.value = data;
+            filteredStockMovements.value = data; // Initialize filtered data
         })
         .catch((error) => {
             console.error("Error fetching stock movements:", error);
             errorMessage.value = "Failed to load stock movements data.";
         })
         .finally(() => {
-            isLoading.value = false; // Turn off loading spinner
+            isLoading.value = false;
         });
 }
 
+// Watch search input and filter stock movements
+const filteredData = computed(() => {
+    if (!searchQuery.value.trim()) {
+        return stockMovements.value;
+    }
+    return stockMovements.value.filter((movement) =>
+        Object.values(movement).some((value) =>
+            String(value)
+                .toLowerCase()
+                .includes(searchQuery.value.toLowerCase())
+        )
+    );
+});
+
+// Clear search input
+const clearFilters = () => {
+    searchQuery.value = "";
+};
 // Format date and time utility
 function formatDateTime(dateTime) {
     if (!dateTime) return "N/A";
@@ -65,6 +86,7 @@ function formatDateTime(dateTime) {
                     label="Clear"
                     outlined
                     class="mr-2"
+                    @click="clearFilters"
                 />
             </div>
 
@@ -76,28 +98,16 @@ function formatDateTime(dateTime) {
                     </InputIcon>
                     <InputText
                         id="search"
+                        v-model="searchQuery"
                         placeholder="Keyword Search"
                         class="w-60"
                     />
                 </IconField>
             </div>
-
-            <!-- Date Picker -->
-            <div class="flex items-center">
-                <span for="datePicker" class="font-bold pr-2">
-                    Select Date:
-                </span>
-                <DatePicker
-                    id="datePicker"
-                    :showIcon="true"
-                    :showButtonBar="true"
-                    class="w-60"
-                ></DatePicker>
-            </div>
         </div>
 
         <DataTable
-            :value="stockMovements"
+            :value="filteredData"
             :rows="10"
             :paginator="true"
             :responsiveLayout="'scroll'"

@@ -1,10 +1,11 @@
 <script setup>
 import { InventoryService } from "@/service/InventoryService"; // Inventory service
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 
 const lowStockItems = ref([]); // Reactive variable for low stock report
 const isLoading = ref(true); // Loading state
 const errorMessage = ref(""); // Error state for API call
+const searchQuery = ref(""); // Search input
 
 // Fetch low stock items
 onMounted(() => {
@@ -18,7 +19,7 @@ function fetchLowStockItems() {
         .then((data) => {
             // Filter items where currentStock is below reorderLevel
             lowStockItems.value = data.filter(
-                (item) => item.currentStock < item.reorderLevel,
+                (item) => item.currentStock < item.reorderLevel
             );
         })
         .catch((error) => {
@@ -29,6 +30,24 @@ function fetchLowStockItems() {
             isLoading.value = false;
         });
 }
+
+// Computed property to filter items based on search query
+const filteredItems = computed(() => {
+    if (!searchQuery.value.trim()) {
+        return lowStockItems.value;
+    }
+    const query = searchQuery.value.toLowerCase();
+    return lowStockItems.value.filter(
+        (item) =>
+            item.itemName.toLowerCase().includes(query) ||
+            item.supplier.toLowerCase().includes(query)
+    );
+});
+
+// Clear search input
+const clearFilters = () => {
+    searchQuery.value = "";
+};
 </script>
 <template>
     <div class="card">
@@ -52,6 +71,7 @@ function fetchLowStockItems() {
                     icon="pi pi-filter-slash"
                     label="Clear"
                     outlined
+                    @click="clearFilters"
                     class="mr-2"
                 />
             </div>
@@ -64,6 +84,7 @@ function fetchLowStockItems() {
                     </InputIcon>
                     <InputText
                         id="search"
+                        v-model="searchQuery"
                         placeholder="Keyword Search"
                         class="w-60"
                     />
@@ -82,7 +103,7 @@ function fetchLowStockItems() {
         <!-- Data Table -->
         <DataTable
             v-else
-            :value="lowStockItems"
+            :value="filteredItems"
             :rows="10"
             paginator
             responsiveLayout="scroll"

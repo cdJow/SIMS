@@ -23,6 +23,14 @@ const rooms = ref([
                 condition: "Excellent",
                 isDamaged: false,
                 serialNumber: "ELE-101-TV-002",
+                damage: {
+                    type: {
+                        name: "HVAC Malfunction",
+                        value: "hvac_malfunction",
+                    },
+                    severity: { label: "Medium", value: "medium" },
+                    notes: "",
+                },
             },
         ],
     },
@@ -55,6 +63,14 @@ const rooms = ref([
                 condition: "Needs Repair",
                 isDamaged: true,
                 serialNumber: "APP-102-AC-005",
+                damage: {
+                    type: {
+                        name: "HVAC Malfunction",
+                        value: "hvac_malfunction",
+                    },
+                    severity: { label: "Medium", value: "medium" },
+                    notes: "",
+                },
             },
         ],
     },
@@ -87,6 +103,11 @@ const rooms = ref([
                 condition: "Cracked",
                 isDamaged: true,
                 serialNumber: "FIX-103-MIR-008",
+                damage: {
+                    type: { name: "Broken", value: "broken" },
+                    severity: { label: "Minor", value: "minor" },
+                    notes: "",
+                },
             },
         ],
     },
@@ -127,8 +148,6 @@ const severityLevels = ref([
     { label: "Severe", value: "severe" },
 ]);
 
-// Computed
-const filteredRooms = computed(() => rooms.value);
 const damagedItems = computed(
     () => selectedRoom.value.amenities?.filter((item) => item.isDamaged) || []
 );
@@ -193,6 +212,34 @@ const getStatusSeverity = (status) => {
     }
 };
 
+const searchQuery = ref("");
+const selectedStatuses = ref([]);
+const roomTypes = ref(["Standard", "Deluxe", "Suite"]); // Example room types
+const selectedRoomType = ref("");
+
+// Update filteredRooms computed property
+const filteredRooms = computed(() => {
+    return rooms.value.filter((room) => {
+        const matchesSearch = room.number
+            .toLowerCase()
+            .includes(searchQuery.value.toLowerCase());
+        const matchesStatus =
+            selectedStatuses.value.length === 0 ||
+            selectedStatuses.value.includes(room.status);
+        const matchesType =
+            !selectedRoomType.value || room.type === selectedRoomType.value;
+
+        return matchesSearch && matchesStatus && matchesType;
+    });
+});
+
+// Add clear filters method
+const clearFilters = () => {
+    searchQuery.value = "";
+    selectedStatuses.value = [];
+    selectedRoomType.value = "";
+};
+
 const getConditionSeverity = (condition) => {
     switch (condition.toLowerCase()) {
         case "excellent":
@@ -215,49 +262,126 @@ const formatDate = (dateString) =>
 </script>
 
 <template>
-    <div class="card">
-        <!-- Room Grid -->
-        <div class="room-grid">
-            <h2 class="text-2xl font-bold mb-6">Rooms Status</h2>
-            <div
-                class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
-            >
-                <div
-                    v-for="room in filteredRooms"
-                    :key="room.number"
-                    class="relative w-full p-6 rounded-lg shadow-md border cursor-pointer hover:shadow-lg transition-shadow min-h-[120px]"
-                    :class="{
-                        'bg-green-500 text-white hover:bg-green-600':
-                            room.status === 'Available',
-                        'bg-blue-500 text-white hover:bg-blue-600':
-                            room.status === 'Booked',
-                        'bg-orange-500 text-white hover:bg-orange-600':
-                            room.status === 'Cleaning',
-                        'bg-red-500 text-white hover:bg-red-600':
-                            room.status === 'Occupied',
-                        'bg-gray-400 text-gray-800 hover:bg-gray-500': ![
-                            'Available',
-                            'Booked',
-                            'Cleaning',
-                            'Occupied',
-                        ].includes(room.status),
-                    }"
-                    @click="selectRoom(room)"
-                >
-                    <div class="flex justify-between items-center">
-                        <h3 class="text-lg text-white font-semibold">
-                            Room {{ room.number }}
-                            <Tag
-                                v-if="room.damageCount > 0"
-                                severity="danger"
-                                :value="room.damageCount"
-                                class="ml-2 text-white"
-                            />
-                        </h3>
+    <div class="">
+        <div class="flex flex-col md:flex-row gap-4 p-2 md:p-4">
+            <!-- Room Grid -->
+            <div class="card flex-1">
+                <div class="room-grid">
+                    <h2 class="text-2xl font-bold mb-6">Rooms Status</h2>
+                    <div
+                        class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
+                    >
+                        <div
+                            v-for="room in filteredRooms"
+                            :key="room.number"
+                            class="relative w-full p-6 rounded-lg shadow-md border cursor-pointer hover:shadow-lg transition-shadow min-h-[120px]"
+                            :class="{
+                                'bg-green-500 text-white hover:bg-green-600':
+                                    room.status === 'Available',
+                                'bg-blue-500 text-white hover:bg-blue-600':
+                                    room.status === 'Booked',
+                                'bg-orange-500 text-white hover:bg-orange-600':
+                                    room.status === 'Cleaning',
+                                'bg-red-500 text-white hover:bg-red-600':
+                                    room.status === 'Occupied',
+                                'bg-gray-400 text-gray-800 hover:bg-gray-500':
+                                    ![
+                                        'Available',
+                                        'Booked',
+                                        'Cleaning',
+                                        'Occupied',
+                                    ].includes(room.status),
+                            }"
+                            @click="selectRoom(room)"
+                        >
+                            <div class="flex justify-between items-center">
+                                <h3 class="text-lg text-white font-semibold">
+                                    Room {{ room.number }}
+                                    <Tag
+                                        v-if="room.damageCount > 0"
+                                        severity="danger"
+                                        :value="room.damageCount"
+                                        class="ml-2 text-white"
+                                    />
+                                </h3>
+                            </div>
+                            <div class="mt-2 text-sm">
+                                Last Checked: {{ formatDate(room.lastChecked) }}
+                            </div>
+                        </div>
                     </div>
+                </div>
+            </div>
 
-                    <div class="mt-2 text-sm">
-                        Last Checked: {{ formatDate(room.lastChecked) }}
+            <div class="w-full md:w-1/3 lg:w-1/4 xl:w-1/5 space-y-4">
+                <div class="card rounded-lg p-4">
+                    <h3 class="text-base md:text-lg font-bold mb-4">Filters</h3>
+                    <div class="space-y-4">
+                        <div class="space-y-2">
+                            <Button
+                                type="button"
+                                icon="pi pi-filter-slash"
+                                label="Clear"
+                                outlined
+                                class="w-full text-sm md:text-base"
+                                @click="clearFilters"
+                            />
+                            <IconField>
+                                <InputIcon>
+                                    <i
+                                        class="pi pi-search text-sm md:text-base"
+                                    />
+                                </InputIcon>
+                                <InputText
+                                    v-model="searchQuery"
+                                    placeholder="Search Room Number"
+                                    class="w-full text-sm md:text-base"
+                                />
+                            </IconField>
+                        </div>
+
+                        <!-- Room Type Filter -->
+                        <div>
+                            <Dropdown
+                                v-model="selectedRoomType"
+                                :options="roomTypes"
+                                placeholder="Select Room Type"
+                                class="w-full text-sm md:text-base"
+                            />
+                        </div>
+
+                        <!-- Status Filters -->
+                        <div>
+                            <h4 class="font-bold text-sm md:text-base mb-2">
+                                Status
+                            </h4>
+                            <div class="flex flex-col gap-2">
+                                <div
+                                    v-for="status in [
+                                        'Available',
+                                        'Occupied',
+                                        'Cleaning',
+                                        'Booked',
+                                    ]"
+                                    :key="status"
+                                    class="flex items-center"
+                                >
+                                    <Checkbox
+                                        v-model="selectedStatuses"
+                                        :inputId="status"
+                                        name="status"
+                                        :value="status"
+                                        class="h-4 w-4 md:h-5 md:w-5"
+                                    />
+                                    <label
+                                        :for="status"
+                                        class="text-sm md:text-base ml-2"
+                                    >
+                                        {{ status }}
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

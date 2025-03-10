@@ -1,10 +1,11 @@
 <script setup>
 import { InventoryService } from "@/service/InventoryService"; // Inventory service
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 
 const expiredItems = ref([]); // Reactive variable for expired items
 const isLoading = ref(true); // Loading state
 const errorMessage = ref(""); // Error state for API call
+const searchQuery = ref(""); // Search input
 
 // Fetch expired items
 onMounted(() => {
@@ -19,7 +20,7 @@ function fetchExpiredItems() {
             // Filter items with expiration dates before today
             const today = new Date();
             expiredItems.value = data.filter(
-                (item) => new Date(item.expirationDate) < today,
+                (item) => new Date(item.expirationDate) < today
             );
         })
         .catch((error) => {
@@ -29,6 +30,25 @@ function fetchExpiredItems() {
         .finally(() => {
             isLoading.value = false;
         });
+}
+
+// Computed property to filter expired items based on search query
+const filteredExpiredItems = computed(() => {
+    if (!searchQuery.value) {
+        return expiredItems.value;
+    }
+    const query = searchQuery.value.toLowerCase();
+    return expiredItems.value.filter(
+        (item) =>
+            item.itemName.toLowerCase().includes(query) ||
+            item.batchNumber.toLowerCase().includes(query) ||
+            item.supplier.toLowerCase().includes(query)
+    );
+});
+
+// Function to clear the search input
+function clearSearch() {
+    searchQuery.value = "";
 }
 
 // Calculate days expired
@@ -62,6 +82,7 @@ function calculateDaysExpired(expirationDate) {
                     icon="pi pi-filter-slash"
                     label="Clear"
                     outlined
+                    @click="clearSearch"
                     class="mr-2"
                 />
             </div>
@@ -76,6 +97,7 @@ function calculateDaysExpired(expirationDate) {
                         id="search"
                         placeholder="Keyword Search"
                         class="w-60"
+                        v-model="searchQuery"
                     />
                 </IconField>
             </div>
@@ -92,7 +114,8 @@ function calculateDaysExpired(expirationDate) {
         <!-- Data Table -->
         <DataTable
             v-else
-            :value="expiredItems"
+            :value="filteredExpiredItems"
+            :paginator="true"
             :rows="10"
             paginator
             responsiveLayout="scroll"
@@ -130,7 +153,7 @@ function calculateDaysExpired(expirationDate) {
                     <span class="font-medium text-red-500">
                         {{
                             new Date(
-                                slotProps.data.expirationDate,
+                                slotProps.data.expirationDate
                             ).toLocaleDateString()
                         }}
                     </span>
