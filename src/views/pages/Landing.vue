@@ -30,19 +30,24 @@ const roomRates = ref([
     },
 ]);
 
+// If using Pinia store for auth state:
+import { useAuthStore } from "@/stores/auth";
+const authStore = useAuthStore();
+const isLoggedIn = authStore.isAuthenticated; // Update with your actual auth state property
+
 const showBookingDialog = ref(false);
-const selectedRoom = ref(null);
+
+// Add mobile menu state
+const showMobileMenu = ref(false);
+
+// Add toggle method
+const toggleMobileMenu = () => {
+    showMobileMenu.value = !showMobileMenu.value;
+};
 
 // Add this method
 const handleBookNow = () => {
     showBookingDialog.value = true;
-};
-
-// Add this method to handle room selection
-const selectRoom = (room) => {
-    selectedRoom.value = room;
-    showBookingDialog.value = false;
-    router.push("/booking-form"); // Replace with your actual booking route
 };
 
 const responsiveOptions = ref([
@@ -101,194 +106,124 @@ const amenities = ref([
 
 const toast = useToast();
 
-const isLoggedIn = ref(false);
-
-import { useAuthStore } from "@/stores/auth";
-
 const router = useRouter();
-const authStore = useAuthStore();
-
-const showLoginDialog = ref(false);
-
-const loginForm = ref({
-    email: "",
-    password: "",
-    role: "",
-});
-
-const loginErrors = ref({
-    email: "",
-    password: "",
-    role: "",
-});
-
-const validateForm = () => {
-    loginErrors.value = { email: "", password: "", role: "" };
-    let isValid = true;
-
-    if (!loginForm.value.email) {
-        loginErrors.value.email = "Email is required";
-        isValid = false;
-    }
-
-    if (!loginForm.value.password) {
-        loginErrors.value.password = "Password is required";
-        isValid = false;
-    }
-
-    if (!loginForm.value.role) {
-        loginErrors.value.role = "Role is required";
-        isValid = false;
-    }
-
-    return isValid;
-};
-
-const handleLogin = async () => {
-    if (!validateForm()) return;
-
-    try {
-        // Mock authentication - replace with actual API call
-        await mockAuthAPI(loginForm.value);
-
-        authStore.login({
-            email: loginForm.value.email,
-            role: loginForm.value.role,
-            token: "mock-token",
-        });
-
-        // Redirect based on role
-        switch (loginForm.value.role) {
-            case "admin":
-                router.push("/admin-dashboard");
-                break;
-            case "manager":
-                router.push("/manager-dashboard");
-                break;
-            case "frontdesk":
-                router.push("/frontdesk-dashboard");
-                break;
-            case "inventory":
-                router.push("/inventory-dashboard");
-                break;
-            case "kitchen":
-                router.push("/kitchen-dashboard");
-                break;
-            default:
-                router.push("/");
-        }
-
-        showLoginDialog.value = false;
-    } catch (error) {
-        console.error("Login failed:", error);
-    }
-};
-
-// Mock authentication API
-const mockAuthAPI = (credentials) => {
-    return new Promise((resolve, reject) => {
-        setTimeout(() => {
-            const validRoles = [
-                "admin",
-                "manager",
-                "frontdesk",
-                "inventory",
-                "kitchen",
-            ];
-            if (validRoles.includes(credentials.role)) {
-                resolve({ status: 200, data: { user: credentials } });
-            } else {
-                reject(new Error("Invalid role selected"));
-            }
-        }, 1000);
-    });
-};
-// Handle logout
-const handleLogout = () => {
-    isLoggedIn.value = false;
-    toast.add({
-        severity: "info",
-        summary: "Logged Out",
-        detail: "You have been successfully logged out",
-        life: 3000,
-    });
-};
 </script>
 
 <template>
-    <div class="min-h-screen">
-        <!-- Header -->
-        <header class="bg-white shadow-sm fixed w-full z-50">
+    <div>
+        <!-- Enhanced Header with Mobile Menu -->
+        <nav class="bg-white shadow-sm fixed w-full z-50">
             <div
-                class="container mx-auto px-6 py-4 flex justify-between items-center"
+                class="container mx-auto px-4 sm:px-6 py-4 flex justify-between items-center"
             >
                 <div class="text-2xl font-bold text-primary">
                     Woodland<span class="text-red-500">Suites</span>
                 </div>
-                <nav class="hidden md:flex space-x-8">
-                    <a href="#rooms" class="hover:text-accent transition-colors"
+
+                <!-- Desktop Navigation -->
+                <div class="hidden md:flex space-x-8 items-center">
+                    <a
+                        href="#rooms"
+                        class="hover:text-accent transition-colors p-2"
                         >Rooms</a
                     >
+
                     <a
-                        href="#amenities"
-                        class="hover:text-accent transition-colors"
-                        >Amenities</a
-                    >
-                    <a href="#rates" class="hover:text-accent transition-colors"
+                        href="#rates"
+                        class="hover:text-accent transition-colors p-2"
                         >Rates</a
                     >
                     <a
                         href="#location"
-                        class="hover:text-accent transition-colors"
+                        class="hover:text-accent transition-colors p-2"
                         >Location</a
                     >
-                </nav>
+
+                    <Button
+                        v-if="!isLoggedIn"
+                        label="Login"
+                        class="p-button-text p-button-secondary ml-4"
+                        @click="router.push('/pages/auth/login')"
+                    />
+                    <Button
+                        v-else
+                        label="Logout"
+                        class="p-button-text p-button-danger ml-4"
+                        @click="handleLogout"
+                    />
+                </div>
+
+                <!-- Mobile Menu Toggle -->
                 <Button
-                    v-if="!isLoggedIn"
-                    label="Login"
-                    class="p-button-text p-button-secondary"
-                    @click="showLoginDialog = true"
-                />
-                <Button
-                    v-else
-                    label="Logout"
-                    class="p-button-text p-button-danger"
-                    @click="handleLogout"
+                    icon="pi pi-bars"
+                    class="md:hidden p-button-text p-button-secondary"
+                    @click="toggleMobileMenu"
                 />
             </div>
-        </header>
+
+            <!-- Mobile Menu Dropdown -->
+            <div
+                v-if="showMobileMenu"
+                class="md:hidden absolute w-full bg-white shadow-lg"
+            >
+                <div class="px-6 py-4 space-y-4">
+                    <a href="#rooms" class="block hover:text-accent">Rooms</a>
+                    <a href="#amenities" class="block hover:text-accent"
+                        >Amenities</a
+                    >
+                    <a href="#rates" class="block hover:text-accent">Rates</a>
+                    <a href="#location" class="block hover:text-accent"
+                        >Location</a
+                    >
+                    <div class="pt-4 border-t">
+                        <Button
+                            v-if="!isLoggedIn"
+                            label="Login"
+                            class="w-full p-button-outlined p-button-secondary"
+                            @click="router.push('/pages/auth/login')"
+                        />
+                        <Button
+                            v-else
+                            label="Logout"
+                            class="w-full p-button-outlined p-button-danger"
+                            @click="handleLogout"
+                        />
+                    </div>
+                </div>
+            </div>
+        </nav>
 
         <!-- Hero Section -->
-        <section class="relative h-screen">
-            <div class="card h-full mx-auto px-6">
-                <div class="grid md:grid-cols-2 h-full gap-12 items-center">
-                    <!-- Left Side - Text Content -->
-                    <div class="text-white relative z-10">
+        <section class="relative h-screen pt-16">
+            <div class="h-full mx-auto px-4 sm:px-6">
+                <div class="grid md:grid-cols-2 h-full gap-8 items-center">
+                    <!-- Text Content -->
+                    <div class="text-center md:text-left z-10 px-4">
                         <h1
-                            class="text-4xl md:text-6xl font-bold mb-6 leading-tight"
+                            class="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 leading-tight"
                         >
                             <span class="text-red-500">EXPERIENCE</span> LUXURY
                             REDEFINED
                         </h1>
                         <p
-                            class="text-xl mb-8 md:text-2xl md:mb-12 text-gray-500"
+                            class="text-lg sm:text-xl md:text-2xl mb-6 text-gray-600"
                         >
                             Your home away from home
                         </p>
                         <Button
                             label="Book Now"
-                            class="p-button-lg p-button-success hover:bg-green-600 transition-all"
+                            class="p-button-lg p-button-success hover:bg-green-600 w-full md:w-auto"
                             @click="handleBookNow"
                         />
                     </div>
 
-                    <!-- Right Side - Image -->
+                    <!-- Image -->
                     <div
-                        class="relative h-full rounded-lg overflow-hidden shadow-2xl"
+                        class="relative h-64 md:h-full rounded-lg overflow-hidden shadow-2xl"
                     >
                         <img
                             src="@/assets/images/main.jpg"
-                            class="w-full h-full rounded-lg object-cover transform hover:scale-105 transition-transform duration-500"
+                            class="w-full h-full object-cover transform hover:scale-105 transition-transform duration-500"
                             alt="Luxury Suite"
                         />
                         <div
@@ -299,24 +234,29 @@ const handleLogout = () => {
             </div>
         </section>
 
-        <!-- Rooms & Suites -->
-        <section id="rooms" class="py-20">
-            <div class="container mx-auto px-6">
-                <h2 class="text-3xl font-bold mb-12 text-center">Rooms</h2>
+        <!-- Rooms Section -->
+        <section id="rooms" class="py-2 md:py-2 px-4 sm:px-2">
+            <div class="mx-auto">
+                <h2
+                    class="text-2xl md:text-3xl font-bold mb-8 md:mb-12 text-center"
+                >
+                    Rooms
+                </h2>
                 <Carousel
                     :value="rooms"
-                    :numVisible="3"
+                    :numVisible="1"
                     :numScroll="1"
                     :responsiveOptions="responsiveOptions"
+                    class="px-2"
                 >
                     <template #item="room">
-                        <div class="p-4">
+                        <div class="p-2 sm:p-4">
                             <Card class="shadow-lg">
                                 <template #header>
                                     <img
                                         src="@/assets/images/2.jpg"
-                                        class="w-full h-full object-cover transform hover:scale-105 transition-transform duration-500"
-                                        alt="Luxury Suite"
+                                        class="w-full h-48 sm:h-64 object-cover"
+                                        alt="Room Image"
                                     />
                                 </template>
                                 <template #title>{{ room.data.name }}</template>
@@ -356,12 +296,15 @@ const handleLogout = () => {
             </div>
         </section>
 
-        <section id="rates" class="py-20">
-            <div class="container mx-auto px-6">
-                <h2 class="text-3xl font-bold mb-12 text-center">
+        <!-- Rates Section -->
+        <section id="rates" class="py-12 md:py-20 bg-white px-4 sm:px-6">
+            <div class="container mx-auto">
+                <h2
+                    class="text-2xl md:text-3xl font-bold mb-8 md:mb-12 text-center"
+                >
                     Room Prices
                 </h2>
-                <div class="grid md:grid-cols-3 gap-8">
+                <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                     <div
                         v-for="(room, index) in roomRates"
                         :key="index"
@@ -406,68 +349,30 @@ const handleLogout = () => {
             </div>
         </section>
 
-        <!-- Amenities -->
-        <section id="amenities" class="py-20 bg-gray-50">
-            <div class="container mx-auto px-6">
-                <h2 class="text-3xl font-bold mb-12 text-center">
-                    Amenities & Services
+        <!-- Location Section -->
+        <section id="location" class="py-12 md:py-20 bg-white px-4 sm:px-6">
+            <div class="mx-auto">
+                <h2 class="text-2xl md:text-4xl font-bold mb-8 text-center">
+                    Our Location
                 </h2>
-                <div class="grid md:grid-cols-3 gap-8">
-                    <div
-                        v-for="(amenity, index) in amenities"
-                        :key="index"
-                        class="p-6 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow"
-                    >
-                        <i
-                            :class="amenity.icon"
-                            class="text-4xl text-accent mb-4"
-                        ></i>
-                        <h3 class="text-xl font-semibold mb-2">
-                            {{ amenity.title }}
-                        </h3>
-                        <p class="text-gray-600">{{ amenity.description }}</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Contact & Location -->
-        <section id="location" class="py-20 bg-white">
-            <div id="highlights" class="py-6 px-6 lg:px-20 mx-0 my-12 lg:mx-20">
-                <div class="text-center">
-                    <div
-                        class="text-surface-900 dark:text-surface-0 font-normal mb-2 text-4xl"
-                    >
-                        Our Location
-                    </div>
-                    <span class="text-muted-color text-2xl"
-                        >Find us easily with the interactive map below</span
-                    >
-                </div>
-
-                <div class="grid grid-cols-12 gap-4 mt-20">
-                    <div class="col-span-12 flex justify-center">
-                        <div
-                            class="w-full h-[500px] lg:w-11/12"
-                            style="border-radius: 8px; overflow: hidden"
-                        >
-                            <iframe
-                                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d698.042618689094!2d124.24055174107627!3d8.23034940442809!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3255758d3ab4ab77%3A0xf498dd27637f6b05!2sWoodland%20Suites!5e0!3m2!1sen!2sph!4v1734363968355!5m2!1sen!2sph"
-                                width="100%"
-                                height="500px"
-                                style="border: 0"
-                                loading="lazy"
-                                referrerpolicy="no-referrer-when-downgrade"
-                            ></iframe>
-                        </div>
-                    </div>
+                <div
+                    class="aspect-video w-full h-full rounded-lg overflow-hidden shadow-lg"
+                >
+                    <iframe
+                        src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d698.042618689094!2d124.24055174107627!3d8.23034940442809!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3255758d3ab4ab77%3A0xf498dd27637f6b05!2sWoodland%20Suites!5e0!3m2!1sen!2sph!4v1734363968355!5m2!1sen!2sph"
+                        width="100%"
+                        height="500px"
+                        style="border: 0"
+                        loading="lazy"
+                        referrerpolicy="no-referrer-when-downgrade"
+                    ></iframe>
                 </div>
             </div>
         </section>
 
         <!-- Footer -->
-        <footer class="bg-gray-600 text-white py-12">
-            <div class="container mx-auto px-6 grid md:grid-cols-4 gap-8">
+        <footer class="bg-gray-600 text-white py-12 px-4 sm:px-6">
+            <div class="container mx-auto grid gap-8 md:grid-cols-4">
                 <div>
                     <div class="text-2xl font-bold mb-4">
                         Woodland Suite Hotel
@@ -520,139 +425,20 @@ const handleLogout = () => {
         </footer>
     </div>
 
-    <Dialog
-        v-model:visible="showBookingDialog"
-        :style="{ width: '90vw', maxWidth: '1200px' }"
-        :modal="true"
-        :dismissableMask="true"
-    >
-        <template #header>
-            <div class="text-center w-full">
-                <h2 class="text-3xl font-bold text-gray-800">
-                    Available Rooms
-                </h2>
-                <p class="text-gray-600 mt-2">
-                    Select your preferred accommodation
-                </p>
-            </div>
-        </template>
-
-        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div
-                v-for="(room, index) in rooms"
-                :key="index"
-                class="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 border-t-4 border-indigo-500"
-            >
-                <div class="p-6 h-full flex flex-col">
-                    <div class="mb-4 relative overflow-hidden rounded-lg">
-                        <img
-                            :src="room.image"
-                            class="w-full h-48 object-cover transform hover:scale-105 transition-transform duration-500"
-                            alt="Room Image"
-                        />
-                    </div>
-                    <h3 class="text-xl font-semibold text-gray-800 mb-2">
-                        {{ room.name }}
-                    </h3>
-                    <p class="text-gray-600 mb-3 flex-grow">
-                        {{ room.description }}
-                    </p>
-                    <div class="text-sm text-gray-500 mb-4">
-                        <i class="pi pi-users mr-2"></i>{{ room.occupancy }}
-                    </div>
-
-                    <div class="space-y-3 mb-4">
-                        <div
-                            v-for="(duration, dIndex) in room.durations"
-                            :key="dIndex"
-                            class="flex justify-between items-center px-4 py-2 bg-gray-50 rounded-md"
-                        >
-                            <span class="text-gray-600"
-                                >{{ duration.hours }} hours</span
-                            >
-                            <span class="font-semibold text-indigo-600"
-                                >₱{{ duration.price }}</span
-                            >
-                        </div>
-                    </div>
-
-                    <Button
-                        label="Select Room"
-                        class="w-full p-button-success"
-                        @click="selectRoom(room)"
-                    />
-                </div>
-            </div>
-        </div>
-    </Dialog>
-
-    <!-- Add login dialog -->
-    <Dialog
-        v-model:visible="showLoginDialog"
-        :style="{ width: '400px' }"
-        :modal="true"
-        :dismissableMask="true"
-    >
-        <template #header>
-            <div class="text-center w-full">
-                <h2 class="text-2xl font-bold mb-2">Login!</h2>
-            </div>
-        </template>
-
-        <div class="p-fluid space-y-4">
-            <div class="field">
-                <InputText
-                    id="email"
-                    v-model="loginForm.email"
-                    type="email"
-                    placeholder="Email"
-                    :class="{ 'p-invalid': loginErrors.email }"
-                    class="w-full"
-                />
-                <small v-if="loginErrors.email" class="p-error block mt-1">
-                    {{ loginErrors.email }}
-                </small>
-            </div>
-
-            <div class="field">
-                <InputText
-                    id="password"
-                    v-model="loginForm.password"
-                    type="password"
-                    placeholder="Password"
-                    :class="{ 'p-invalid': loginErrors.password }"
-                    class="w-full"
-                />
-                <small v-if="loginErrors.password" class="p-error block mt-1">
-                    {{ loginErrors.password }}
-                </small>
-            </div>
-        </div>
-
-        <template #footer>
-            <div class="w-full space-y-4">
-                <Button
-                    label="Login"
-                    class="w-full p-button-success"
-                    @click="handleLogin"
-                />
-
-                <div class="text-center text-sm">
-                    <span class="text-muted-color"
-                        >Don't have an account?
-                    </span>
-                    <a
-                        href="#"
-                        class="text-primary font-semibold hover:underline"
-                        @click.prevent="showRegisterDialog = true"
-                    >
-                        Create Account
-                    </a>
-                </div>
-            </div>
-        </template>
-    </Dialog>
-
-    <!-- Add toast component -->
     <Toast />
 </template>
+
+<style scoped>
+/* Mobile-first media queries */
+@media (min-width: 640px) {
+    .h-hero-mobile {
+        height: 50vh;
+    }
+}
+
+@media (min-width: 768px) {
+    .h-hero-desktop {
+        height: 75vh;
+    }
+}
+</style>
