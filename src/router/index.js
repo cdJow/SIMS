@@ -7,6 +7,7 @@ const router = createRouter({
         {
             path: "/dashboard",
             component: AppLayout,
+            meta: { requiresAuth: true }, // Protect dashboard
             children: [
                 {
                     path: "/Dashboard",
@@ -359,5 +360,8 @@ const router = createRouter({
         },
     ],
 });
+
+
+
 
 export default router;

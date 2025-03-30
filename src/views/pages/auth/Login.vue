@@ -1,57 +1,59 @@
-<script setup>
-import { useAuthStore } from "@/stores/auth";
-import { ref } from "vue";
+<script>
+import { login } from "@/api/auth";
 import { useRouter } from "vue-router";
 
-const router = useRouter();
-const authStore = useAuthStore();
+export default {
+  data() {
+    return {
+      form: {
+        email: "",
+        password: "",
+      },
+      errors: {
+        email: null,
+        password: null,
+        form: null,
+      },
+      isLoading: false,
+    };
+  },
+  setup() {
+    const router = useRouter();
+    return { router };
+  },
+  methods: {
+    async handleLogin() {
+      this.errors = { email: null, password: null, form: null }; // Reset errors
+      if (!this.form.email) this.errors.email = "Email is required.";
+      if (!this.form.password) this.errors.password = "Password is required.";
+      if (this.errors.email || this.errors.password) return;
 
-const form = ref({
-    email: "",
-    password: "",
-});
+      this.isLoading = true;
+      try {
+        const response = await login(this.form.email, this.form.password);
+        const token = response.data.token;
 
-const errors = ref({});
-const isLoading = ref(false);
-
-const validateForm = () => {
-    errors.value = {};
-    let isValid = true;
-
-    if (!form.value.email) {
-        errors.value.email = "Email is required";
-        isValid = false;
-    }
-
-    if (!form.value.password) {
-        errors.value.password = "Password is required";
-        isValid = false;
-    }
-
-    return isValid;
-};
-
-const handleLogin = async () => {
-    if (!validateForm()) return;
-
-    isLoading.value = true;
-    try {
-        await authStore.login(form.value);
-        router.push("/");
-    } catch (error) {
-        errors.value.form = error.message;
-    } finally {
-        isLoading.value = false;
-    }
+        if (token) {
+          localStorage.setItem("token", token);
+          this.$router.push("/dashboard"); // Redirect after successful login
+        }
+      } catch (error) {
+        this.errors.form = "Invalid email or password.";
+      } finally {
+        this.isLoading = false;
+      }
+    },
+  },
 };
 </script>
+
+
 <template>
     <div class="min-h-screen flex flex-col md:flex-row">
         <!-- Left Side - Background Image -->
         <div
             class="hidden md:block md:w-1/2 bg-red-500 relative overflow-hidden"
         >
-            <!-- Image Container -->
             <div class="relative w-full h-auto overflow-hidden">
                 <img
                     src="@/assets/images/main.jpg"
@@ -60,7 +62,6 @@ const handleLogin = async () => {
                 />
             </div>
 
-            <!-- Overlay Content -->
             <div
                 class="absolute inset-0 bg-black/40 flex items-center justify-center"
             >
@@ -78,6 +79,7 @@ const handleLogin = async () => {
                 </div>
             </div>
         </div>
+
         <!-- Right Side - Login Form -->
         <div
             class="w-full md:w-1/2 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8"
@@ -166,6 +168,11 @@ const handleLogin = async () => {
                             </div>
                         </div>
 
+                        <!-- Error Message -->
+                        <div v-if="errors.form" class="text-red-500">
+                            {{ errors.form }}
+                        </div>
+
                         <!-- Submit Button -->
                         <Button
                             type="submit"
@@ -182,23 +189,21 @@ const handleLogin = async () => {
                                 >Don't have an account?</span
                             >
                             <router-link
-                                to="/register"
+                                to="/auth/signup"
                                 class="text-primary font-medium hover:underline ml-1"
                             >
                                 Create Account
                             </router-link>
-
-                            <router-link
-                                to="/"
-                                class="self-start mb-4 sm:mb-6 text-gray-600 hover:text-primary transition-colors"
-                            >
-                                <Button
-                                    icon="pi pi-arrow-left"
-                                    class="p-button-text p-button-sm"
-                                    label="Back to Home"
-                                />
-                            </router-link>
                         </div>
+
+                        <!-- Back to Home -->
+                        <router-link to="/">
+                            <Button
+                                icon="pi pi-arrow-left"
+                                class="p-button-text p-button-sm mt-4"
+                                label="Back to Home"
+                            />
+                        </router-link>
                     </form>
                 </div>
             </div>

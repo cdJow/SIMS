@@ -30,10 +30,6 @@ const roomRates = ref([
     },
 ]);
 
-// If using Pinia store for auth state:
-import { useAuthStore } from "@/stores/auth";
-const authStore = useAuthStore();
-const isLoggedIn = authStore.isAuthenticated; // Update with your actual auth state property
 
 const showBookingDialog = ref(false);
 
