@@ -52,7 +52,7 @@ export default {
     <div class="min-h-screen flex flex-col md:flex-row">
         <!-- Left Side - Background Image -->
         <div
-            class="hidden md:block md:w-1/2 bg-red-500 relative overflow-hidden"
+            class="hidden md:block md:w-1/2 bg-gradient-to-r from-red-600 to-orange-500 relative overflow-hidden"
         >
             <div class="relative w-full h-auto overflow-hidden">
                 <img
@@ -191,6 +191,7 @@ export default {
                             <router-link
                                 to="/auth/signup"
                                 class="text-primary font-medium hover:underline ml-1"
+                                @click="() => router.push('/auth/SignUp')"
                             >
                                 Create Account
                             </router-link>

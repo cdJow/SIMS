@@ -1,9 +1,45 @@
 import AppLayout from "@/layout/AppLayout.vue";
+import WebsiteLayout from "@/layout/WebsiteLayout.vue";
+
 import { createRouter, createWebHistory } from "vue-router";
 
 const router = createRouter({
     history: createWebHistory(),
     routes: [
+        {
+            path: "/HomePage",
+            component: WebsiteLayout,
+            children: [
+                {
+                    path: "/pages/website/HomePage",
+                    name: "Home",
+                    component: () =>
+                        import("@/views/pages/website/HomePage.vue"),
+                },
+
+                {
+                    path: "/pages/website/ProfilePage",
+                    name: "ProfilePage",
+                    component: () =>
+                        import("@/views/pages/website/ProfilePage.vue"),
+                },
+
+                {
+                    path: "/pages/website/RoomCatalog",
+                    name: "RoomCatalog",
+                    component: () =>
+                        import("@/views/pages/website/RoomCatalog.vue"),
+                },
+
+                {
+                    path: "/pages/website/TransactionHistory",
+                    name: "TransactionHistory",
+                    component: () =>
+                        import("@/views/pages/website/TransactionHistory.vue"),
+                },
+            ],
+        },
+
         {
             path: "/dashboard",
             component: AppLayout,
@@ -317,6 +353,18 @@ const router = createRouter({
             path: "/",
             name: "landing",
             component: () => import("@/views/pages/Landing.vue"),
+        },
+
+        {
+            path: "/pages/Catalog",
+            name: "Catalog",
+            component: () => import("@/views/pages/Catalog.vue"),
+        },
+
+        {
+            path: "/:pathMatch(.*)*", // Proper catch-all route
+            name: "not-found",
+            component: () => import("@/views/pages/NotFound.vue"),
         },
 
         {
