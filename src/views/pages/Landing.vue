@@ -33,7 +33,6 @@ const roomRates = ref([
 ]);
 
 
-const showBookingDialog = ref(false);
 
 // Add mobile menu state
 const showMobileMenu = ref(false);
@@ -100,9 +99,6 @@ const responsiveOptions = ref([
     },
 ]);
 
-// If using Pinia store for auth state:
-import { useAuthStore } from "@/stores/auth";
-const authStore = useAuthStore();
 
 const showBookingDialog = ref(false);
 

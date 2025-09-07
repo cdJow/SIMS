@@ -1,457 +1,424 @@
 <script setup>
-import { ProductService } from "@/service/ProductService";
-import { computed, onMounted, ref, watch } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
+import { useToast } from "primevue/usetoast";
+import { getProducts, addItem, generateBatchNumber, generateSerialNumbers, getCurrentQuantity } from "@/api/auth";
 
-// Reactive state for serial numbers
-const newSerialNumber = ref(""); // Holds the input for the new serial number
-const serialNumbers = ref([]); // Array of existing serial numbers
-const arrivalDate = ref(null); // For tracking the arrival date
-const isBatchRental = ref(false); // Tracks if the batch is set as rental
-const batchRentalPrice = ref(null); // Batch rental price
-const sliderValue = ref(50);
-const showInfoDialog = ref(false);
-// Reactive state for input fields in Step 1
-const productName = ref(""); // Product Name
-const brand = ref(""); // Brand
-const category = ref(""); // Category
 
-// Reference for the Popover
+
+
+const toast = useToast();
 const op2 = ref(null);
+const stockLimit = computed(() => selectedProduct.value?.stock_limit || 1);
+const currentStock = ref(0);
 
-// Reactive state for products and selected product
-const products = ref([]); // Holds the list of products
-const selectedProduct = ref(null); // For storing the selected product
+// Shared fields
+const batchNumber = ref("");
+const quantity = ref(1);
+const purchasePrice = ref("");
+const supplier = ref("");
+const arrivalDate = ref("");
 
-// Computed property to filter consumable items
-const NonconsumableProducts = computed(() =>
-    products.value.filter((product) => product.category === "Non-Consumable"),
+// Consumable-specific
+const unitRetailPrice = ref("");
+const expiryDate = ref("");
+
+// Non-consumable-specific
+const unitRentalPrice = ref("");
+const warranty = ref("");
+const serialNumbers = ref(""); // comma-separated string
+
+const products = ref([]);
+const selectedProduct = ref(null);
+
+const isConsumable = computed(
+  () => selectedProduct.value?.category === "Consumable"
+);
+const isNonConsumable = computed(
+  () => selectedProduct.value?.category === "Non-Consumable"
 );
 
-// Function to fetch products from ProductService
-const fetchProducts = () => {
+const maxQuantity = computed(() => {
+  // Only restrict consumables by stock limit
+    if (!selectedProduct.value) return 0;
+  // Always restrict by what's left to reach the limit
+  const left = stockLimit.value - currentStock.value;
+  return left > 0 ? left : 0;
+});
+
+
+
+watch(selectedProduct, async (prod) => {
+  quantity.value = 0;
+  if (prod && prod.id) {
     try {
-        const response = ProductService.getProductsWithOrdersData(); // Fetch the local product data
-        products.value = response; // Assign the fetched products to the products ref
-    } catch (error) {
-        console.error("Error fetching products:", error);
+      const res = await getCurrentQuantity(prod.id);
+      currentStock.value = res.data.current_quantity;
+    } catch {
+      currentStock.value = 0;
     }
+  } else {
+    currentStock.value = 0;
+  }
+});
+
+// Watch for changes to product or quantity for batch/serial generation
+watch(
+   [selectedProduct, quantity],
+  async ([prod, qty]) => {
+    if (qty > maxQuantity.value) {
+      quantity.value = maxQuantity.value;
+    }
+    // ... rest of your logic ...
+  
+
+    if (prod && prod.id) {
+      // Generate batch number for any product
+      try {
+        const res = await generateBatchNumber(prod.id);
+        batchNumber.value = res.data.batch_number;
+      } catch (e) {
+        batchNumber.value = "";
+        toast.add({
+          severity: "error",
+          summary: "Error",
+          detail: "Failed to generate batch number.",
+          life: 3000,
+        });
+      }
+
+      // If non-consumable and qty > 0, generate serials
+      if (prod.category === "Non-Consumable" && qty > 0) {
+        try {
+          const res = await generateSerialNumbers(prod.id, qty);
+          serialNumbers.value = res.data.serial_numbers.join(", ");
+        } catch (e) {
+          serialNumbers.value = "";
+          toast.add({
+            severity: "error",
+            summary: "Error",
+            detail: "Failed to generate serial numbers.",
+            life: 3000,
+          });
+        }
+      }
+    } else {
+      // If no product, clear fields
+      batchNumber.value = "";
+      serialNumbers.value = "";
+      quantity.value = 1;
+      purchasePrice.value = "";
+      supplier.value = "";
+      arrivalDate.value = "";
+      unitRetailPrice.value = "";
+      expiryDate.value = "";
+      unitRentalPrice.value = "";
+      warranty.value = "";
+    }
+  },
+  { immediate: true }
+);
+
+watch(quantity, (val) => {
+   if (!selectedProduct.value) return;
+  if (val > maxQuantity.value) {
+    quantity.value = maxQuantity.value;
+    toast.add({
+      severity: "warn",
+      summary: "Warning",
+      detail: `Quantity cannot exceed available stock limit (${maxQuantity.value}).`,
+      life: 2000,
+    });
+  }
+});
+
+const clearForm = () => {
+  batchNumber.value = "";
+  quantity.value = null;
+  purchasePrice.value = "";
+  supplier.value = "";
+  arrivalDate.value = "";
+  unitRetailPrice.value = "";
+  expiryDate.value = "";
+  unitRentalPrice.value = "";
+  warranty.value = "";
+  serialNumbers.value = "";
+  selectedProduct.value = null;
+};
+
+
+
+const fetchProducts = async () => {
+  try {
+    const response = await getProducts();
+    products.value = response.data;
+  } catch (error) {
+    console.error("Error fetching products:", error);
+  }
 };
 
 const onProductSelect = (selected) => {
-    if (selected) {
-        // Populate the fields with the selected product data
-        productName.value = selected.name || ""; // Populate Product Name
-        brand.value = selected.brand || ""; // Populate Brand
-        category.value = selected.category || ""; // Populate Category
-
-        // Close the Popover
-        if (op2.value) {
-            op2.value.hide();
-        }
-    }
+  selectedProduct.value = selected;
+  if (op2.value) op2.value.hide();
 };
 
-// Call fetchProducts when the component is mounted
-onMounted(() => {
-    fetchProducts(); // Load products on component mount
-});
-
-watch([isBatchRental, batchRentalPrice], ([batchRental, price]) => {
-    if (batchRental) {
-        // Apply batch rental price to all serial numbers
-        serialNumbers.value = serialNumbers.value.map((item) => ({
-            ...item,
-            isRental: true,
-            price,
-        }));
-    } else {
-        // Reset rental settings if batch rental is disabled
-        serialNumbers.value = serialNumbers.value.map((item) => ({
-            ...item,
-            isRental: false,
-            price: null,
-        }));
-    }
-});
-const addSerialNumber = () => {
-    if (newSerialNumber.value.trim()) {
-        serialNumbers.value.push({
-            serial: newSerialNumber.value.trim(),
-            isRental: isBatchRental.value, // Apply batch rental status
-            price: isBatchRental.value ? batchRentalPrice.value : null, // Apply batch rental price
-        });
-        newSerialNumber.value = ""; // Clear the input field
-    }
-};
-
-const removeSerialNumber = (index) => {
-    serialNumbers.value.splice(index, 1);
-};
-
-const dropdownItems = ref([
-    { name: "Day", code: "Day" },
-    { name: "Month", code: "Month" },
-    { name: "Years", code: "Years" },
-]);
-
-// Function to toggle the DataTable Popover
 const toggleDataTable = (event) => {
-    if (op2.value) {
-        op2.value.toggle(event); // Toggle the visibility of the Popover
-    }
+  fetchProducts();
+  if (op2.value) op2.value.toggle(event);
 };
+
+
+
+const handleSubmit = async () => {
+  if (!selectedProduct.value) {
+    toast.add({
+      severity: "error",
+      summary: "Error",
+      detail: "Select a product.",
+      life: 3000,
+    });
+    return;
+  }
+  if (isConsumable.value && quantity.value > maxQuantity.value) {
+    toast.add({
+      severity: "error",
+      summary: "Error",
+      detail: `You cannot add more than the stock limit. Only ${maxQuantity.value} left.`,
+      life: 3000,
+    });
+    return;
+  }
+  if (isNonConsumable.value && quantity.value > stockLimit.value) {
+    toast.add({
+      severity: "error",
+      summary: "Error",
+      detail: `Cannot add more than stock limit (${stockLimit.value}) for this non-consumable product.`,
+      life: 3000,
+    });
+    return;
+  }
+  if (
+    !batchNumber.value.trim() ||
+    !quantity.value ||
+    !purchasePrice.value ||
+    !arrivalDate.value ||
+    (isConsumable.value && (!unitRetailPrice.value || !expiryDate.value)) ||
+    (isNonConsumable.value && (!serialNumbers.value.trim()))
+  ) {
+    toast.add({
+      severity: "error",
+      summary: "Error",
+      detail: "Fill in all required fields.",
+      life: 3000,
+    });
+    return;
+  }
+  if (quantity.value > stockLimit.value) {
+    toast.add({
+      severity: "error",
+      summary: "Error",
+      detail: `Quantity cannot exceed stock limit (${stockLimit.value}).`,
+      life: 3000,
+    });
+    return;
+  }
+  if (isConsumable.value) {
+    if (quantity.value < 1) {
+      toast.add({
+        severity: "error",
+        summary: "Error",
+        detail: "Quantity must be at least 1.",
+        life: 3000,
+      });
+      return;
+    }
+    if (serialNumbers.value.trim() || unitRentalPrice.value) {
+      toast.add({
+        severity: "error",
+        summary: "Error",
+        detail: "Serial numbers and Unit Rental Price not allowed for consumables.",
+        life: 3000,
+      });
+      return;
+    }
+  }
+  if (quantity.value > stockLimit.value) {
+    toast.add({
+      severity: "error",
+      summary: "Error",
+      detail: `Quantity cannot exceed stock limit (${stockLimit.value}).`,
+      life: 3000,
+    });
+    return;
+  }
+  if (isNonConsumable.value) {
+    if (quantity.value < 1) {
+      toast.add({
+        severity: "error",
+        summary: "Error",
+        detail: "Quantity must be at least 1.",
+        life: 3000,
+      });
+      return;
+    }
+    const serialsArray = serialNumbers.value
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (serialsArray.length !== Number(quantity.value)) {
+      toast.add({
+        severity: "error",
+        summary: "Error",
+        detail: `Provide exactly ${quantity.value} serial number(s), separated by commas.`,
+        life: 5000,
+      });
+      return;
+    }
+  }
+
+  const payload = {
+    product_id: selectedProduct.value.id,
+    batch_number: batchNumber.value,
+    quantity: quantity.value,
+    purchase_price: purchasePrice.value,
+    supplier: supplier.value,
+    arrival_date: arrivalDate.value,
+    unit_retail_price: isConsumable.value ? unitRetailPrice.value : null,
+    expiry_date: isConsumable.value ? expiryDate.value : null,
+    unit_rental_price: isNonConsumable.value ? unitRentalPrice.value || null : null,
+    warranty: isNonConsumable.value ? warranty.value || null : null,
+    serial_numbers: isNonConsumable.value ? serialNumbers.value : null,
+  };
+
+  try {
+    const response = await addItem(payload);
+    if (response.status === 200) {
+      toast.add({
+        severity: "success",
+        summary: "Success",
+        detail: "Item added successfully!",
+        life: 3000,
+      });
+      clearForm();
+      await fetchProducts(); // <--- Refresh
+
+      // Refresh current stock info (optional)
+      if (selectedProduct.value && selectedProduct.value.id) {
+        try {
+          const res = await getCurrentQuantity(selectedProduct.value.id);
+          currentStock.value = res.data.current_quantity;
+        } catch {
+          currentStock.value = 0;
+        }
+      } else {
+        currentStock.value = 0;
+      }
+    } else {
+      toast.add({
+        severity: "error",
+        summary: "Error",
+        detail: "Failed to add item.",
+        life: 3000,
+      });
+    }
+  } catch (error) {
+    toast.add({
+      severity: "error",
+      summary: "Error",
+      detail: "Error adding item.",
+      life: 3000,
+    });
+  }
+};
+
+
+onMounted(fetchProducts);
 </script>
 
 <template>
-    <Fluid>
-        <div class="">
-            <div class="card flex flex-col gap-4">
-                <div class="font-semibold text-xl">Add Items</div>
+  <div class="card flex flex-col gap-4">
+    <div class="font-semibold text-xl">Add Item</div>
+    <div class="flex flex-wrap gap-4">
+      <div class="flex flex-col grow basis-0 gap-2">
+        <label>Select Product</label>
+        <Button icon="pi pi-list" label="Choose Product" @click="toggleDataTable($event)" />
+        <popover ref="op2" id="overlay_panel" style="width: 70rem">
+          <DataTable v-model:selection="selectedProduct" :value="products" selectionMode="single" paginator :rows="5" @row-select="onProductSelect">
+            <Column field="product_name" header="Product Name" sortable />
+            <Column field="brand" header="Brand" sortable />
+            <Column field="category" header="Category" sortable />
+            <Column field="type" header="Type" sortable />
+            <Column field="unit" header="Unit" sortable />
+            <Column field="created_at" header="Created At" sortable />
+            <Column header="Actions">
+              <template #body="slotProps">
+                <Button label="Select" icon="pi pi-check" class="w-full" @click="onProductSelect(slotProps.data)" />
+              </template>
+            </Column>
+          </DataTable>
+        </popover>
+      </div>
+      <div class="flex flex-col grow basis-0 gap-2">
+        <label>Batch Number</label>
+        <InputText v-model="batchNumber" placeholder="Batch Number" readonly />
+      </div>
+      <div class="flex flex-col grow basis-0 gap-2">
+         <label>Quantity</label>
+  <InputText
+  v-model="quantity"
+  type="number"
+    :placeholder="`Up to max: ${maxQuantity}`"
+  min="1"
+  :max="maxQuantity"
+/>
+<small v-if="selectedProduct">
+  Stock Limit: {{ stockLimit }}<br>
+  Already in stock: {{ currentStock }}<br>
+  You can add up to <b>{{ maxQuantity }}</b> more.
+</small>
+      </div>
+      <div class="flex flex-col grow basis-0 gap-2">
+        <label>Purchase Price</label>
+        <InputText v-model="purchasePrice" type="number" placeholder="e.g., 50.00" />
+      </div>
+    </div>
+    <div class="flex flex-wrap gap-4">
+      <div class="flex flex-col grow basis-0 gap-2">
+        <label>Supplier  <span style="color: #aaa;">(optional)</span></label>
+        <InputText v-model="supplier" placeholder="Supplier" />
+      </div>
 
-                <!-- Section 1: Item Details -->
-                <div class="flex flex-wrap gap-4">
-                    <!-- Product Name -->
-                    <div class="flex flex-col grow basis-0 gap-2">
-                        <label for="productName">Product Name</label>
-                        <InputText
-                            id="productName"
-                            type="text"
-                            placeholder="Product Name"
-                            v-model="productName"
-                        />
-                        <div class="flex flex-wrap gap-2">
-                            <!-- Existing Items Button -->
-                            <Button
-                                type="button"
-                                icon="pi pi-list"
-                                label="Existing Items"
-                                @click="toggleDataTable"
-                            />
-                            <!-- Popover for Existing Items -->
-                            <Popover
-                                ref="op2"
-                                id="overlay_panel"
-                                style="width: 38rem"
-                            >
-                                <DataTable
-                                    v-model:selection="selectedProduct"
-                                    :value="NonconsumableProducts"
-                                    selectionMode="single"
-                                    paginator
-                                    :rows="5"
-                                    @row-select="onProductSelect"
-                                >
-                                    <Column
-                                        field="name"
-                                        header="Name"
-                                        sortable
-                                        style="min-width: 12rem"
-                                    ></Column>
-                                    <Column
-                                        field="brand"
-                                        header="Brand"
-                                        sortable
-                                        style="min-width: 8rem"
-                                    ></Column>
-                                    <Column
-                                        field="category"
-                                        header="Category"
-                                        sortable
-                                        style="min-width: 8rem"
-                                    ></Column>
-                                    <Column
-                                        header="Actions"
-                                        style="min-width: 8rem"
-                                    >
-                                        <template #body="slotProps">
-                                            <Button
-                                                label="Select"
-                                                icon="pi pi-check"
-                                                class="w-full"
-                                                @click="
-                                                    onProductSelect(
-                                                        slotProps.data,
-                                                    )
-                                                "
-                                            ></Button>
-                                        </template>
-                                    </Column>
-                                </DataTable>
-                            </Popover>
-                        </div>
-                    </div>
-                    <!-- Brand -->
-                    <div class="flex flex-col grow basis-0 gap-2">
-                        <label for="brand">Brand</label>
-                        <InputText
-                            id="brand"
-                            type="text"
-                            placeholder="Brand"
-                            v-model="brand"
-                        />
-                    </div>
-                    <!-- Category -->
-                    <div class="flex flex-col grow basis-0 gap-2">
-                        <label for="category">Category</label>
-                        <InputText
-                            id="category"
-                            type="text"
-                            placeholder="Non-Consumable"
-                            v-model="category"
-                            readonly
-                        />
-                    </div>
-                </div>
+      <div class="flex flex-col grow basis-0 gap-2">
+        <label>Arrival Date</label>
+        <DatePicker v-model="arrivalDate" showButtonBar placeholder="Arrival Date" />
+      </div>
 
-                <!-- Section 2: Batch Details -->
-                <div class="grid grid-cols-3 gap-4">
-                    <div class="flex flex-col grow basis-0 gap-2">
-                        <label for="batchNumber">Batch Number</label>
-                        <InputText
-                            id="batchNumber"
-                            type="text"
-                            placeholder="Batch Number"
-                        />
-                    </div>
-                    <div class="flex flex-col grow basis-0 gap-2">
-                        <label for="quantity">Quantity</label>
-                        <InputText
-                            id="quantity"
-                            type="number"
-                            placeholder="Quantity"
-                        />
-                    </div>
-                    <div class="flex flex-col grow basis-0 gap-2">
-                        <label for="purchasePrice">Purchase Price</label>
-                        <InputText
-                            id="purchasePrice"
-                            type="number"
-                            placeholder="Purchase Price"
-                        />
-                    </div>
-                </div>
-
-                <!-- Section 3: Stocks Details -->
-                <div class="grid grid-cols-3 gap-6 items-start">
-                    <!-- Batch Rental Section -->
-                    <div>
-                        <!-- Label, Question Mark, and Checkbox -->
-                        <div class="flex items-center gap-2">
-                            <label class="font-medium">Set Rental Price</label>
-                            <i
-                                class="pi pi-question-circle text-blue-500 cursor-pointer"
-                                @click="showInfoDialog = true"
-                            ></i>
-                            <Checkbox v-model="isBatchRental" binary>
-                                Apply Batch Rental
-                            </Checkbox>
-                        </div>
-
-                        <!-- Rental Price Input -->
-                        <div>
-                            <InputText
-                                id="batchRentalPrice"
-                                type="number"
-                                placeholder="Enter rental price for batch"
-                                v-model="batchRentalPrice"
-                                class="w-full"
-                                :disabled="!isBatchRental"
-                            />
-                        </div>
-                    </div>
-
-                    <!-- Minimum Stock Section -->
-                    <div>
-                        <label for="minimumStock" class="font-medium"
-                            >Minimum Stock</label
-                        >
-                        <InputText
-                            id="minimumStock"
-                            type="number"
-                            placeholder="Enter Minimum Stock"
-                            class="w-full"
-                        />
-                    </div>
-
-                    <!-- Stock Limit Section -->
-                    <div>
-                        <label for="stockLimit" class="font-medium"
-                            >Stock Limit</label
-                        >
-                        <InputText
-                            id="stockLimit"
-                            type="number"
-                            placeholder="Enter Stock Limit"
-                            class="w-full"
-                        />
-                    </div>
-
-                    <!-- Dialog Component -->
-
-                    <Dialog
-                        v-model:visible="showInfoDialog"
-                        header="Batch Rental Information"
-                        :modal="true"
-                        :closable="true"
-                        :dismissable-mask="true"
-                        class="w-1/3"
-                        :breakpoints="{ '960px': '75vw' }"
-                        :style="{ width: '30vw' }"
-                    >
-                        <p>
-                            The batch rental feature allows you to set a rental
-                            price for the entire batch. If enabled, individual
-                            item rental settings will be disabled.
-
-                            <label>
-                                <label class="text-red-500">Note:</label>
-                                You can Set the rental price for each Item
-                            </label>
-                        </p>
-                    </Dialog>
-                </div>
-
-                <div class="grid grid-cols-2 gap-6">
-                    <div class="flex flex-col grow basis-0 gap-2">
-                        <label for="unit">Unit</label>
-                        <InputText id="unit" type="text" placeholder="Unit" />
-                    </div>
-                    <div class="flex flex-col grow basis-0 gap-2">
-                        <label for="supplier">Supplier</label>
-                        <InputText
-                            id="supplier"
-                            type="text"
-                            placeholder="Supplier"
-                        />
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-6">
-                    <!-- Warranty and Day/Month/Year Section -->
-                    <div class="grid grid-cols-2 items-start gap-4">
-                        <!-- Warranty Input and Slider -->
-                        <div class="flex flex-col gap-2">
-                            <label for="batchNumber" class="font-medium"
-                                >Warranty</label
-                            >
-                            <InputText
-                                v-model.number="sliderValue"
-                                class="w-full"
-                            />
-                            <Slider v-model="sliderValue" class="mt-2 w-full" />
-                        </div>
-
-                        <!-- Day / Month / Year Select -->
-                        <div class="flex flex-col gap-2">
-                            <label for="dropdown" class="font-medium"
-                                >Select Duration</label
-                            >
-                            <Select
-                                v-model="dropdownItems"
-                                :options="dropdownItems"
-                                optionLabel="name"
-                                placeholder="Select Day / Month / Year"
-                                class="w-full"
-                            ></Select>
-                        </div>
-                    </div>
-
-                    <!-- Arrival Date Section -->
-                    <div class="flex flex-col gap-2">
-                        <label for="arrivalDate" class="font-medium"
-                            >Purchase Date</label
-                        >
-                        <DatePicker
-                            id="PurchaseDate"
-                            placeholder="Purchase Date"
-                            :showIcon="true"
-                            :showButtonBar="true"
-                            v-model="arrivalDate"
-                            class="w-full"
-                        ></DatePicker>
-                    </div>
-                </div>
-
-                <!-- Section: Add Serial Number -->
-                <div class="flex flex-col gap-4 mt-4">
-                    <label class="font-medium">Per Item Serial Numbers</label>
-                    <!-- Add Serial Number Input -->
-                    <div class="flex items-center gap-4">
-                        <InputText
-                            id="serialNumber"
-                            type="text"
-                            placeholder="Enter Serial Number"
-                            v-model="newSerialNumber"
-                        />
-                        <Button
-                            label="Add"
-                            class="p-button-primary"
-                            @click="addSerialNumber"
-                        ></Button>
-                    </div>
-
-                    <!-- Serial Numbers List -->
-                    <ul class="list-disc pl-5 divide-y divide-gray-200">
-                        <li
-                            v-for="(item, index) in serialNumbers"
-                            :key="index"
-                            class="py-2 flex justify-between items-center"
-                        >
-                            <!-- Serial Details -->
-                            <div class="flex flex-col">
-                                <span
-                                    ><strong>Serial:</strong>
-                                    {{ item.serial }}</span
-                                >
-                                <span
-                                    ><strong>Rental:</strong>
-                                    {{ item.isRental ? "Yes" : "No" }}</span
-                                >
-                                <span v-if="item.isRental"
-                                    ><strong>Price:</strong>
-                                    {{ item.price || "N/A" }}</span
-                                >
-                            </div>
-
-                            <!-- Actions -->
-                            <div
-                                class="grid grid-cols-[auto_auto_1fr_auto] items-center gap-2"
-                            >
-                                <!-- Rental Checkbox -->
-                                <Checkbox
-                                    v-model="item.isRental"
-                                    binary
-                                    :disabled="isBatchRental"
-                                >
-                                    Rental
-                                </Checkbox>
-
-                                <!-- Rental Price Input (Consistent Sizing) -->
-                                <InputText
-                                    v-if="item.isRental && !isBatchRental"
-                                    type="number"
-                                    placeholder="Enter rental price"
-                                    v-model="item.price"
-                                    class="w-40"
-                                />
-
-                                <!-- Remove Button -->
-                                <Button
-                                    icon="pi pi-trash"
-                                    class="p-button-danger p-button-rounded"
-                                    @click="removeSerialNumber(index)"
-                                ></Button>
-                            </div>
-                        </li>
-                    </ul>
-                </div>
-
-                <div class="flex gap-4">
-                    <Button label="Submit" :fluid="false" class="w-1/2">
-                    </Button>
-                    <Button label="Clear" :fluid="false" class="w-1/2"></Button>
-                </div>
-            </div>
-        </div>
-    </Fluid>
+      <div class="flex flex-col grow basis-0 gap-2" v-if="isConsumable">
+        <label>Unit Retail Price</label>
+        <InputText v-model="unitRetailPrice" type="number" placeholder="e.g., 10.00" />
+      </div>
+      <div class="flex flex-col grow basis-0 gap-2" v-if="isConsumable">
+        <label>Expiry Date</label>
+        <DatePicker v-model="expiryDate" showButtonBar placeholder="Expiry Date" />
+      </div>
+      <div class="flex flex-col grow basis-0 gap-2" v-if="isNonConsumable">
+        <label>Unit Rental Price <span style="color: #aaa;">(optional)</span></label>
+        <InputText v-model="unitRentalPrice" type="number" placeholder="e.g., 100.00" />
+      </div>
+      <div class="flex flex-col grow basis-0 gap-2" v-if="isNonConsumable">
+        <label>Warranty <span style="color: #aaa;">(optional)</span></label>
+        <InputText v-model="warranty" placeholder="e.g., 12 months" />
+      </div>
+      <div class="flex flex-col grow basis-0 gap-2" v-if="isNonConsumable">
+        <label>Serial Numbers</label>
+        <InputText v-model="serialNumbers" placeholder="Serial Numbers" readonly />
+        <small>Automatically generated, one per quantity</small>
+      </div>
+    </div>
+    <div class="flex gap-4">
+      <Button label="Submit" :disabled="maxQuantity === 0" class="w-1/2" @click="handleSubmit" />
+      <Button label="Clear" :fluid="false" class="w-1/2" @click="clearForm" />
+    </div>
+    <span v-if="maxQuantity === 0" class="text-red-500">Stock limit reached. Cannot add more.</span>
+    <Toast />
+  </div>
 </template>

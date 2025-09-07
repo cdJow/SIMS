@@ -1,121 +1,139 @@
 <script setup>
-import { FilterMatchMode, FilterOperator } from "@primevue/core/api";
-import { onBeforeMount, ref } from "vue";
+import { useToast } from "primevue/usetoast";
+import { computed, onBeforeMount, ref } from "vue";
+import { fetchCancelledBookings } from "@/api/auth";
 
-const canceledBookings = ref(null);
+// Filters
+const filters = ref({
+    searchQuery: "",
+    dateRange: [null, null],
+    roomType: null,
+});
 
-const filters = ref(null);
+// State
+const canceledBookings = ref([]);
+const loading = ref(false);
+const error = ref(null);
 
-const mockCanceledBookings = [
-    {
-        BookingCode: "RES-1003",
-        guestName: "Alice Johnson",
-        roomNumber: "102",
-        roomType: "Single Size Bed",
-        selectedHours: 6,
-        selectedRate: 199.99,
-        checkInDate: "2023-12-20T12:00:00",
-        checkOutDate: "2023-12-22T10:00:00",
-        cancellationDate: "2023-12-19T14:30:00", // Added cancellation date
-        cancellationReason: "Change of plans", // Added cancellation reason
-        paymentStatus: {
-            ratePaid: false,
-            depositAmount: 50.0,
-            depositStatus: "Refunded",
-            balanceDue: 0.0,
-        },
-        ExtraAmenities: ["Towels"],
-        contactInfo: "099294293",
-        loyaltyStatus: "Bronze Member",
-        notes: "Guest requested a refund.",
-    },
-    {
-        BookingCode: "RES-1004",
-        guestName: "Bob Brown",
-        roomNumber: "204",
-        roomType: "Double Size Bed",
-        selectedHours: 12,
-        selectedRate: 299.99,
-        checkInDate: "2023-12-18T15:00:00",
-        checkOutDate: "2023-12-20T11:00:00",
-        cancellationDate: "2023-12-17T09:45:00", // Added cancellation date
-        cancellationReason: "Flight cancellation", // Added cancellation reason
-        paymentStatus: {
-            ratePaid: true,
-            depositAmount: 100.0,
-            depositStatus: "Pending Refund",
-            balanceDue: 0.0,
-        },
-        ExtraAmenities: ["Pillows", "Blankets"],
-        contactInfo: "099294293",
-        loyaltyStatus: "Silver Member",
-        notes: "Guest will rebook later.",
-    },
-];
+async function loadCancelled() {
+    loading.value = true;
+    error.value = null;
+    try {
+        const res = await fetchCancelledBookings();
+        const items = res.data || [];
+        // Normalize date objects for table rendering
+        canceledBookings.value = items.map((b) => ({
+            ...b,
+            checkInDate: b.check_in_datetime ? new Date(b.check_in_datetime) : null,
+            checkOutDate: b.check_out_datetime ? new Date(b.check_out_datetime) : null,
+            cancellationDate: b.cancellationDate ? new Date(b.cancellationDate) : null,
+        }));
+    } catch (e) {
+        error.value = e?.message || "Failed to load cancelled bookings";
+    } finally {
+        loading.value = false;
+    }
+}
+
+onBeforeMount(loadCancelled);
+
+// Filtering
+
+// Format date/time in 12-hour with am/pm (Asia/Manila)
+function formatCancellation(dt) {
+    if (!dt) return "N/A";
+    const d = dt instanceof Date ? dt : new Date(dt);
+    if (isNaN(d.getTime())) return "N/A";
+    let s = d.toLocaleString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: "Asia/Manila",
+    });
+    // Lowercase meridiem only
+    s = s.replace(/\bAM\b/, "am").replace(/\bPM\b/, "pm");
+    return s;
+}
+
+const filteredBookings = computed(() => {
+    return canceledBookings.value.filter((booking) => {
+        const q = (filters.value.searchQuery || "").toLowerCase();
+        const searchMatches =
+            String(booking.BookingCode || "").toLowerCase().includes(q) ||
+            String(booking.guestName || "").toLowerCase().includes(q);
+
+        const [start, end] = filters.value.dateRange || [];
+        const startDate = start ? new Date(start) : null;
+        const endDate = end ? new Date(end) : null;
+        const cDate = booking.cancellationDate instanceof Date ? booking.cancellationDate : (booking.cancellationDate ? new Date(booking.cancellationDate) : null);
+        const dateMatches = !startDate || (!cDate ? false : (cDate >= startDate && (!endDate || cDate <= endDate)));
+
+        const roomTypeMatches = !filters.value.roomType || booking.roomType === filters.value.roomType;
+
+        return searchMatches && dateMatches && roomTypeMatches;
+    });
+});
+
+// Clear filters
+const clearFilters = () => {
+    filters.value = { searchQuery: "", dateRange: [null, null], roomType: null };
+};
+
+const toast = useToast();
+
+
+
+
 
 const op = ref();
 const selectedBooking = ref(null);
-
 const handleClick = (event, bookingData) => {
     selectedBooking.value = bookingData;
-    op.value.toggle(event);
+    op.value?.toggle(event);
 };
-
-onBeforeMount(() => {
-    canceledBookings.value = mockCanceledBookings.map((booking) => ({
-        ...booking,
-        checkInDate: new Date(booking.checkInDate),
-        checkOutDate: new Date(booking.checkOutDate),
-        cancellationDate: new Date(booking.cancellationDate), // Parse cancellation date
-    }));
-    initFilters();
-});
-
-function initFilters() {
-    filters.value = {
-        global: { value: null, matchMode: FilterMatchMode.CONTAINS },
-        guestName: {
-            operator: FilterOperator.AND,
-            constraints: [
-                { value: null, matchMode: FilterMatchMode.STARTS_WITH },
-            ],
-        },
-        roomNumber: {
-            operator: FilterOperator.AND,
-            constraints: [{ value: null, matchMode: FilterMatchMode.EQUALS }],
-        },
-    };
-}
 </script>
 
 <template>
-    <div class="p-4 card rounded-lg shadow-sm">
+    <div class="card p-4 rounded-lg shadow-sm">
         <div class="text-xl font-semibold mb-4">Canceled Bookings</div>
 
-        <!-- Clear and Search -->
-        <div class="flex gap-4 mb-4">
-            <Button
-                type="button"
-                icon="pi pi-filter-slash"
-                label="Clear"
-                outlined
-                class="mb-4"
-            />
-            <div class="flex-1">
-                <InputText
-                    placeholder="Keyword Search"
-                    class="p-2 border rounded-lg"
-                />
+        <!-- Enhanced Filter Section -->
+        <div>
+            <div class="mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    <!-- Search -->
+                    <div>
+                        <div class="flex gap-2">
+                            <Button
+                                type="button"
+                                icon="pi pi-filter-slash"
+                                label="Clear"
+                                outlined
+                                class="whitespace-nowrap"
+                                @click="clearFilters"
+                            />
+                            <InputText
+                                placeholder="Enter Booking Code"
+                                class="flex-1 p-3 border rounded-lg"
+                                v-model="filters.searchQuery"
+                            />
+                        </div>
+                    </div>
+                    <!-- Date Range -->
+                </div>
             </div>
-        </div>
 
+            <!-- DataTable and other content -->
+        </div>
         <!-- DataTable -->
         <DataTable
-            :value="canceledBookings"
+            :value="filteredBookings"
             scrollable
             scrollHeight="600px"
             class="mt-6"
-            :filters="filters"
         >
             <!-- Booking Code -->
             <Column
@@ -139,7 +157,7 @@ function initFilters() {
             >
                 <template #body="{ data }">
                     <span class="text-red-500">
-                        {{ data.cancellationDate.toLocaleString() }}
+                        {{ formatCancellation(data.cancellationDate) }}
                     </span>
                 </template>
             </Column>
@@ -154,7 +172,9 @@ function initFilters() {
                             outlined
                             rounded
                             @click="handleClick($event, data)"
+                            v-tooltip="'View Guest Info'"
                         />
+            
                     </div>
                 </template>
             </Column>
@@ -172,7 +192,7 @@ function initFilters() {
                     <div class="flex items-center gap-2">
                         <i class="pi pi-phone"></i>
                         <span class="font-semibold">Contact Number:</span>
-                        {{ selectedBooking.contactInfo }}
+                        {{ selectedBooking.contactInfo || "N/A" }}
                     </div>
                     <div class="flex items-center gap-2">
                         <i class="pi pi-home"></i>
@@ -183,4 +203,6 @@ function initFilters() {
             </div>
         </Popover>
     </div>
+
+     <toast />
 </template>

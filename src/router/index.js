@@ -221,6 +221,13 @@ const router = createRouter({
                 },
 
                 {
+                    path: "/Rooms/Discount",
+                    name: " Discount",
+                    component: () => import("@/views/pages/Rooms/Discount.vue"),
+                },
+
+
+                {
                     path: "/Inventory/GenerateReport/StockHistory",
                     name: "Stock Table",
                     component: () =>

@@ -4,6 +4,7 @@ import { $t, updatePreset, updateSurfacePalette } from "@primevue/themes";
 import Aura from "@primevue/themes/aura";
 import Lara from "@primevue/themes/lara";
 import { ref } from "vue";
+import SelectButton from "primevue/selectbutton"; // <-- MAKE SURE THIS IS IMPORTED!
 
 const { layoutConfig, isDarkTheme } = useLayout();
 
@@ -552,13 +553,12 @@ function onMenuModeChange() {
 
 <template>
     <div
-        class="config-panel hidden absolute top-[3.25rem] right-0 w-64 p-4 bg-surface-0 dark:bg-surface-900 border border-surface rounded-border origin-top shadow-[0px_3px_5px_rgba(0,0,0,0.02),0px_0px_2px_rgba(0,0,0,0.05),0px_1px_4px_rgba(0,0,0,0.08)]"
+        class="config-panel absolute top-[3.25rem] right-0 w-64 p-4 bg-surface-0 dark:bg-surface-900 border border-surface rounded-border origin-top shadow-[0px_3px_5px_rgba(0,0,0,0.02),0px_0px_2px_rgba(0,0,0,0.05),0px_1px_4px_rgba(0,0,0,0.08)] z-50"
     >
         <div class="flex flex-col gap-4">
+            <!-- Primary Color Selector -->
             <div>
-                <span class="text-sm text-muted-color font-semibold"
-                    >Primary</span
-                >
+                <span class="text-sm text-muted-color font-semibold">Primary</span>
                 <div class="pt-2 flex gap-2 flex-wrap justify-between">
                     <button
                         v-for="primaryColor of primaryColors"
@@ -579,10 +579,9 @@ function onMenuModeChange() {
                     ></button>
                 </div>
             </div>
+            <!-- Surface Color Selector -->
             <div>
-                <span class="text-sm text-muted-color font-semibold"
-                    >Surface</span
-                >
+                <span class="text-sm text-muted-color font-semibold">Surface</span>
                 <div class="pt-2 flex gap-2 flex-wrap justify-between">
                     <button
                         v-for="surface of surfaces"
@@ -600,16 +599,13 @@ function onMenuModeChange() {
                                       : surface.name === 'slate',
                             },
                         ]"
-                        :style="{
-                            backgroundColor: `${surface.palette['500']}`,
-                        }"
+                        :style="{ backgroundColor: `${surface.palette['500']}` }"
                     ></button>
                 </div>
             </div>
+            <!-- Preset Switcher -->
             <div class="flex flex-col gap-2">
-                <span class="text-sm text-muted-color font-semibold"
-                    >Presets</span
-                >
+                <span class="text-sm text-muted-color font-semibold">Presets</span>
                 <SelectButton
                     v-model="preset"
                     @change="onPresetChange"
@@ -617,10 +613,9 @@ function onMenuModeChange() {
                     :allowEmpty="false"
                 />
             </div>
+            <!-- Menu Mode Switcher -->
             <div class="flex flex-col gap-2">
-                <span class="text-sm text-muted-color font-semibold"
-                    >Menu Mode</span
-                >
+                <span class="text-sm text-muted-color font-semibold">Menu Mode</span>
                 <SelectButton
                     v-model="menuMode"
                     @change="onMenuModeChange"

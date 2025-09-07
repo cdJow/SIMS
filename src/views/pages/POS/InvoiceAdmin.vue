@@ -1,25 +1,44 @@
 <script setup>
 import { useToast } from "primevue/usetoast";
-import { computed, ref } from "vue";
+import { computed, ref, onMounted } from "vue";
+import { fetchBills, deleteBill } from "@/api/auth";
 
-// Sample POS invoice data
-const invoiceData = ref([
-    {
-        invoiceId: "INV-1001",
-        items: [
-            { name: "Bottled Water", quantity: 2, price: 20 },
-            { name: "Snacks", quantity: 3, price: 50 },
-        ],
-        total: 190,
-        date: "2024-03-02T16:45:00",
-    },
-    {
-        invoiceId: "INV-1002",
-        items: [{ name: "Toiletries Kit", quantity: 1, price: 150 }],
-        total: 150,
-        date: "2024-03-03T09:30:00",
-    },
-]);
+// Invoices from backend
+const invoiceData = ref([]);
+const isLoading = ref(false);
+
+async function loadInvoices() {
+    isLoading.value = true;
+    try {
+        const res = await fetchBills();
+        const bills = res.data || [];
+        invoiceData.value = bills.map((b) => ({
+            id: b.id,
+            invoiceId: b.invoice_no || `INV-${b.id}`,
+            items: (b.items || []).map((it) => ({
+                name: it.name,
+                brand: it.brand || "",
+                quantity: Number(it.quantity || 0),
+                price: Number(it.price || 0),
+            })),
+            total: Number(b.total || 0),
+            date: b.timestamp,
+        }));
+    } catch (e) {
+        toast.add({
+            severity: "error",
+            summary: "Load Invoices",
+            detail: "Failed to fetch invoices",
+            life: 3000,
+        });
+    } finally {
+        isLoading.value = false;
+    }
+}
+
+onMounted(() => {
+    loadInvoices();
+});
 
 // Utility functions
 const formatCurrency = (value) => {
@@ -67,23 +86,27 @@ const confirmDelete = (invoice) => {
     deleteDialogVisible.value = true;
 };
 
-const deleteInvoice = (invoiceId) => {
-    // Close the dialog first
+const deleteInvoice = async (billId) => {
     deleteDialogVisible.value = false;
-    selectedInvoice.value = null;
-
-    // Remove the invoice from the list
-    invoiceData.value = invoiceData.value.filter(
-        (invoice) => invoice.invoiceId !== invoiceId
-    );
-
-    // Show success toast
-    toast.add({
-        severity: "error",
-        summary: "Deleted",
-        detail: "Invoice deleted successfully",
-        life: 3000,
-    });
+    try {
+        await deleteBill(billId);
+        invoiceData.value = invoiceData.value.filter((inv) => inv.id !== billId);
+        toast.add({
+            severity: "success",
+            summary: "Deleted",
+            detail: "Invoice deleted successfully",
+            life: 3000,
+        });
+    } catch (e) {
+        toast.add({
+            severity: "error",
+            summary: "Delete failed",
+            detail: e?.response?.data?.message || "Failed to delete invoice",
+            life: 3000,
+        });
+    } finally {
+        selectedInvoice.value = null;
+    }
 };
 
 const handlePrint = (invoice) => {
@@ -107,6 +130,7 @@ const handlePrint = (invoice) => {
                     <thead>
                         <tr>
                             <th>Item</th>
+                            <th>Brand</th>
                             <th>Quantity</th>
                             <th>Unit Price</th>
                             <th>Total</th>
@@ -118,6 +142,7 @@ const handlePrint = (invoice) => {
                                 (item) => `
                             <tr>
                                 <td>${item.name}</td>
+                                <td>${item.brand || ""}</td>
                                 <td>${item.quantity}</td>
                                 <td>${formatCurrency(item.price)}</td>
                                 <td>${formatCurrency(
@@ -153,6 +178,7 @@ const downloadInvoice = (invoice) => {
             .map(
                 (item) => `
         - ${item.name}
+          Brand: ${item.brand || ""}
           Quantity: ${item.quantity}
           Price: ${formatCurrency(item.price)}
           Subtotal: ${formatCurrency(item.price * item.quantity)}
@@ -188,11 +214,13 @@ const filteredInvoices = computed(() => {
             invoice.invoiceId
                 .toLowerCase()
                 .includes(filters.value.searchQuery.toLowerCase()) ||
-            invoice.items.some((item) =>
-                item.name
-                    .toLowerCase()
-                    .includes(filters.value.searchQuery.toLowerCase())
-            );
+            invoice.items.some((item) => {
+                const q = filters.value.searchQuery.toLowerCase();
+                return (
+                    (item.name || "").toLowerCase().includes(q) ||
+                    (item.brand || "").toLowerCase().includes(q)
+                );
+            });
 
         // Date range filter
         const matchesDate =
@@ -246,6 +274,7 @@ const clearFilters = () => {
             class="p-datatable-striped"
             :sortField="sortField"
             :sortOrder="sortOrder"
+            :loading="isLoading"
             @sort="onSort"
         >
             <!-- Invoice ID -->
@@ -263,6 +292,17 @@ const clearFilters = () => {
                     <div class="flex flex-col">
                         <div v-for="(item, index) in data.items" :key="index">
                             {{ item.name }}
+                        </div>
+                    </div>
+                </template>
+            </Column>
+
+            <!-- Brand -->
+            <Column header="Brand">
+                <template #body="{ data }">
+                    <div class="flex flex-col">
+                        <div v-for="(item, index) in data.items" :key="index">
+                            {{ item.brand || "" }}
                         </div>
                     </div>
                 </template>
@@ -370,7 +410,7 @@ const clearFilters = () => {
                 label="Yes"
                 icon="pi pi-check"
                 class="p-button-danger"
-                @click="deleteInvoice(selectedInvoice.invoiceId)"
+                @click="deleteInvoice(selectedInvoice.id)"
             />
         </template>
     </Dialog>

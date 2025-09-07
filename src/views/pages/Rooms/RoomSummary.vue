@@ -1,35 +1,21 @@
 <script>
 export default {
-    data() {
-        return {
-            stats: {
-                operationalRooms: 80,
-
-                underMaintinance: 4,
-
-                totalRooms: 84,
-                occupiedRooms: 60,
-                revenue: 1254000,
-                revenueIncrease: 12.4,
-                revenueBreakdown: [
-                    {
-                        name: "Room Revenue",
-                        amount: 854000,
-                        percentage: 68,
-                    },
-                    {
-                        name: "Food & Beverage",
-                        amount: 235000,
-                        percentage: 19,
-                    },
-                    {
-                        name: "Amenities",
-                        amount: 98000,
-                        percentage: 8,
-                    },
-                ],
-            },
-        };
+    props: {
+        operationalRooms: { type: Number, default: 0 }, // Available
+        occupiedRooms: { type: Number, default: 0 },
+        underMaintinance: { type: Number, default: 0 }, // Cleaning
+        totalRooms: { type: Number, default: 0 }, // Booked
+    },
+    computed: {
+        // Keep the template unchanged by exposing a 'stats' object
+        stats() {
+            return {
+                operationalRooms: this.operationalRooms,
+                occupiedRooms: this.occupiedRooms,
+                underMaintinance: this.underMaintinance,
+                totalRooms: this.totalRooms,
+            };
+        },
     },
 };
 </script>

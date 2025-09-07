@@ -1,9 +1,150 @@
 <script setup>
+import { ref, onMounted, onBeforeUnmount } from "vue";
+import { useToast } from "primevue/usetoast";
 import { useLayout } from "@/layout/composables/layout";
-import AppConfigurator from "./AppConfigurator.vue";
+import Menu from "primevue/menu";
+import Tag from "primevue/tag";
+import Avatar from "primevue/avatar";
+import Dialog from "primevue/dialog";
+import InputText from "primevue/inputtext";
+import Password from "primevue/password";
+import Button from "primevue/button";
+import { getCurrentUser, logoutUserLog, resetUserPassword } from "@/api/auth";
+import { useCurrentUser } from "@/service/CurrentUser";
 
 const { toggleMenu, toggleDarkMode, isDarkTheme } = useLayout();
+
+const toast = useToast();
+
+const settingsForm = ref({
+  name: "",
+  email: "",
+  image_url: "",
+  password: "",
+});
+const confirmPassword = ref("");
+const settingsError = ref("");
+const imagePreview = ref(null);
+
+const menu = ref();
+const showConfigurator = ref(false);
+
+const { user, setUser } = useCurrentUser();
+
+// This is the only image upload handler needed!
+function handleImageUpload(e) {
+  const file = e.target.files[0];
+  if (file) {
+    settingsForm.value.image = file;
+    imagePreview.value = URL.createObjectURL(file);
+  }
+}
+
+function closeMenuOnScroll() {
+  if (menu.value) {
+    menu.value.hide();
+  }
+}
+
+onMounted(() => {
+  window.addEventListener("scroll", closeMenuOnScroll, true);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener("scroll", closeMenuOnScroll, true);
+});
+
+function openSettings() {
+  settingsForm.value.name = user.value.name || "";
+  settingsForm.value.email = user.value.email || "";
+  settingsForm.value.image_url = user.value.image_url || "";
+  settingsForm.value.password = "";
+  confirmPassword.value = "";
+  settingsError.value = "";
+  showConfigurator.value = true;
+}
+
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function closeConfigurator() {
+  showConfigurator.value = false;
+}
+
+
+async function saveSettings() {
+  settingsError.value = "";
+
+  // Password is optional—only change if provided
+  if (settingsForm.value.password || confirmPassword.value) {
+    if (!settingsForm.value.password || !confirmPassword.value) {
+      settingsError.value = "Please fill in both password fields.";
+      toast.add({ severity: "warn", summary: "Missing", detail: settingsError.value, life: 2500 });
+      return;
+    }
+    if (settingsForm.value.password !== confirmPassword.value) {
+      settingsError.value = "Passwords do not match.";
+      toast.add({ severity: "warn", summary: "Mismatch", detail: settingsError.value, life: 2500 });
+      return;
+    }
+    try {
+      const userId = localStorage.getItem("userId");
+      await resetUserPassword(userId, { new_password: settingsForm.value.password });
+      const res = await getCurrentUser(userId);
+      setUser(res.data.user);
+      toast.add({ severity: "success", summary: "Saved", detail: "Password updated.", life: 2000 });
+    } catch (err) {
+      settingsError.value = "Failed to update password.";
+      toast.add({ severity: "error", summary: "Error", detail: settingsError.value, life: 3000 });
+      return;
+    }
+  }
+
+  showConfigurator.value = false;
+}
+
+
+// User menu
+const userMenuItems = [
+  {
+    label: "Settings",
+    icon: "pi pi-cog",
+    command: openSettings
+  },
+  {
+    label: "Log Out",
+    icon: "pi pi-sign-out",
+    command: async () => {
+      try {
+        const userId = localStorage.getItem("userId");
+        if (userId) {
+          await logoutUserLog(userId);
+        }
+      } catch (e) {}
+      localStorage.removeItem("token");
+      localStorage.removeItem("userId");
+      window.location.href = "/pages/auth/login";
+    }
+  }
+];
+
+// Fetch user info on mount
+onMounted(async () => {
+  try {
+    const userId = localStorage.getItem("userId");
+    if (!userId) {
+      window.location.href = "/pages/auth/login";
+      return;
+    }
+    const res = await getCurrentUser(userId);
+    setUser(res.data.user);
+  } catch (err) {
+    window.location.href = "/pages/auth/login";
+  }
+});
 </script>
+
 
 <template>
     <div class="layout-topbar">
@@ -52,6 +193,8 @@ const { toggleMenu, toggleDarkMode, isDarkTheme } = useLayout();
             </router-link>
         </div>
 
+
+        <!-- ACTIONS -->
         <div class="layout-topbar-actions">
             <div class="layout-config-menu">
                 <button
@@ -59,54 +202,103 @@ const { toggleMenu, toggleDarkMode, isDarkTheme } = useLayout();
                     class="layout-topbar-action"
                     @click="toggleDarkMode"
                 >
-                    <i
-                        :class="[
-                            'pi',
-                            { 'pi-moon': isDarkTheme, 'pi-sun': !isDarkTheme },
-                        ]"
-                    ></i>
+                    <i :class="[ 'pi', { 'pi-moon': isDarkTheme, 'pi-sun': !isDarkTheme } ]"></i>
                 </button>
-                <div class="relative">
-                    <button
-                        v-styleclass="{
-                            selector: '@next',
-                            enterFromClass: 'hidden',
-                            enterActiveClass: 'animate-scalein',
-                            leaveToClass: 'hidden',
-                            leaveActiveClass: 'animate-fadeout',
-                            hideOnOutsideClick: true,
-                        }"
-                        type="button"
-                        class="layout-topbar-action layout-topbar-action-highlight"
-                    >
-                        <i class="pi pi-palette"></i>
-                    </button>
-                    <AppConfigurator />
-                </div>
-            </div>
 
-            <button
-                class="layout-topbar-menu-button layout-topbar-action"
-                v-styleclass="{
-                    selector: '@next',
-                    enterFromClass: 'hidden',
-                    enterActiveClass: 'animate-scalein',
-                    leaveToClass: 'hidden',
-                    leaveActiveClass: 'animate-fadeout',
-                    hideOnOutsideClick: true,
-                }"
-            >
-                <i class="pi pi-ellipsis-v"></i>
-            </button>
-
-            <div class="layout-topbar-menu hidden lg:block">
-                <div class="layout-topbar-menu-content">
-                    <button type="button" class="layout-topbar-action">
-                        <i class="pi pi-sign-out"></i>
-                        <span>Log Out</span>
-                    </button>
-                </div>
             </div>
+           <!--   appconfigurator -->
         </div>
+
+        <!-- USER AVATAR MENU -->
+       <div class="relative">
+  <button
+    v-ripple
+    class="relative overflow-hidden border-0 bg-transparent flex items-center p-1 pl-2 hover:bg-surface-100 dark:hover:bg-surface-800 rounded cursor-pointer transition-colors duration-200 min-w-fit"
+    @click="menu.toggle($event)"
+    aria-haspopup="true"
+    aria-controls="user_menu"
+  >
+    <Avatar
+      :image="user.image_url ? `http://localhost:5000/uploads/users/${user.image_url}` : 'https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png'"
+      class="mr-2 border border-blue-300 shadow-md w-12 h-12 bg-white object-cover"
+      shape="circle"
+    />
+    <span class="inline-flex flex-col items-start">
+      <span class="font-bold leading-tight text-sm ml-1">{{ user.name }}</span>
+      <Tag
+        :value="user.role"
+        severity="info"
+        class="mt-1 text-xs px-2 py-0.5 rounded-full font-semibold shadow-none bg-blue-100 text-blue-700 border-0"
+        style="letter-spacing: 0.01em;"
+      />
+    </span>
+    <i class="pi pi-chevron-down ml-2 text-xs"></i>
+  </button>
+  <Menu ref="menu" :model="userMenuItems" popup id="user_menu" appendTo="body"/>
+</div>
+
+        <!-- SETTINGS MODAL (optional, can be a popover or modal) -->
+
+        <Dialog
+  v-model:visible="showConfigurator"
+  :dismissable-mask="true"
+  modal
+  header="Settings"
+  :style="{ width: '400px' }"
+>
+  <div class="space-y-4">
+    <!-- Read-only profile info -->
+    <div class="flex items-center gap-3">
+      <Avatar
+  :image="settingsForm.image_url ? `http://localhost:5000/uploads/users/${settingsForm.image_url}` : 'https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png'"
+  class="w-20 h-20 border bg-white object-cover"
+  shape="circle"
+/>
+      <div class="text-xs text-gray-500">Profile details are read-only.</div>
     </div>
+
+    <div>
+      <label class="block mb-1 font-semibold text-xs">Name</label>
+      <InputText v-model="settingsForm.name" class="w-full" disabled />
+    </div>
+
+    <div>
+      <label class="block mb-1 font-semibold text-xs">Email</label>
+      <InputText v-model="settingsForm.email" class="w-full" disabled />
+    </div>
+
+    <!-- Password change -->
+    <div>
+      <label class="block mb-1 text-sm font-medium text-gray-700">New Password</label>
+      <Password v-model="settingsForm.password" toggleMask class="w-full" inputClass="w-full" />
+    </div>
+
+    <div>
+      <label class="block mb-1 text-sm font-medium text-gray-700">Confirm Password</label>
+      <Password v-model="confirmPassword" toggleMask class="w-full" inputClass="w-full" />
+      <div
+        v-if="settingsForm.password && confirmPassword && settingsForm.password !== confirmPassword"
+        class="text-red-500 text-xs mt-1"
+      >
+        Passwords do not match.
+      </div>
+    </div>
+
+    <div v-if="settingsError" class="text-red-500 text-xs">{{ settingsError }}</div>
+  </div>
+
+  <template #footer>
+    <Button label="Close" @click="closeConfigurator" class="p-button-secondary p-button-sm" />
+    <Button
+      label="Save Changes"
+      @click="saveSettings"
+      class="p-button-primary p-button-sm"
+    />
+  </template>
+</Dialog>
+
+
+    </div>
+    <Toast />
+
 </template>

@@ -1,35 +1,68 @@
 <script>
+import { fetchRooms } from "@/api/auth";
+
 export default {
     data() {
         return {
             stats: {
-                operationalRooms: 80,
-
-                underMaintinance: 4,
-
-                totalRooms: 84,
-                occupiedRooms: 60,
+                operationalRooms: 0, // Available
+                occupiedRooms: 0,
+                underMaintinance: 0, // Cleaning / Maintenance
+                totalRooms: 0, // Booked
+                // Keep revenue placeholders for future wiring
                 revenue: 1254000,
                 revenueIncrease: 12.4,
                 revenueBreakdown: [
-                    {
-                        name: "Room Revenue",
-                        amount: 854000,
-                        percentage: 68,
-                    },
-                    {
-                        name: "Food & Beverage",
-                        amount: 235000,
-                        percentage: 19,
-                    },
-                    {
-                        name: "Amenities",
-                        amount: 98000,
-                        percentage: 8,
-                    },
+                    { name: "Room Revenue", amount: 854000, percentage: 68 },
+                    { name: "Food & Beverage", amount: 235000, percentage: 19 },
+                    { name: "Amenities", amount: 98000, percentage: 8 },
                 ],
             },
+            _timer: null,
+            _loading: false,
+            _refreshRequested: false,
         };
+    },
+    methods: {
+        _computeCounts(rooms) {
+            const statusOf = (r) => String(r?.status || "").trim();
+            const available = rooms.filter((r) => statusOf(r) === "Available").length;
+            const occupied = rooms.filter((r) => statusOf(r) === "Occupied").length;
+            const cleaning = rooms.filter((r) => ["Cleaning", "Maintenance", "Under Maintenance"].includes(statusOf(r))).length;
+            const booked = rooms.filter((r) => statusOf(r) === "Booked").length;
+
+            this.stats.operationalRooms = available;
+            this.stats.occupiedRooms = occupied;
+            this.stats.underMaintinance = cleaning;
+            this.stats.totalRooms = booked;
+        },
+        async _load() {
+            if (this._loading) return;
+            this._loading = true;
+            try {
+                const res = await fetchRooms();
+                const rooms = Array.isArray(res?.data) ? res.data : [];
+                this._computeCounts(rooms);
+            } catch (e) {
+                console.error("StatsWidget: failed to fetch rooms", e);
+            } finally {
+                this._loading = false;
+            }
+        },
+    },
+    mounted() {
+        this._load();
+        // Live refresh every 10s
+        this._timer = setInterval(() => this._load(), 10000);
+
+        // Instant refresh hook: listen for global events when room changes happen
+        window.addEventListener("rooms:changed", this._load);
+        window.addEventListener("bookings:changed", this._load);
+    },
+    beforeUnmount() {
+        if (this._timer) clearInterval(this._timer);
+        window.removeEventListener("rooms:changed", this._load);
+        window.removeEventListener("bookings:changed", this._load);
     },
 };
 </script>

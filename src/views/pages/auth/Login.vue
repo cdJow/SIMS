@@ -1,6 +1,10 @@
 <script>
 import { login } from "@/api/auth";
 import { useRouter } from "vue-router";
+import { useToast } from "primevue/usetoast";
+
+
+
 
 export default {
   data() {
@@ -19,11 +23,13 @@ export default {
   },
   setup() {
     const router = useRouter();
-    return { router };
+    const toast = useToast();
+    return { router, toast };
   },
   methods: {
     async handleLogin() {
-      this.errors = { email: null, password: null, form: null }; // Reset errors
+      this.errors = { email: null, password: null, form: null };
+
       if (!this.form.email) this.errors.email = "Email is required.";
       if (!this.form.password) this.errors.password = "Password is required.";
       if (this.errors.email || this.errors.password) return;
@@ -32,13 +38,32 @@ export default {
       try {
         const response = await login(this.form.email, this.form.password);
         const token = response.data.token;
+        const userId = response.data.user?.id || response.data.user_id;
 
-        if (token) {
+        if (token && userId) {
           localStorage.setItem("token", token);
-          this.$router.push("/dashboard"); // Redirect after successful login
+          localStorage.setItem("userId", userId);
+
+         
+          this.toast.add({
+            severity: "success",
+            summary: "Login Successful",
+            detail: `Welcome back!`,
+            life: 3000,
+          });
+
+          this.$router.push("/dashboard");
         }
       } catch (error) {
         this.errors.form = "Invalid email or password.";
+
+        
+        this.toast.add({
+          severity: "error",
+          summary: "Login Failed",
+          detail: "Invalid email or password.",
+          life: 3000,
+        });
       } finally {
         this.isLoading = false;
       }
@@ -147,25 +172,28 @@ export default {
 
                             <!-- Password Input -->
                             <div>
-                                <label
-                                    class="block text-sm sm:text-base font-medium text-gray-700 mb-2"
-                                >
-                                    Password
-                                </label>
-                                <Password
-                                    v-model="form.password"
-                                    toggleMask
-                                    placeholder="Enter your password"
-                                    class="w-full text-sm sm:text-base"
-                                    :class="{ 'p-invalid': errors.password }"
-                                />
-                                <small
-                                    v-if="errors.password"
-                                    class="p-error mt-1 block text-xs sm:text-sm"
-                                >
-                                    {{ errors.password }}
-                                </small>
-                            </div>
+  <label
+    for="password"
+    class="block text-sm sm:text-base font-medium text-gray-700 mb-2"
+  >
+    Password
+  </label>
+  <Password
+    id="password"
+    v-model="form.password"
+    toggleMask
+    placeholder="Enter your password"
+    class="w-full text-sm sm:text-base"
+    inputClass="w-full"
+    :class="{ 'p-invalid': errors.password }"
+  />
+  <small
+    v-if="errors.password"
+    class="p-error mt-1 block text-xs sm:text-sm"
+  >
+    {{ errors.password }}
+  </small>
+</div>
                         </div>
 
                         <!-- Error Message -->
@@ -209,5 +237,6 @@ export default {
                 </div>
             </div>
         </div>
+         <Toast />
     </div>
 </template>

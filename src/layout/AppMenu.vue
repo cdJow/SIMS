@@ -8,6 +8,23 @@ const model = ref([
         label: " Admin",
         items: [
             {
+                label: "Rates Management",
+                icon: "pi pi-fw pi-money-bill",
+                items: [
+                    {
+                        label: "Rate Configuration",
+                        icon: "pi pi-fw pi-plus",
+                        to: "/Rates/RatePage",
+                    },
+
+                    {
+                        label: "Discount",
+                        icon: "pi pi-fw pi-percentage",
+                        to: "/Rooms/Discount",
+                    },
+                ],
+            },
+            {
                 label: "Room Management",
                 icon: "pi pi-fw pi-cog",
                 items: [
@@ -25,16 +42,6 @@ const model = ref([
                 ],
             },
 
-            {
-                label: "Menu Management",
-                icon: "pi  pi-cog",
-                to: "/MenuList",
-            },
-            {
-                label: "Rates Management",
-                icon: "pi  pi-money-bill",
-                to: "/Rates/RatePage",
-            },
             {
                 label: "Account Management ",
                 icon: "pi  pi-users",
@@ -147,16 +154,16 @@ const model = ref([
         label: "Inventory",
         items: [
             {
-                label: "Add Items",
+                label: "Products/Items",
                 icon: "pi pi-fw pi-plus",
                 items: [
                     {
-                        label: "Consumable",
+                        label: "Add Products",
                         icon: "pi pi-fw pi-box",
                         to: "/Inventory/Additems/ConsumableForm",
                     },
                     {
-                        label: "Non-Consumable",
+                        label: "Add Items",
                         icon: "pi pi-fw pi-box",
                         to: "/Inventory/AddItems/NonConsumableForm",
                     },
@@ -199,6 +206,12 @@ const model = ref([
                 label: "Kitchen Staff Module",
                 icon: "pi pi-fw pi-globe",
                 to: "/KitchenModule",
+            },
+
+            {
+                label: "Menu Management",
+                icon: "pi pi-fw pi-cog",
+                to: "/MenuList",
             },
         ],
     },

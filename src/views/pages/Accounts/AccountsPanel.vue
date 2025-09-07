@@ -1,25 +1,57 @@
 <script setup>
-import { AccountService } from "@/service/AccountService";
 import { Button, Dialog, InputText, Tag } from "primevue";
-import { useToast } from "primevue/usetoast"; // Import useToast
+import MultiSelect from "primevue/multiselect";
+import { useToast } from "primevue/usetoast";
+import { computed, nextTick,  onMounted, ref, watch } from "vue";
 import {
-    computed,
-    nextTick,
-    onBeforeUnmount,
-    onMounted,
-    onUnmounted,
-    ref,
-} from "vue";
+    getUsers, addUser, updateUser, deleteUser,
+    resetUserPassword, uploadUserImage, getUserLogs, adminResetUserPassword
+} from "@/api/auth";
+import { getCurrentUser } from "@/api/auth";
+import { useCurrentUser } from "@/service/CurrentUser";
 
-// Fetch accounts from AccountService
-const accounts = ref(AccountService.getAccounts());
+const { setUser } = useCurrentUser();
 
+const toast = useToast();
+const ALLOWED_ROLES = ["Front Desk", "Manager", "System Admin", "Inventory", "Kitchen Staff"];
+
+
+const showPassword = ref(false);
+
+const emailError = ref(""); // for Add
+const editEmailError = ref(""); // for Edit
+
+
+const nameError = ref("");         // for Add
+const editNameError = ref("");
+
+function validateNameInput() {
+    if (!accountForm.value.name || accountForm.value.name.trim() === "") {
+        nameError.value = "Name is required.";
+    } else {
+        nameError.value = "";
+    }
+}
+function validateEditNameInput() {
+    if (!accountForm.value.name || accountForm.value.name.trim() === "") {
+        editNameError.value = "Name is required.";
+    } else {
+        editNameError.value = "";
+    }
+}
+
+
+
+
+// Options for roles/statuses
 const roles = [
-    { label: "Front Desk", value: "Super Admin" },
-    { label: "Manager", value: "Moderator" },
-    { label: "System Admin", value: "Auditor" },
-    { label: "Inventory", value: "Stock Manager" }, // Added Inventory role
+    { label: "Front Desk", value: "Front Desk" },
+    { label: "Manager", value: "Manager" },
+    { label: "System Admin", value: "System Admin" },
+    { label: "Inventory", value: "Inventory" },
+    { label: "Kitchen Staff", value: "Kitchen Staff" },
 ];
+
 
 const statuses = [
     { label: "Active", value: "Active" },
@@ -27,73 +59,56 @@ const statuses = [
     { label: "Disabled", value: "Disabled" },
 ];
 
-// Date and time handling
-const currentTime = ref("");
-let timeInterval;
+// Account list state
+const accounts = ref([]);
+const loading = ref(false);
 
-// Lifecycle hooks
-onMounted(() => {
-    timeInterval = setInterval(() => {
-        currentTime.value = new Date().toLocaleTimeString();
-    }, 1000);
-});
+// Fetch all users on mount
+async function loadAccounts() {
+  loading.value = true;
+  try {
+    const { data } = await getUsers();
 
-onBeforeUnmount(() => {
-    clearInterval(timeInterval);
-});
+    accounts.value = data
+      .filter(acc => {
+        const extras = Array.isArray(acc.roles) ? acc.roles : [];
+        const all = [acc.role, ...extras].filter(Boolean); // primary + extras
+        return all.some(r => ALLOWED_ROLES.includes(r));
+      })
+      .map(acc => ({
+        ...acc,
+        // keep additional roles only in a dedicated field for the UI
+        extraRoles: Array.isArray(acc.roles) ? acc.roles : [],
+        // primary role comes from acc.role (single string)
+        role: roles.find(r => r.value === acc.role) || roles[0],
+        status: statuses.find(s => s.value === acc.status) || statuses[0],
+      }));
+  } catch (err) {
+    toast.add({ severity: "error", summary: "Error", detail: "Failed to fetch users", life: 3000 });
+  }
+  loading.value = false;
+}
+
+
+
+
+
+
+// Dialog states, form state, etc (your original logic retained)
 const isEditDialogVisible = ref(false);
 const isEditing = ref(false);
 const accountForm = ref({});
-const isDetailsDialogVisible = ref(false); // Account details dialog visibility
-
-// State variables
+const isDetailsDialogVisible = ref(false);
+const isAddDialogVisible = ref(false);
 const isDeleteDialogVisible = ref(false);
 const accountToDelete = ref(null);
-
-const currentPassword = ref("");
-
 const selectedAccount = ref(null);
-
 const isResetPasswordDialogVisible = ref(false);
+const currentPassword = ref("");
 const newPassword = ref("");
-
-// Automatically update the time every second
-onMounted(() => {
-    updateCurrentDate();
-    const interval = setInterval(updateCurrentDate, 1000);
-
-    // Cleanup interval on unmount
-    onUnmounted(() => clearInterval(interval));
-});
-
-const calendarEvents = ref([]); // List of events to display on the calendar
-
-// Update current date every second
-function updateCurrentDate() {
-    const now = new Date();
-    currentTime.value = now.toLocaleString("en-US", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: true,
-    });
-}
-
-// Dummy logs data
-const logs = ref([
-    { date: new Date(2024, 0, 1), action: "login", timestamp: "09:00:00" },
-    { date: new Date(2024, 0, 1), action: "logout", timestamp: "17:30:00" },
-    { date: new Date(2024, 0, 2), action: "login", timestamp: "08:45:00" },
-    { date: new Date(2024, 0, 2), action: "logout", timestamp: "16:15:00" },
-    { date: new Date(2024, 0, 5), action: "login", timestamp: "10:00:00" },
-    { date: new Date(2024, 0, 5), action: "logout", timestamp: "18:00:00" },
-]);
-
-// Event filter
+const passwordInputRef = ref(null);
+const isCalendarDialogVisible = ref(false);
+const userLogs = ref([]);
 const selectedFilter = ref(null);
 const eventTypes = ref([
     { label: "All", value: null },
@@ -101,349 +116,281 @@ const eventTypes = ref([
     { label: "Logout", value: "logout" },
 ]);
 
-// Formatting functions
-const formatDate = (date) => {
-    return date.toLocaleDateString("en-US", {
-        weekday: "short",
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-    });
-};
-
-const closeResetPasswordDialog = () => {
-    isResetPasswordDialogVisible.value = false;
-    currentPassword.value = ""; // Reset current password
-    newPassword.value = ""; // Reset new password
-};
-
-const formatTime = (timeString) => {
-    const [hours, minutes] = timeString.split(":");
-    return new Date(0, 0, 0, hours, minutes).toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-    });
-};
-
-// Filtered logs
-const filteredLogs = computed(() => {
-    return logs.value
-        .filter(
-            (log) =>
-                !selectedFilter.value?.value ||
-                log.action === selectedFilter.value.value
-        )
-        .sort((a, b) => b.date - a.date);
-});
-
-// Group logs by date
-const groupedLogs = computed(() => {
-    return filteredLogs.value.reduce((groups, log) => {
-        const dateKey = log.date.toDateString();
-        if (!groups[dateKey]) {
-            groups[dateKey] = {
-                date: log.date,
-                entries: [],
-            };
-        }
-        groups[dateKey].entries.push(log);
-        return groups;
-    }, {});
-});
-
-// Map mock events to PrimeVue's calendar events format
-onMounted(() => {
-    updateCurrentDate();
-    setInterval(updateCurrentDate, 1000);
-
-    calendarEvents.value = mockEvents.map((event) => ({
-        date: new Date(event.date),
-        activities: event.activities,
-    }));
-});
-
-// Handle date selection
-
-// Open the reset password dialog// In script setup
-const passwordInputRef = ref(null);
-
-function openResetPasswordDialog(account) {
-    selectedAccount.value = account;
-    isResetPasswordDialogVisible.value = true;
-
-    nextTick(() => {
-        // Add a 50ms delay to ensure PrimeVue's dialog finishes rendering
-        setTimeout(() => {
-            if (passwordInputRef.value?.$el) {
-                passwordInputRef.value.$el.focus();
-            }
-        }, 50);
-    });
+// For image uploads
+const previewImageUrl = ref(null);
+function onImageUpload(e) {
+    const file = e.target.files[0];
+    if (file) {
+        previewImageUrl.value = URL.createObjectURL(file);
+        accountForm.value.image = file;
+    }
 }
-// Close the reset password dialog
 
-// Confirm Reset Password
-const confirmResetPassword = async () => {
-    if (!currentPassword.value || !newPassword.value) return;
-
+// Add user
+async function addAccount() {
+       validateNameInput();
+    validateEmailInput();
+      if (emailError.value) return;
     try {
-        // First verify current password
-        const isValid = await currentPassword(
-            selectedAccount.value.id,
-            currentPassword.value
-        );
+        // Only send fields needed for initial user creation
+        let payload = {
+    name: accountForm.value.name,
+    email: accountForm.value.email,
+    password: accountForm.value.password,
+    role: accountForm.value.role.value,  // This is now the real new role name!
+    status: "Active"
+};
+        // POST to backend (user created, returns ID)
+        const { data } = await addUser(payload);
 
-        if (isValid) {
-            // Proceed with password reset
-            await resetPassword(selectedAccount.value.id, newPassword.value);
-            closeResetPasswordDialog();
-            toast.add({
-                severity: "success",
-                summary: "Success",
-                detail: "Password updated",
-                life: 3000,
-            });
-        } else {
-            toast.add({
-                severity: "error",
-                summary: "Error",
-                detail: "Current password is incorrect",
-                life: 3000,
-            });
+        // Only now, upload the image if provided (like room control)
+        if (accountForm.value.image && data.id) {
+            let formData = new FormData();
+            formData.append("image", accountForm.value.image);
+            await uploadUserImage(data.id, formData);
         }
-    } catch (error) {
+
+        toast.add({ severity: "success", summary: "Success", detail: "Account Created", life: 3000 });
+        isAddDialogVisible.value = false;
+        await loadAccounts();
+    } catch (err) {
         toast.add({
             severity: "error",
             summary: "Error",
-            detail: "Password update failed",
-            life: 3000,
+            detail: err.response?.data?.message || "Failed to add user",
+            life: 3000
         });
     }
-};
-
-// State variables
-
-const toast = useToast();
-
-// Function to open the details dialog
-function openDetailsDialog(account) {
-    selectedAccount.value = account; // Set the selected account
-    isDetailsDialogVisible.value = true; // Open the dialog
 }
 
-// Open Calendar
-function openCalendar() {
-    isCalendarDialogVisible.value = true;
+
+function openResetPasswordDialog(account) {
+  selectedAccount.value = account;
+  isResetPasswordDialogVisible.value = true;
+  newPassword.value = "";
+  nextTick(() => setTimeout(() => passwordInputRef.value?.$el?.focus(), 50));
 }
 
-// Generate calendar days
+async function confirmResetPassword() {
+  if (!newPassword.value) {
+    toast.add({ severity: "warn", summary: "Missing", detail: "Enter new password", life: 3000 });
+    return;
+  }
+  try {
+    await adminResetUserPassword(selectedAccount.value.id, { new_password: newPassword.value });
+    toast.add({ severity: "success", summary: "Success", detail: "Password reset.", life: 3000 });
+    isResetPasswordDialogVisible.value = false;
+  } catch (err) {
+    toast.add({ severity: "error", summary: "Error", detail: err.response?.data?.message || "Failed", life: 3000 });
+  }
+}
 
-// Show popover
 
-// Open Delete Dialog
+// Edit user
+function openEditDialog(account) {
+  const primaryValue = account.role?.value || account.role;
+
+  accountForm.value = {
+    ...account,
+    role: roles.find((r) => r.value === primaryValue) || roles[0], // PRIMARY (editable)
+    status:
+      statuses.find((s) => s.value === (account.status?.value || account.status)) ||
+      statuses[0],
+    // Additional roles (array) - exclude current primary
+    extraRoles: (Array.isArray(account.roles) ? account.roles : []).filter(
+      (r) => r !== primaryValue
+    ),
+  };
+
+  isEditing.value = true;
+  isEditDialogVisible.value = true;
+
+  previewImageUrl.value = account.image_url
+    ? `http://localhost:5000/uploads/users/${account.image_url}`
+    : null;
+}
+
+watch(
+  () => accountForm.value.role,
+  (newRoleObj) => {
+    if (!newRoleObj || !accountForm.value?.extraRoles) return;
+    const newPrimary = newRoleObj.value;
+    accountForm.value.extraRoles = accountForm.value.extraRoles.filter(
+      (r) => r !== newPrimary
+    );
+  }
+);
+
+async function saveAccount() {
+  if (!isEditing.value) return;
+  validateEditNameInput();
+  validateEditEmailInput();
+  if (editEmailError.value) return;
+
+  try {
+    const editedId = accountForm.value.id;
+
+    const payload = {
+      name: accountForm.value.name,
+      email: accountForm.value.email,
+      status: accountForm.value.status.value,
+      role: accountForm.value.role.value,          // PRIMARY role (now editable)
+      roles: accountForm.value.extraRoles || [],   // ADDITIONAL roles (array)
+    };
+
+    await updateUser(editedId, payload);
+
+    if (accountForm.value.image) {
+      const formData = new FormData();
+      formData.append("image", accountForm.value.image);
+      await uploadUserImage(editedId, formData);
+    }
+
+    const loggedId = Number(localStorage.getItem("userId") || 0);
+    if (loggedId && Number(editedId) === loggedId) {
+      try {
+        const { data: res } = await getCurrentUser(loggedId);
+        setUser(res.user);
+      } catch {}
+    }
+
+    toast.add({
+      severity: "success",
+      summary: "Success",
+      detail: "Account Updated",
+      life: 3000,
+    });
+    isEditDialogVisible.value = false;
+    await loadAccounts();
+  } catch (err) {
+    toast.add({
+      severity: "error",
+      summary: "Error",
+      detail: err.response?.data?.message || "Failed to update user",
+      life: 3000,
+    });
+  }
+}
+
+
+// Delete user
 function openDeleteDialog(account) {
     accountToDelete.value = account;
     isDeleteDialogVisible.value = true;
 }
-
-// Close Delete Dialog
-function closeDeleteDialog() {
+async function confirmDeleteAccount() {
+    try {
+        await deleteUser(accountToDelete.value.id);
+        toast.add({ severity: "success", summary: "Success", detail: "Account Deleted", life: 3000 });
+        await loadAccounts();
+    } catch (err) {
+        toast.add({ severity: "error", summary: "Error", detail: "Failed to delete user", life: 3000 });
+    }
     isDeleteDialogVisible.value = false;
     accountToDelete.value = null;
 }
 
-// Confirm Delete Account
-function confirmDeleteAccount() {
-    if (accountToDelete.value) {
-        // Perform deletion logic
-        console.log(`Deleted account: ${accountToDelete.value.name}`);
-
-        // Simulate removing from the list
-        accounts.value = accounts.value.filter(
-            (acc) => acc.id !== accountToDelete.value.id
-        );
-
-        // Show success toast
-        toast.add({
-            severity: "success",
-            summary: "Account Deleted",
-            detail: `Account "${accountToDelete.value.name}" has been deleted successfully.`,
-            life: 3000,
-        });
-    }
-
-    closeDeleteDialog();
-}
-
-// Utility function to generate a random password
-function generatePassword() {
-    const length = 12;
-    const chars =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()";
-    let password = "";
-    for (let i = 0; i < length; i++) {
-        password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    accountForm.value.password = password;
-}
-
-const isAddDialogVisible = ref(false);
-
-// Close Add Dialog
-function closeAddDialog() {
-    isAddDialogVisible.value = false;
-}
-
-// Close Add Dialog
-function closeEditDialog() {
-    isEditDialogVisible.value = false;
-}
-
-function addAccount() {
-    accounts.value.push({
-        ...accountForm.value,
-        id: accounts.value.length + 1, // Generate a new ID
-    });
-
-    // Show success toast
-    toast.add({
-        severity: "success",
-        summary: "Account Created",
-        detail: `Account "${accountForm.value.name}" has been created successfully.`,
-        life: 3000,
-    });
-
-    closeAddDialog();
-}
-
-// Add New User Handler
+// Add new user
 function openAddUserDialog() {
     accountForm.value = {
         name: "",
         email: "",
         password: "",
-        role: roles[0], // Default role
-        status: statuses[0], // Default status
+        role: roles[0],
     };
     isAddDialogVisible.value = true;
+    previewImageUrl.value = null;
 }
 
-// Edit User Handler
-function openEditDialog(account) {
-    accountForm.value = {
-        ...account,
-        role: roles.find((r) => r.value === account.role.value) || roles[0],
-        status:
-            statuses.find((s) => s.value === account.status.value) ||
-            statuses[0],
-    };
-    isEditing.value = true;
-    isEditDialogVisible.value = true;
+
+
+// Details dialog
+function openDetailsDialog(account) {
+    selectedAccount.value = account;
+    isDetailsDialogVisible.value = true;
+    // Load user logs if API exists
+    userLogs.value = [];
+    getUserLogs(account.id)
+        .then(({ data }) => userLogs.value = data)
+        .catch(() => userLogs.value = []);
+}
+function openCalendar() { isCalendarDialogVisible.value = true; }
+
+// Password generator
+function generatePassword() {
+    const length = 12;
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()";
+    let password = "";
+    for (let i = 0; i < length; i++) password += chars.charAt(Math.floor(Math.random() * chars.length));
+    accountForm.value.password = password;
 }
 
-// Save User Handler
-function saveAccount() {
-    if (isEditing.value) {
-        const index = accounts.value.findIndex(
-            (account) => account.id === accountForm.value.id
-        );
-
-        if (index !== -1) {
-            // Create a NEW object to trigger reactivity
-            accounts.value[index] = {
-                ...accountForm.value,
-                role: { ...accountForm.value.role },
-                status: { ...accountForm.value.status },
-            };
-
-            // Add log entry directly to the updated account
-            accounts.value[index].logs.push({
-                action: "Account Edited",
-                timestamp: new Date().toLocaleString(),
-            });
-        }
-
-        toast.add({
-            severity: "success",
-            summary: "Account Updated",
-            detail: `Account "${accountForm.value.name}" updated`,
-            life: 3000,
-        });
-    } else {
-        // Add new user logic
-        accounts.value.push({
-            ...accountForm.value,
-            id: accounts.value.length + 1, // Generate a new ID
-            role: { ...accountForm.value.role }, // Ensure role is an object
-            status: { ...accountForm.value.status }, // Ensure status is an object
-        });
-
-        // Show success toast
-        toast.add({
-            severity: "success",
-            summary: "Account Created",
-            detail: `Account "${accountForm.value.name}" has been created successfully.`,
-            life: 3000,
-        });
-    }
-    isEditDialogVisible.value = false; // Close the dialog
-}
-
-// Utility function to get status severity
+// Status tag color
 function getAccountStatusSeverity(statusValue) {
     switch (statusValue) {
-        case "Active":
-            return "success"; // Green
-        case "Locked":
-            return "warn"; // Yellow
-        case "Disabled":
-            return "danger"; // Red
-        default:
-            return "info"; // Blue or default
+        case "Active": return "success";
+        case "Locked": return "warn";
+        case "Disabled": return "danger";
+        default: return "info";
     }
 }
 
-// Dialog visibility
-const isCalendarDialogVisible = ref(false);
 
-// Mock activity data
-const mockEvents = [
-    {
-        date: "2023-12-05",
-        activities: [
-            { type: "Login", detail: "Logged in at 08:30 AM" },
-            { type: "Logout", detail: "Logged out at 05:00 PM" },
-        ],
-    },
-    {
-        date: "2023-12-12",
-        activities: [{ type: "Meeting", detail: "Team meeting at 03:00 PM" }],
-    },
-    {
-        date: "2023-12-15",
-        activities: [{ type: "Task", detail: "Project deadline" }],
-    },
-];
-
-// Update the current time
-function updateCurrentTime() {
-    const now = new Date();
-    currentTime.value = now.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-    });
+function isValidEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+function validateEmailInput() {
+    if (!accountForm.value.email) {
+        emailError.value = "Email is required.";
+    } else if (!isValidEmail(accountForm.value.email)) {
+        emailError.value = "Please enter a valid email address.";
+    } else {
+        emailError.value = "";
+    }
 }
 
-// Navigation
 
-// Initialize
-onMounted(() => {
-    updateCurrentTime();
-    setInterval(updateCurrentTime, 1000);
+function validateEditEmailInput() {
+    if (!accountForm.value.email) {
+        editEmailError.value = "Email is required.";
+    } else if (!isValidEmail(accountForm.value.email)) {
+        editEmailError.value = "Please enter a valid email address.";
+    } else {
+        editEmailError.value = "";
+    }
+}
+
+
+// Log filtering (if using logs API, adapt for actual log shape)
+const filteredLogs = computed(() => {
+    return userLogs.value
+        .filter((log) =>
+            !selectedFilter.value?.value || log.action === selectedFilter.value.value
+        )
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 });
-</script>
+const groupedLogs = computed(() => {
+    return filteredLogs.value.reduce((groups, log) => {
+        const dateKey = new Date(log.timestamp).toDateString();
+        if (!groups[dateKey]) groups[dateKey] = { date: new Date(log.timestamp), entries: [] };
+        groups[dateKey].entries.push(log);
+        return groups;
+    }, {});
+});
 
+// Date formatting
+const formatDate = (date) => new Date(date).toLocaleDateString("en-US", { weekday: "short", year: "numeric", month: "short", day: "numeric" });
+const formatTime = (timestamp) => new Date(timestamp).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+
+// Dialog closes
+function closeAddDialog() { isAddDialogVisible.value = false; }
+function closeEditDialog() { isEditDialogVisible.value = false; }
+function closeResetPasswordDialog() { isResetPasswordDialogVisible.value = false; }
+function closeDeleteDialog() { isDeleteDialogVisible.value = false; accountToDelete.value = null; }
+
+// On mount, fetch accounts
+onMounted(loadAccounts);
+</script>
 <template>
     <div class="card">
         <div class="font-semibold text-xl mb-4">Accounts Management</div>
@@ -469,12 +416,11 @@ onMounted(() => {
                     <div
                         class="absolute top-4 right-4 w-24 h-24 bg-white rounded-full border border-slate-200 flex items-center justify-center"
                     >
-                        <img
-                            v-if="account.image"
-                            :src="account.image"
-                            alt="Profile Picture"
-                            class="w-full h-full object-cover rounded-full"
-                        />
+                      <img v-if="account.image_url"
+     :src="`http://localhost:5000/uploads/users/${account.image_url}`"
+     alt="Profile Picture"
+     class="w-full h-full object-cover rounded-full"
+/>
                         <i v-else class="pi pi-user text-4xl"></i>
                     </div>
 
@@ -531,135 +477,125 @@ onMounted(() => {
 
     <!-- Reset Password Dialog -->
     <Dialog
-        v-model:visible="isResetPasswordDialogVisible"
-        @hide="closeResetPasswordDialog"
-        header="Reset Password"
-        :dismissable-mask="true"
-        :modal="true"
-        :closable="true"
-        :style="{ width: '30vw' }"
-    >
-        <div v-if="selectedAccount">
-            <p class="text-sm mb-4">
-                You are resetting the password for
-                <strong>{{ selectedAccount.name }}</strong
-                >.
-            </p>
-
-            <!-- Current Password Input -->
-            <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">
-                    Current Password
-                </label>
-                <InputText
-                    v-model="currentPassword"
-                    type="password"
-                    placeholder="Enter current password"
-                    ref="passwordInputRef"
-                    class="w-full"
-                    @keyup.enter="confirmResetPassword"
-                />
-            </div>
-
-            <!-- New Password Input -->
-            <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">
-                    New Password
-                </label>
-                <InputText
-                    v-model="newPassword"
-                    type="password"
-                    placeholder="Enter new password"
-                    class="w-full"
-                    @keyup.enter="confirmResetPassword"
-                />
-            </div>
-
-            <div class="flex justify-end gap-2">
-                <Button
-                    label="Cancel"
-                    icon="pi pi-times"
-                    class="p-button-secondary"
-                    @click="closeResetPasswordDialog"
-                    :autoFocus="false"
-                />
-                <Button
-                    label="Confirm Reset"
-                    icon="pi pi-key"
-                    class="p-button-warning"
-                    :disabled="!currentPassword || !newPassword"
-                    @click="confirmResetPassword"
-                />
-            </div>
+    v-model:visible="isResetPasswordDialogVisible"
+    @hide="closeResetPasswordDialog"
+    header="Reset Password"
+    :dismissable-mask="true"
+    :modal="true"
+    :closable="true"
+    :style="{ width: '30vw' }"
+>
+    <div v-if="selectedAccount">
+        <p class="text-sm mb-4">
+            You are resetting the password for
+            <strong>{{ selectedAccount.name }}</strong>.
+        </p>
+        <!-- New Password Only -->
+        <div class="mb-4">
+            <label class="block text-sm font-medium mb-2">
+                New Password
+            </label>
+            <InputText
+                v-model="newPassword"
+                type="password"
+                placeholder="Enter new password"
+                class="w-full"
+                ref="passwordInputRef"
+                @keyup.enter="confirmResetPassword"
+            />
         </div>
-    </Dialog>
+        <div class="flex justify-end gap-2">
+            <Button
+                label="Cancel"
+                icon="pi pi-times"
+                class="p-button-secondary"
+                @click="closeResetPasswordDialog"
+                :autoFocus="false"
+            />
+            <Button
+                label="Confirm Reset"
+                icon="pi pi-key"
+                class="p-button-warning"
+                :disabled="!newPassword"
+                @click="confirmResetPassword"
+            />
+        </div>
+    </div>
+</Dialog>
 
     <Dialog
-        v-model:visible="isCalendarDialogVisible"
-        header="Log History"
-        :modal="true"
-        :closable="true"
-        :style="{ width: '40vw', height: '80vh' }"
-    >
-        <div class="flex flex-col h-full">
-            <!-- Filter Section -->
-            <div class="flex justify-between items-center mb-4">
-                <Select
-                    v-model="selectedFilter"
-                    :options="eventTypes"
-                    optionLabel="label"
-                    placeholder="Filter by Log Type"
-                    class="w-48"
-                />
-            </div>
+    v-model:visible="isCalendarDialogVisible"
+    header="Log History"
+    :dismissable-mask="true"
+    :modal="true"
+    :closable="true"
+    :style="{ width: '40vw', height: '80vh' }"
+>
+    <div class="flex flex-col h-full">
+        <!-- Filter Section -->
+        <div class="flex justify-between items-center mb-4">
+            <Select
+                v-model="selectedFilter"
+                :options="eventTypes"
+                optionLabel="label"
+                placeholder="Filter by Log Type"
+                class="w-48"
+            />
+        </div>
 
-            <!-- Logs List -->
-            <div class="flex-1 overflow-auto">
+        <!-- Logs List -->
+        <div class="flex-1 overflow-auto">
+            <div
+                v-for="(group, date) in groupedLogs"
+                :key="date"
+                class="mb-4"
+            >
+                <!-- Group Date -->
                 <div
-                    v-for="(group, date) in groupedLogs"
-                    :key="date"
-                    class="mb-4"
+                  class="font-semibold bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 p-2 rounded-t transition-all"
                 >
-                    <div class="font-semibold bg-gray-100 p-2 rounded-t">
-                        {{ formatDate(group.date) }}
-                    </div>
-                    <div class="border-x border-b rounded-b p-2">
-                        <div
-                            v-for="(log, index) in group.entries"
-                            :key="index"
-                            class="flex items-center justify-between py-2 border-b last:border-b-0"
-                        >
-                            <div class="flex items-center gap-2">
-                                <span
-                                    class="w-20 text-sm font-medium"
-                                    :class="{
-                                        'text-green-600':
-                                            log.action === 'login',
-                                        'text-red-600': log.action === 'logout',
-                                    }"
-                                >
-                                    {{ log.action.toUpperCase() }}
-                                </span>
-                                <span class="text-sm">
-                                    {{ formatTime(log.timestamp) }}
-                                </span>
-                            </div>
-                            <span class="text-xs">
-                                {{ log.date.toLocaleTimeString() }}
+                    {{ formatDate(group.date) }}
+                </div>
+                <div class="border-x border-b border-slate-200 dark:border-slate-700 rounded-b p-2 bg-white dark:bg-gray-900 transition-all">
+                    <div
+                        v-for="(log, index) in group.entries"
+                        :key="index"
+                        class="flex items-center justify-between py-2 border-b last:border-b-0 border-slate-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                    >
+                        <div class="flex items-center gap-2">
+                            <span
+                              class="w-36 text-xs font-bold tracking-wide px-2 rounded transition-colors"
+                              :class="{
+                                'text-green-600 dark:text-green-400': log.action === 'login',
+                                'text-red-600 dark:text-red-400': log.action === 'logout',
+                                'text-blue-700 dark:text-blue-400': log.action === 'admin_reset_password',
+                                'text-yellow-700 dark:text-yellow-400': log.action === 'reset_password'
+                              }"
+                            >
+                              <template v-if="log.action === 'admin_reset_password'">ADMIN RESET PASSWORD</template>
+                              <template v-else-if="log.action === 'reset_password'">RESET PASSWORD</template>
+                              <template v-else>{{ log.action.toUpperCase() }}</template>
+                            </span>
+                            <span class="text-sm truncate min-w-20 ml-2 text-gray-800 dark:text-gray-200 transition-colors">
+                                {{ formatTime(log.timestamp) }}
                             </span>
                         </div>
+                        <span class="text-xs text-gray-600 dark:text-gray-400">
+                            {{ new Date(log.timestamp).toLocaleTimeString() }}
+                        </span>
                     </div>
                 </div>
+            </div>
 
-                <div
-                    v-if="Object.keys(groupedLogs).length === 0"
-                    class="text-center py-4"
-                >
-                    No logs found for selected filter
-                </div>
+            <div
+                v-if="Object.keys(groupedLogs).length === 0"
+                class="text-center py-4 text-gray-500 dark:text-gray-400"
+            >
+                No logs found for selected filter
             </div>
         </div>
-    </Dialog>
+    </div>
+</Dialog>
 
     <!-- Account Details Dialog -->
     <Dialog
@@ -718,40 +654,55 @@ onMounted(() => {
             <div class="mb-4">
                 <label class="block text-sm font-medium mb-2">Name</label>
                 <InputText
-                    v-model="accountForm.name"
-                    placeholder="Enter name"
-                    class="w-full"
-                />
+        v-model="accountForm.name"
+        placeholder="Enter name"
+        class="w-full"
+        @blur="validateNameInput"
+        @input="validateNameInput"
+    />
+    <span v-if="nameError" class="text-xs text-red-500 mt-1 block">{{ nameError }}</span>
             </div>
 
             <!-- Email -->
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Email</label>
-                <InputText
-                    v-model="accountForm.email"
-                    class="w-full"
-                    placeholder="Enter Email"
-                />
-            </div>
+    <label class="block text-sm font-medium mb-2">Email</label>
+    <InputText
+        v-model="accountForm.email"
+        class="w-full"
+        placeholder="Enter Email"
+        type="email"
+        @blur="validateEmailInput"
+        @input="validateEmailInput"
+    />
+    <span v-if="emailError" class="text-xs text-red-500 mt-1 block">{{ emailError }}</span>
+</div>
+
 
             <!-- Password -->
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Password</label>
-                <div class="flex gap-2">
-                    <InputText
-                        v-model="accountForm.password"
-                        type="password"
-                        placeholder="Enter or generate password"
-                        class="w-full"
-                    />
-                    <Button
-                        label="Generate"
-                        icon="pi pi-refresh"
-                        class="p-button-secondary p-2"
-                        @click="generatePassword"
-                    />
-                </div>
-            </div>
+    <label class="block text-sm font-medium mb-2">Password</label>
+    <div class="flex gap-2 items-center">
+        <InputText
+            v-model="accountForm.password"
+            :type="showPassword ? 'text' : 'password'"
+            placeholder="Enter or generate password"
+            class="w-full"
+        />
+        <Button
+            :icon="showPassword ? 'pi pi-eye-slash' : 'pi pi-eye'"
+            class="p-button-secondary p-2"
+            @click="showPassword = !showPassword"
+            type="button"
+            :aria-label="showPassword ? 'Hide password' : 'Show password'"
+        />
+        <Button
+            label="Generate"
+            icon="pi pi-refresh"
+            class="p-button-secondary p-2"
+            @click="generatePassword"
+        />
+    </div>
+</div>
 
             <!-- Image Upload -->
             <div class="mb-4">
@@ -766,11 +717,12 @@ onMounted(() => {
                 />
                 <div class="mt-2">
                     <img
-                        v-if="accountForm.image"
-                        :src="accountForm.image"
-                        alt="Preview"
-                        class="w-16 h-16 rounded-full object-cover"
-                    />
+    v-if="previewImageUrl"
+    :src="previewImageUrl"
+    alt="Preview"
+    class="w-16 h-16 rounded-full object-cover"
+/>
+
                 </div>
             </div>
 
@@ -786,16 +738,6 @@ onMounted(() => {
                 />
             </div>
 
-            <!-- Status -->
-            <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Status</label>
-                <Select
-                    v-model="accountForm.status"
-                    :options="statuses"
-                    optionLabel="label"
-                    class="w-full"
-                />
-            </div>
 
             <!-- Dialog Actions -->
             <div class="flex justify-end gap-2">
@@ -815,67 +757,129 @@ onMounted(() => {
         </div>
     </Dialog>
 
+
     <!-- Edit Account Dialog -->
-    <Dialog
-        :dismissable-mask="true"
-        v-model:visible="isEditDialogVisible"
-        header="Edit Account"
-        :modal="true"
-        :closable="true"
-        :style="{ width: '30vw' }"
-    >
-        <div>
-            <!-- Name -->
-            <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Name</label>
-                <InputText v-model="accountForm.name" class="w-full" />
-            </div>
+<Dialog
+    :dismissable-mask="true"
+    v-model:visible="isEditDialogVisible"
+    header="Edit Account"
+    :modal="true"
+    :closable="true"
+    :style="{ width: '30vw' }"
+>
+    <div>
+        <!-- Name -->
+        <div class="mb-4">
+            <label class="block text-sm font-medium mb-2">Name</label>
+               <InputText
+        v-model="accountForm.name"
+        placeholder="Enter name"
+        class="w-full"
+        @blur="validateEditNameInput"
+        @input="validateEditNameInput"
+    />
+    <span v-if="editNameError" class="text-xs text-red-500 mt-1 block">{{ editNameError }}</span>
+        </div>
 
-            <!-- Email -->
-            <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Email</label>
-                <InputText v-model="accountForm.email" class="w-full" />
-            </div>
+        <!-- Email -->
+       <div class="mb-4">
+    <label class="block text-sm font-medium mb-2">Email</label>
+    <InputText
+        v-model="accountForm.email"
+        class="w-full"
+        placeholder="Enter Email"
+        type="email"
+        @blur="validateEditEmailInput"
+        @input="validateEditEmailInput"
+    />
+    <span v-if="editEmailError" class="text-xs text-red-500 mt-1 block">{{ editEmailError }}</span>
+</div>
 
-            <!-- Role -->
-            <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Role</label>
-                <Select
-                    v-model="accountForm.role"
-                    :options="roles"
-                    optionLabel="label"
-                    class="w-full"
+
+       <!-- Primary Role (read-only) -->
+<div class="mb-4">
+  <label class="block text-sm font-medium mb-2">Primary Role</label>
+  <Select
+    v-model="accountForm.role"
+    :options="roles"
+    optionLabel="label"
+    class="w-full"
+    placeholder="Select primary role"
+  />
+</div>
+
+<!-- Additional Roles -->
+<div class="mb-4">
+  <label class="block text-sm font-medium mb-2">Additional Roles</label>
+  <MultiSelect
+    v-model="accountForm.extraRoles"
+    :options="roles.filter(r => r.value !== accountForm.role.value)"
+    optionLabel="label"
+    optionValue="value"
+    placeholder="Assign additional roles"
+    display="chip"
+    class="w-full"
+    :maxSelectedLabels="4"
+  />
+</div>
+
+
+         <!-- Image Upload -->
+        <div class="mb-4">
+            <label class="block text-sm font-medium mb-2">Profile Picture</label>
+            <input
+                type="file"
+                accept="image/*"
+                @change="onImageUpload"
+                class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+            />
+
+            <div class="mt-2">
+                <img
+                    v-if="previewImageUrl"
+                    :src="previewImageUrl"
+                    alt="Preview"
+                    class="w-16 h-16 rounded-full object-cover"
                 />
-            </div>
-
-            <!-- Status -->
-            <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Status</label>
-                <Select
-                    v-model="accountForm.status"
-                    :options="statuses"
-                    optionLabel="label"
-                    class="w-full"
-                />
-            </div>
-
-            <!-- Dialog Actions -->
-            <div class="flex justify-end gap-2">
-                <Button
-                    label="Cancel"
-                    icon="pi pi-times"
-                    class="p-button-secondary"
-                    @click="closeEditDialog"
-                />
-                <Button
-                    label="Save"
-                    icon="pi pi-save"
-                    class="p-button-primary"
-                    @click="saveAccount"
+                <img
+                    v-else-if="accountForm.image_url"
+                    :src="`http://localhost:5000/uploads/users/${accountForm.image_url}`"
+                    alt="Profile"
+                    class="w-16 h-16 rounded-full object-cover"
                 />
             </div>
         </div>
-    </Dialog>
+
+
+        <!-- Status -->
+        <div class="mb-4">
+            <label class="block text-sm font-medium mb-2">Status</label>
+            <Select
+                v-model="accountForm.status"
+                :options="statuses"
+                optionLabel="label"
+                class="w-full"
+            />
+        </div>
+
+        <!-- Dialog Actions -->
+        <div class="flex justify-end gap-2">
+            <Button
+                label="Cancel"
+                icon="pi pi-times"
+                class="p-button-secondary"
+                @click="closeEditDialog"
+            />
+            <Button
+                label="Save"
+                icon="pi pi-save"
+                class="p-button-primary"
+                @click="saveAccount"
+            />
+        </div>
+    </div>
+</Dialog>
+
 
     <!-- Delete Confirmation Dialog -->
     <Dialog

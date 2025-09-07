@@ -1,148 +1,122 @@
 <script setup>
 import { useToast } from "primevue/usetoast";
 import { computed, onBeforeMount, ref } from "vue";
+import { fetchCancelledBookings, deleteCancelledBooking } from "@/api/auth";
 
-const mockCanceledBookings = [
-    {
-        BookingCode: "RES-1003",
-        guestName: "Alice Johnson",
-        roomNumber: "102",
-        roomType: "Single Size Bed",
-        selectedHours: 6,
-        selectedRate: 199.99,
-        checkInDate: "2023-12-20T12:00:00",
-        checkOutDate: "2023-12-22T10:00:00",
-        cancellationDate: "2023-12-19T14:30:00", // Added cancellation date
-        cancellationReason: "Change of plans", // Added cancellation reason
-        paymentStatus: {
-            ratePaid: false,
-            depositAmount: 50.0,
-            depositStatus: "Refunded",
-            balanceDue: 0.0,
-        },
-        ExtraAmenities: ["Towels"],
-        contactInfo: "099294293",
-        loyaltyStatus: "Bronze Member",
-        notes: "Guest requested a refund.",
-    },
-    {
-        BookingCode: "RES-1004",
-        guestName: "Bob Brown",
-        roomNumber: "204",
-        roomType: "Double Size Bed",
-        selectedHours: 12,
-        selectedRate: 299.99,
-        checkInDate: "2023-12-18T15:00:00",
-        checkOutDate: "2023-12-20T11:00:00",
-        cancellationDate: "2023-12-17T09:45:00", // Added cancellation date
-        cancellationReason: "Flight cancellation", // Added cancellation reason
-        paymentStatus: {
-            ratePaid: true,
-            depositAmount: 100.0,
-            depositStatus: "Pending Refund",
-            balanceDue: 0.0,
-        },
-        ExtraAmenities: ["Pillows", "Blankets"],
-        contactInfo: "099294293",
-        loyaltyStatus: "Silver Member",
-        notes: "Guest will rebook later.",
-    },
-];
-
-// Add these filter-related variables
+// Filters
 const filters = ref({
     searchQuery: "",
     dateRange: [null, null],
     roomType: null,
 });
 
-// Add computed filtered bookings
+// State
+const canceledBookings = ref([]);
+const loading = ref(false);
+const error = ref(null);
+
+async function loadCancelled() {
+    loading.value = true;
+    error.value = null;
+    try {
+        const res = await fetchCancelledBookings();
+        const items = res.data || [];
+        // Normalize date objects for table rendering
+        canceledBookings.value = items.map((b) => ({
+            ...b,
+            checkInDate: b.check_in_datetime ? new Date(b.check_in_datetime) : null,
+            checkOutDate: b.check_out_datetime ? new Date(b.check_out_datetime) : null,
+            cancellationDate: b.cancellationDate ? new Date(b.cancellationDate) : null,
+        }));
+    } catch (e) {
+        error.value = e?.message || "Failed to load cancelled bookings";
+    } finally {
+        loading.value = false;
+    }
+}
+
+onBeforeMount(loadCancelled);
+
+// Filtering
+
+// Format date/time in 12-hour with am/pm (Asia/Manila)
+function formatCancellation(dt) {
+    if (!dt) return "N/A";
+    const d = dt instanceof Date ? dt : new Date(dt);
+    if (isNaN(d.getTime())) return "N/A";
+    let s = d.toLocaleString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: "Asia/Manila",
+    });
+    // Lowercase meridiem only
+    s = s.replace(/\bAM\b/, "am").replace(/\bPM\b/, "pm");
+    return s;
+}
+
 const filteredBookings = computed(() => {
     return canceledBookings.value.filter((booking) => {
-        // Search filter
+        const q = (filters.value.searchQuery || "").toLowerCase();
         const searchMatches =
-            booking.BookingCode.toLowerCase().includes(
-                filters.value.searchQuery.toLowerCase()
-            ) ||
-            booking.guestName
-                .toLowerCase()
-                .includes(filters.value.searchQuery.toLowerCase());
+            String(booking.BookingCode || "").toLowerCase().includes(q) ||
+            String(booking.guestName || "").toLowerCase().includes(q);
 
-        // Date range filter
-        const dateMatches =
-            !filters.value.dateRange[0] ||
-            (booking.cancellationDate >= new Date(filters.value.dateRange[0]) &&
-                booking.cancellationDate <=
-                    new Date(filters.value.dateRange[1]));
+        const [start, end] = filters.value.dateRange || [];
+        const startDate = start ? new Date(start) : null;
+        const endDate = end ? new Date(end) : null;
+        const cDate = booking.cancellationDate instanceof Date ? booking.cancellationDate : (booking.cancellationDate ? new Date(booking.cancellationDate) : null);
+        const dateMatches = !startDate || (!cDate ? false : (cDate >= startDate && (!endDate || cDate <= endDate)));
 
-        // Room type filter
-        const roomTypeMatches =
-            !filters.value.roomType ||
-            booking.roomType === filters.value.roomType;
+        const roomTypeMatches = !filters.value.roomType || booking.roomType === filters.value.roomType;
 
         return searchMatches && dateMatches && roomTypeMatches;
     });
 });
 
-// Add clear filters function
+// Clear filters
 const clearFilters = () => {
-    filters.value = {
-        searchQuery: "",
-        dateRange: [null, null],
-        roomType: null,
-    };
+    filters.value = { searchQuery: "", dateRange: [null, null], roomType: null };
 };
 
-onBeforeMount(() => {
-    canceledBookings.value = mockCanceledBookings.map((booking) => ({
-        ...booking,
-        checkInDate: new Date(booking.checkInDate),
-        checkOutDate: new Date(booking.checkOutDate),
-        cancellationDate: new Date(booking.cancellationDate),
-    }));
-    console.log("Canceled Bookings Loaded:", canceledBookings.value);
-});
-
-const canceledBookings = ref([]); // Initialize as empty array instead of null
 const toast = useToast();
 const deleteDialogVisible = ref(false);
-
 const selectedBookingToDelete = ref(null);
 
-// Add delete confirmation functions
 const confirmDelete = (booking) => {
     selectedBookingToDelete.value = booking;
     deleteDialogVisible.value = true;
 };
 
-const executeDelete = () => {
-    if (selectedBookingToDelete.value) {
+const executeDelete = async () => {
+    if (!selectedBookingToDelete.value) return;
+    try {
+        await deleteCancelledBooking(selectedBookingToDelete.value.id);
         canceledBookings.value = canceledBookings.value.filter(
-            (b) => b.BookingCode !== selectedBookingToDelete.value.BookingCode
+            (b) => b.id !== selectedBookingToDelete.value.id
         );
+        toast.add({ severity: "success", summary: "Deleted", detail: "Cancelled booking deleted", life: 2500 });
+    } catch (e) {
+        toast.add({ severity: "error", summary: "Error", detail: e?.message || "Failed to delete", life: 3000 });
+    } finally {
         deleteDialogVisible.value = false;
         selectedBookingToDelete.value = null;
     }
-
-    // Show success toast
-    toast.add({
-        severity: "error",
-        summary: "Deleted",
-        detail: "Deleted successfully",
-        life: 3000,
-    });
 };
 
 const cancelDelete = () => {
     deleteDialogVisible.value = false;
     selectedBookingToDelete.value = null;
 };
+
 const op = ref();
 const selectedBooking = ref(null);
-
 const handleClick = (event, bookingData) => {
     selectedBooking.value = bookingData;
-    op.value.toggle(event);
+    op.value?.toggle(event);
 };
 </script>
 
@@ -207,7 +181,7 @@ const handleClick = (event, bookingData) => {
             >
                 <template #body="{ data }">
                     <span class="text-red-500">
-                        {{ data.cancellationDate.toLocaleString() }}
+                        {{ formatCancellation(data.cancellationDate) }}
                     </span>
                 </template>
             </Column>
@@ -249,7 +223,7 @@ const handleClick = (event, bookingData) => {
                     <div class="flex items-center gap-2">
                         <i class="pi pi-phone"></i>
                         <span class="font-semibold">Contact Number:</span>
-                        {{ selectedBooking.contactInfo }}
+                        {{ selectedBooking.contactInfo || "N/A" }}
                     </div>
                     <div class="flex items-center gap-2">
                         <i class="pi pi-home"></i>
