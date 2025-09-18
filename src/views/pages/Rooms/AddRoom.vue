@@ -15,6 +15,133 @@ const canSubmit = computed(() => {
   );
 });
 
+// --- Dynamic floors: add/remove support ---
+const newFloor = ref("");                 // input field for new floor number
+const manageFloorsVisible = ref(false);   // "Manage Floors" dialog visibility
+
+function ordinal(n) {
+  const j = n % 10, k = n % 100;
+  if (j === 1 && k !== 11) return `${n}st Floor`;
+  if (j === 2 && k !== 12) return `${n}nd Floor`;
+  if (j === 3 && k !== 13) return `${n}rd Floor`;
+  return `${n}th Floor`;
+}
+function normalizeFloor(v) {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  if (s === "") return null;
+  const n = Number(s);
+  if (!Number.isFinite(n)) return null;
+  const ni = Math.floor(n);
+  return ni >= 1 ? ni : null;          // valid floors: 1+
+}
+
+const newFloorNumber = computed(() => normalizeFloor(newFloor.value));
+function floorExistsNum(n) {
+  return floorOptions.value.some(o => o.value === n) ||
+         (existingRooms.value || []).some(r => normalizeFloor(r.floor_number) === n);
+}
+
+
+const floorExists = computed(() => {
+  const n = newFloorNumber.value;
+  if (!n) return false;
+  const inOptions = floorOptions.value.some(o => o.value === n);
+  const inRooms = (existingRooms.value || []).some(
+    r => normalizeFloor(r.floor_number) === n
+  );
+  return inOptions || inRooms;
+});
+
+const addFloorDisabled = computed(() => newFloorNumber.value === null);
+
+function ensureFloorOption(n) {
+  if (!Number.isFinite(n) || n < 1) return;
+  if (!floorOptions.value.some(o => o.value === n)) {
+    floorOptions.value.push({ label: ordinal(n), value: n });
+    floorOptions.value.sort((a, b) => a.value - b.value);
+  }
+}
+function addFloor() {
+  const n = newFloorNumber.value;
+
+  if (n === null) {
+    toast.add({
+      severity: "warn",
+      summary: "Invalid floor",
+      detail: "Enter a valid floor (1 or higher).",
+      life: 2000,
+    });
+    return;
+  }
+
+  if (floorExistsNum(n)) {
+    toast.add({
+      severity: "warn",
+      summary: "Duplicate floor",
+      detail: `${ordinal(n)} already exists.`,
+      life: 2200,
+    });
+    return;
+  }
+
+  ensureFloorOption(n);
+  newFloor.value = "";
+  toast.add({
+    severity: "success",
+    summary: "Floor added",
+    detail: `${ordinal(n)} added.`,
+    life: 1500,
+  });
+}
+
+// Floors currently used by rooms (can't remove these)
+const floorsInUse = computed(() => {
+  const set = new Set();
+  (existingRooms.value || []).forEach(r => {
+    const n = normalizeFloor(r.floor_number);
+    if (Number.isFinite(n) && n >= 1) set.add(n);
+  });
+  return set;
+});
+
+function canRemoveFloor(n) {
+  return !floorsInUse.value.has(n);
+}
+function removeFloor(n) {
+  if (!canRemoveFloor(n)) {
+    toast.add({
+      severity: "warn",
+      summary: "Floor in use",
+      detail: `${ordinal(n)} has rooms — move/remove those rooms first.`,
+      life: 2200,
+    });
+    return;
+  }
+
+  // if selected floor equals removed one, clear it
+  const sel = normalizeFloor(newRoom.value.floorNumber?.value ?? newRoom.value.floorNumber);
+  if (sel === n) newRoom.value.floorNumber = null;
+
+  floorOptions.value = floorOptions.value.filter(o => o.value !== n);
+
+  toast.add({ severity: "success", summary: "Floor removed", detail: `${ordinal(n)} removed.`, life: 1400 });
+}
+
+// Ensure floor options include any floors found in existingRooms
+function syncFloorOptionsFromRooms() {
+  const seen = new Set(floorOptions.value.map(o => o.value));
+  (existingRooms.value || []).forEach(r => {
+    const n = normalizeFloor(r.floor_number);
+    if (n && !seen.has(n)) {
+      floorOptions.value.push({ label: ordinal(n), value: n });
+      seen.add(n);
+    }
+  });
+  floorOptions.value.sort((a, b) => a.value - b.value);
+}
+
+
 
 let lastPreviewUrl = null;
 
@@ -80,8 +207,13 @@ const showExistingDialog = ref(false);
 // pick an existing room -> fill into the form
 function useExistingRoom(room) {
   newRoom.value.roomName = String(room.room_number);
+
+  // ensure option exists even if it was previously removed
+  const n = Number(room.floor_number);
+  ensureFloorOption(n);
+
   // match the correct floor option object
-  const opt = floorOptions.value.find(o => o.value === Number(room.floor_number));
+  const opt = floorOptions.value.find(o => o.value === n);
   newRoom.value.floorNumber = opt || null;
 
   toast.add({
@@ -136,36 +268,40 @@ const fetchRooms = async () => {
   try {
     const res = await getRooms();
     existingRooms.value = res.data;
+    // make sure dropdown has every floor found in DB
+    syncFloorOptionsFromRooms();
   } catch (e) {
     toast.add({ severity: "error", summary: "Fetch Rooms Error", detail: e.message, life: 3000 });
   }
 };
 
 const roomsByFloor = computed(() => {
-  // Floor value to label map for pretty display
-  const floorMap = {
-    1: "1st Floor",
-    2: "2nd Floor",
-    3: "3rd Floor",
-    4: "4th Floor",
-    5: "5th Floor",
-  };
+  // collect all floor numbers: from options + from rooms
+  const nums = new Set([
+    ...floorOptions.value.map(o => o.value),
+    ...(existingRooms.value || [])
+      .map(r => normalizeFloor(r.floor_number))
+      .filter(Boolean),
+  ]);
 
-   // Group rooms per floor, sorted numerically by room_number
-  const grouped = {};
-  for (let floor = 1; floor <= 5; floor++) {
-    grouped[floorMap[floor]] = existingRooms.value
-      .filter(r => Number(r.floor_number) === floor)
+  const sorted = Array.from(nums).sort((a, b) => a - b);
+
+  return sorted.map((f) => {
+    const match = floorOptions.value.find(o => o.value === f);
+    const label = match ? match.label : ordinal(f);
+    const rooms = (existingRooms.value || [])
+      .filter(r => normalizeFloor(r.floor_number) === f)
       .sort((a, b) => {
         const numA = parseInt(a.room_number, 10);
         const numB = parseInt(b.room_number, 10);
         if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
         if (!isNaN(numA)) return -1;
         if (!isNaN(numB)) return 1;
-        return (a.room_number + "").localeCompare(b.room_number + "");
+        return String(a.room_number).localeCompare(String(b.room_number));
       });
-  }
-  return grouped;
+
+    return { value: f, label, rooms };
+  });
 });
 
 
@@ -608,32 +744,29 @@ async function saveRoom() {
   :breakpoints="{ '960px': '90vw', '640px': '95vw' }"
 >
   <div class="max-h-[60vh] overflow-y-auto pr-2 space-y-3">
-    <div v-for="(rooms, floor) in roomsByFloor" :key="floor" class="pb-2">
-      <div class="font-semibold mb-1">{{ floor }}</div>
+    <div v-for="group in roomsByFloor" :key="group.value" class="pb-2">
+      <div class="font-semibold mb-1">{{ group.label }}</div>
 
-      <!-- horizontally scrollable row -->
-      <div
-        v-if="rooms.length"
-        class="flex flex-nowrap overflow-x-auto gap-2 pr-1 py-1"
-      >
-       <Button
-  v-for="room in rooms"
-  :key="room.id"
-  unstyled
-  :label="String(room.room_number)"
-  @click="useExistingRoom(room)"
-  class="inline-block px-3 py-1 rounded bg-green-100 text-green-700 text-sm cursor-pointer hover:bg-green-200 shrink-0"
-/>
-
+      <div v-if="group.rooms.length"
+           class="flex flex-nowrap overflow-x-auto gap-2 pr-1 py-1">
+        <Button
+          v-for="room in group.rooms"
+          :key="room.id"
+          unstyled
+          :label="String(room.room_number)"
+          @click="useExistingRoom(room)"
+          class="inline-block px-3 py-1 rounded bg-green-100 text-green-700 text-sm cursor-pointer hover:bg-green-200 shrink-0"
+        />
       </div>
-      <div v-else class="text-gray-400 text-sm">No rooms found.</div>
 
+      <div v-else class="text-gray-400 text-sm">No rooms found.</div>
       <hr class="mt-2" />
     </div>
   </div>
 
   <template #footer>
-    <Button label="Close" icon="pi pi-times" severity="secondary" @click="showExistingDialog = false" />
+    <Button label="Close" icon="pi pi-times" severity="secondary"
+            @click="showExistingDialog = false" />
   </template>
 </Dialog>
 
@@ -641,16 +774,48 @@ async function saveRoom() {
 
             <!-- Floor Number -->
             <div>
-                <label class="block mb-1 font-medium">Floor Number</label>
-<Select
-  v-model="newRoom.floorNumber"
-  :options="floorOptions"
-  optionLabel="label"
-  placeholder="Select Floor Number"
-  class="w-full"
-  inputId="floorNumber"
+  <label class="block mb-1 font-medium">Floor Number</label>
+
+  <div class="flex gap-2 items-end">
+    <Select
+      v-model="newRoom.floorNumber"
+      :options="floorOptions"
+      optionLabel="label"
+      placeholder="Select Floor Number"
+      class="w-full"
+      inputId="floorNumber"
+    />
+
+    <div class="w-28">
+  <label class="block mb-1 text-xs text-gray-500">New floor</label>
+  <InputText
+    v-model="newFloor"
+    type="number"
+    inputmode="numeric"
+    placeholder="e.g., 6"
+    class="w-full"
+  />
+</div>
+
+<Button
+  label="Add"
+  icon="pi pi-plus"
+  outlined
+  :disabled="addFloorDisabled"
+  @click="addFloor"
 />
-            </div>
+
+<Button
+  label="Manage"
+  icon="pi pi-cog"
+  outlined
+  @click="manageFloorsVisible = true"
+/>
+
+  </div>
+
+  <small class="text-gray-500">Type a number then Add to create more floors.</small>
+</div>
 
             <div>
                 <label for="Rdescription" class="block mb-1 font-medium"
@@ -1473,6 +1638,49 @@ async function saveRoom() {
                 />
             </div>
         </Dialog>
+
+        <Dialog
+  v-model:visible="manageFloorsVisible"
+  header="Manage Floors"
+  :modal="true"
+  :dismissable-mask="true"
+  :style="{ width: '28rem' }"
+>
+  <div class="space-y-2">
+    <div
+      v-for="opt in floorOptions"
+      :key="opt.value"
+      class="flex items-center justify-between border rounded px-3 py-2"
+    >
+      <div class="flex items-center gap-2">
+        <span class="font-medium">{{ opt.label }}</span>
+        <span
+          v-if="floorsInUse.has(opt.value)"
+          class="text-xs px-2 py-0.5 rounded bg-yellow-100 text-yellow-700"
+        >
+          in use
+        </span>
+      </div>
+
+      <Button
+        icon="pi pi-trash"
+        severity="danger"
+        outlined
+        size="small"
+        :disabled="floorsInUse.has(opt.value)"
+        @click="removeFloor(opt.value)"
+      />
+    </div>
+
+    <p class="text-xs text-gray-500 mt-2">
+      You can only remove floors that aren't used by any room.
+    </p>
+  </div>
+
+  <template #footer>
+    <Button label="Close" icon="pi pi-times" @click="manageFloorsVisible = false" />
+  </template>
+</Dialog>
         <Toast />
     </div>
 </template>

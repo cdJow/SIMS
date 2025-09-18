@@ -119,6 +119,10 @@ export function getRooms() {
 
 export const getSerialTypes = () => axios.get(`${API_URL}/serial-types`);
 
+// Room serial numbers (assigned amenities)
+export const getRoomSerialNumbers = (roomId) =>
+  axios.get(`${API_URL}/rooms/${roomId}/serial-numbers`);
+
 
 // Fetch all rooms
 export async function fetchRooms() {
@@ -137,9 +141,7 @@ export async function fetchSerialNumbers() {
 }
 
 // Get serial numbers assigned to a room
-export async function getRoomSerialNumbers(roomId) {
-  return await axios.get(`${API_URL}/rooms/${roomId}/serial-numbers`);
-}
+
 
 // Update a room (PUT)
 export async function updateRoom(roomId, payload) {
@@ -270,3 +272,13 @@ export async function updateDiscount(id, payload) {
 export async function deleteDiscount(id) {
   return axios.delete(`${API_URL}/discounts/${id}`);
 }
+
+export const fetchDiscounts = (params = {}) =>
+  axios.get(`${API_URL}/discounts`, { params }); // e.g. { status: 'active' }
+
+// Check-in payments (store payment header + amenity charges)
+export function createCheckinPayment(payload){
+  return axios.post(`${API_URL}/checkin-payments`, payload);
+}
+
+ 

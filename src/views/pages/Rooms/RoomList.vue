@@ -1,12 +1,301 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from "vue";
-import { getRooms, getRoomTypeRates,  bookRoom, fetchLatestBooking, cancelBooking, checkInBooking, checkoutRoom, cleaningComplete  } from "@/api/auth";
+import { getRooms, getRoomTypeRates, bookRoom, fetchLatestBooking, cancelBooking, checkInBooking, checkoutRoom, cleaningComplete, fetchPOSProducts, fetchPOSPreview, posCheckout, fetchDiscounts, getAvailableAmenities, getRoomSerialNumbers, updateRoomSerialNumbers, createCheckinPayment } from "@/api/auth";
 import { useToast } from "primevue/usetoast";
 import RoomSummary from "./RoomSummary.vue";
+
+//--------------discounts-----------
+
+
+
+
+const discounts = ref([]); // [{ id, name, percent, status }]
+
+const activeDiscounts = computed(() =>
+  discounts.value.filter(d => String(d.status).toLowerCase() === "active")
+);
+
+const selectedDiscountId = ref(null); // bound to UI dropdown
+const selectedDiscount = computed(() =>
+  activeDiscounts.value.find(d => Number(d.id) === Number(selectedDiscountId.value)) || null
+);
+
+async function loadDiscounts() {
+  try {
+    const res = await fetchDiscounts({ status: "active" }); // GET /discounts?status=active
+    discounts.value = res?.data || [];
+  } catch (e) {
+    toast.add({ severity: "error", summary: "Discounts", detail: "Failed to load discounts.", life: 2500 });
+  }
+}
+
+
+// ==== Discounted totals (room only) ====
+const roomRate = computed(() => Number(selectedRoom.value?.guestDetails?.selectedrate) || 0);
+const roomDiscountPercent = computed(() => Number(selectedDiscount.value?.percent) || 0);
+const roomDiscountAmount = computed(() => +(roomRate.value * roomDiscountPercent.value / 100).toFixed(2));
+const discountedRoomRate = computed(() => Math.max(0, +(roomRate.value - roomDiscountAmount.value).toFixed(2)));
+
+
+
+const productSearchQueryPD = ref("");
+const productsPD = ref([]);
+const cartPD = ref([]); // [{ id, name, brand, quantity }]
+const previewPD = ref({ lines: [], total: 0 }); // authoritative pricing
+
+// load-on-open flag
+let loadedProductsOncePD = false;
+
+// Amenities (non-consumables) for rent in payment dialog
+const amenitiesPD = ref([]); // [{ serial_id, serial_number, product_name, brand, unit_rental_price }]
+const amenitiesSearch = ref("");
+const selectedAmenityIds = ref([]); // [serial_id]
+const filteredAmenitiesPD = computed(() => {
+  const q = amenitiesSearch.value.trim().toLowerCase();
+  const list = amenitiesPD.value || [];
+  if (!q) return list;
+  return list.filter(a => (
+    ((a.product_name || "") + " " + (a.brand || "") + " " + (a.serial_number || "")).toLowerCase().includes(q)
+  ));
+});
+const uiTotalAmenitiesPD = computed(() => {
+  const byId = new Map((amenitiesPD.value || []).map(a => [Number(a.serial_id), Number(a.unit_rental_price) || 0]));
+  return (selectedAmenityIds.value || []).reduce((sum, id) => sum + (byId.get(Number(id)) || 0), 0);
+});
+
+// Selected amenities derived from checkbox selection (for cart view)
+const selectedAmenitiesPD = computed(() => {
+  const byId = new Map((amenitiesPD.value || []).map(a => [Number(a.serial_id), a]));
+  return (selectedAmenityIds.value || [])
+    .map(id => byId.get(Number(id)))
+    .filter(Boolean)
+    .map(a => ({
+      id: Number(a.serial_id),
+      name: a.product_name,
+      serial: a.serial_number,
+      price: Number(a.unit_rental_price) || 0,
+      brand: a.brand || ''
+    }));
+});
+
+function removeAmenityPD(id){
+  const nid = Number(id);
+  selectedAmenityIds.value = (selectedAmenityIds.value || []).filter(v => Number(v) !== nid);
+}
+
+/* fast maps (built from productsPD) */
+const nameByIdPD = computed(() => new Map(productsPD.value.map(p => [Number(p.id), p.name || p.product_name || `#${p.id}`])));
+const brandByIdPD = computed(() => new Map(productsPD.value.map(p => [Number(p.id), p.brand || p.product_brand || p.Brand || "—"])));
+const priceByIdPD = computed(() => new Map(productsPD.value.map(p => [Number(p.id), Number(p.price) || 0])));
+const stockByIdPD = computed(() => {
+  const m = new Map();
+  for (const p of productsPD.value) m.set(Number(p.id), Number(p.stock ?? 0));
+  return m;
+});
+function getStockPD(id){ return stockByIdPD.value.get(Number(id)) ?? 0; }
 
 const lastCheckInByRoom = new Map();
 
 const paymentFlow = ref("WALKIN");
+
+
+const payloadItemsPD = computed(() =>
+  cartPD.value.filter(it => (it.quantity || 0) > 0)
+              .map(it => ({ id: Number(it.id), quantity: Number(it.quantity) }))
+);
+
+let debounceTimerPD = null;
+let reqSeqPD = 0;
+let lastPayloadKeyPD = "";
+
+function payloadKeyPD(items){ return JSON.stringify(items.slice().sort((a,b)=>a.id-b.id)); }
+
+function schedulePreviewPD(){
+  clearTimeout(debounceTimerPD);
+  debounceTimerPD = setTimeout(runPreviewPD, 200);
+}
+
+async function runPreviewPD(){
+  const items = payloadItemsPD.value;
+  if (!items.length){
+    previewPD.value = { lines: [], total: 0 };
+    lastPayloadKeyPD = "";
+    return;
+  }
+  const key = payloadKeyPD(items);
+  if (key === lastPayloadKeyPD) return;
+  lastPayloadKeyPD = key;
+
+  const seq = ++reqSeqPD;
+  try{
+    const { data } = await fetchPOSPreview({ items });
+    if (seq !== reqSeqPD) return;
+    previewPD.value = data || { lines: [], total: 0 };
+  }catch{ /* keep previous */ }
+}
+
+/* ---- UI unit/subtotal (use preview if present) ---- */
+function previewLineForPD(productId){
+  const pid = Number(productId);
+  return (previewPD.value.lines || []).find(l => Number(l.product_id) === pid) || null;
+}
+function uiUnitPricePD(row){
+  const line = previewLineForPD(row.id);
+  if (line && Number(line.quantity) > 0) return Number(line.subtotal) / Number(line.quantity);
+  return priceByIdPD.value.get(Number(row.id)) || 0;
+}
+function uiSubtotalPD(row){
+  const line = previewLineForPD(row.id);
+  if (line) return Number(line.subtotal);
+  return uiUnitPricePD(row) * Number(row.quantity || 0);
+}
+const uiTotalExtrasPD = computed(() => {
+  const t = Number(previewPD.value?.total || 0);
+  if (t > 0) return t;
+  return cartPD.value.reduce((sum, it) => sum + uiSubtotalPD(it), 0);
+});
+
+// Split cart view by batch/unit price using preview breakdown
+const cartViewPD = computed(() => {
+  const lines = previewPD.value?.lines || [];
+  const byId = new Map(cartPD.value.map(it => [Number(it.id), it]));
+  const rows = [];
+
+  for (const ln of lines) {
+    const pid = Number(ln.product_id);
+    const src = byId.get(pid);
+    if (!src) continue;
+    const breakdown = ln.breakdown || [];
+
+    // If we have breakdown from server, render one row per batch/price
+    if (Array.isArray(breakdown) && breakdown.length) {
+      for (const b of breakdown) {
+        const qty = Number(b.qty) || 0;
+        if (qty <= 0) continue;
+        const unit = Number(b.unit_price) || 0;
+        rows.push({
+          vkey: `${pid}@${b.item_id ?? unit}`,
+          id: pid,
+          name: nameByIdPD.value.get(pid) || src.name || `#${pid}`,
+          brand: brandByIdPD.value.get(pid) || src.brand || '',
+          quantity: qty,
+          unitPrice: unit,
+          subtotal: +(qty * unit).toFixed(2),
+        });
+      }
+      continue;
+    }
+
+    // Fallback: no breakdown yet, show single aggregated row
+    const unit = uiUnitPricePD(src);
+    const qty = Number(src.quantity) || 0;
+    if (qty > 0) {
+      rows.push({
+        vkey: `${pid}`,
+        id: pid,
+        name: nameByIdPD.value.get(pid) || src.name || `#${pid}`,
+        brand: brandByIdPD.value.get(pid) || src.brand || '',
+        quantity: qty,
+        unitPrice: unit,
+        subtotal: +(unit * qty).toFixed(2),
+      });
+    }
+  }
+
+  // Also include any items not present in preview yet (e.g., before first fetch)
+  if (!rows.length && cartPD.value.length) {
+    for (const src of cartPD.value) {
+      const pid = Number(src.id);
+      const qty = Number(src.quantity) || 0;
+      if (qty <= 0) continue;
+      const unit = uiUnitPricePD(src);
+      rows.push({
+        vkey: `${pid}`,
+        id: pid,
+        name: nameByIdPD.value.get(pid) || src.name || `#${pid}`,
+        brand: brandByIdPD.value.get(pid) || src.brand || '',
+        quantity: qty,
+        unitPrice: unit,
+        subtotal: +(unit * qty).toFixed(2),
+      });
+    }
+  }
+
+  return rows;
+});
+
+/* ---- product filtering (for Payment dialog) ---- */
+const filteredProductsPD = computed(() => {
+  const q = productSearchQueryPD.value.trim().toLowerCase();
+  if (!q) return productsPD.value;
+  return productsPD.value.filter(p =>
+    ((p.name || p.product_name || "") + " " + (p.brand || p.product_brand || ""))
+      .toLowerCase().includes(q)
+  );
+});
+
+function warnLimitPD(id){
+  const stock = getStockPD(id);
+  toast.add({ severity: "warn", summary: "Stock limit reached", detail: `Only ${stock} in stock for this product.`, life: 2500 });
+}
+
+function adjustProductQtyPD(productId, delta){
+  const id = Number(productId);
+  const stock = getStockPD(id);
+  let row = cartPD.value.find(i => Number(i.id) === id);
+  const qty = row ? Number(row.quantity) : 0;
+
+  if (delta > 0){
+    const canAdd = Math.min(delta, Math.max(0, stock - qty));
+    if (canAdd <= 0){ warnLimitPD(id); return; }
+    if (row) row.quantity += canAdd;
+    else cartPD.value.push({ id, name: nameByIdPD.value.get(id) || `#${id}`, brand: brandByIdPD.value.get(id) || '', quantity: canAdd });
+  } else if (delta < 0){
+    const newQty = qty + delta;
+    if (newQty > 0 && row){ row.quantity = newQty; }
+    else { cartPD.value = cartPD.value.filter(i => Number(i.id) !== id); }
+  }
+  schedulePreviewPD();
+}
+
+function decreaseBatchPD(row){ adjustProductQtyPD(row.id, -1); }
+function increaseBatchPD(row){ adjustProductQtyPD(row.id, +1); }
+function removeBatchPD(row){ adjustProductQtyPD(row.id, -Number(row.quantity || 0)); }
+
+function addToCartPD(product){
+  const id = Number(product.id);
+  const stock = getStockPD(id);
+  const existing = cartPD.value.find(i => Number(i.id) === id);
+  const currentQty = existing ? Number(existing.quantity) : 0;
+  if (stock <= 0 || currentQty >= stock) { warnLimitPD(id); return; }
+
+  if (existing) existing.quantity += 1;
+  else cartPD.value.push({ id, name: product.name || product.product_name || `#${id}`, brand: product.brand || product.product_brand || "—", quantity: 1 });
+
+  schedulePreviewPD();
+}
+function increasePD(rowOrId){
+  const id = typeof rowOrId === "object" ? Number(rowOrId.id) : Number(rowOrId);
+  const stock = getStockPD(id);
+  const row = cartPD.value.find(i => Number(i.id) === id);
+  const qty = row ? Number(row.quantity) : 0;
+  if (qty >= stock) { warnLimitPD(id); return; }
+  if (row) row.quantity += 1;
+  else cartPD.value.push({ id, name: nameByIdPD.value.get(id) || `#${id}`, brand: brandByIdPD.value.get(id) || "—", quantity: 1 });
+  schedulePreviewPD();
+}
+function decreasePD(rowOrId){
+  const id = typeof rowOrId === "object" ? Number(rowOrId.id) : Number(rowOrId);
+  const row = cartPD.value.find(i => Number(i.id) === id);
+  if (!row) return;
+  if (row.quantity > 1) row.quantity -= 1;
+  else cartPD.value = cartPD.value.filter(i => Number(i.id) !== id);
+  schedulePreviewPD();
+}
+function removePD(row){
+  cartPD.value = cartPD.value.filter(i => Number(i.id) !== Number(row.id));
+  schedulePreviewPD();
+}
 
 function getCheckoutTs(room) {
   // Only apply the local override for OCCUPIED rooms
@@ -203,6 +492,8 @@ function isBookedStay(target) {
     }
 
 
+
+
     let bookingExpiryTimers = new Map();   // bookingId -> timeoutId
 const bookingExpiryInFlight = new Set();
 
@@ -261,6 +552,11 @@ function scheduleBookingExpiryForAll() {
   bookingExpiryTimers.clear();
   for (const room of rooms.value) scheduleBookingExpiryForRoom(room);
 }
+
+watch(
+  () => cartPD.value.map(i => `${i.id}:${i.quantity}`).join("|"),
+  () => schedulePreviewPD()
+);
 
 // reschedule when rooms list changes
 watch(rooms, () => { scheduleBookingExpiryForAll(); }, { deep: true });
@@ -353,21 +649,28 @@ onUnmounted(() => {
                             const res = await fetchLatestBooking(room.id);
                             if (res?.data && Object.keys(res.data).length) {
                                 room.guestDetails = {
-                                    id: res.data.id,
-                                    guestName: res.data.guest_name,
-                                    cellphone: res.data.cellphone,
-                                    guestEmail: res.data.guest_email,
-                                    selectedHours: res.data.selected_hours,
-                                    selectedrate: res.data.selected_rate,
-                                    notes: res.data.notes,
-                                    roomCode: res.data.room_code,
-                                    bookCode: res.data.book_code,
-                                    createdAt: res.data.created_at,
-                                    checkInDateTime: res.data.check_in_datetime,
-                                    checkOutDateTime: res.data.check_out_datetime,   // <-- ADD THIS
-                                    bookingType: res.data.booking_type,
-                                    payment: res.data.payment || null,
-                                };
+                                     id: res.data.id,
+                                     guestName: res.data.guest_name,
+                                     cellphone: res.data.cellphone,
+                                     guestEmail: res.data.guest_email,
+                                     selectedHours: res.data.selected_hours,
+                                     selectedrate: res.data.selected_rate,
+                                     roomCode: res.data.room_code,
+                                     bookCode: res.data.book_code,
+                                     createdAt: res.data.created_at,
+                                     checkInDateTime: res.data.check_in_datetime,
+                                     checkOutDateTime: res.data.check_out_datetime,   // <-- ADD THIS
+                                     bookingType: res.data.booking_type,
+                                     payment: res.data.payment || null,
+                                  };
+                                // attach totals + items if present
+                                if (res?.data) {
+                                  selectedRoom.value.guestDetails.extrasTotal = Number(res.data.extras_total || 0);
+                                  selectedRoom.value.guestDetails.amenitiesTotal = Number(res.data.amenities_total || 0);
+                                  selectedRoom.value.guestDetails.extrasItems = res.data.extras_items || [];
+                                  selectedRoom.value.guestDetails.amenitiesItems = res.data.amenities_items || [];
+                                }
+                                
                                 const uiStart = uiBookedAtMsByRoom.get(room.id);
 if (uiStart) {
   const serverBase = parseDateMaybePH(
@@ -630,6 +933,7 @@ onUnmounted(() => {
     const paymentDetails = ref({
         amountReceived: "",
         deposit: "",
+        note: "",
     });
 
 
@@ -651,98 +955,183 @@ onUnmounted(() => {
     });
 
 
-    async function handleWalkInPayment() {
-  const room = rooms.value.find(r => r.id === selectedRoom.value.id);
-  if (!room) return;
+   async function handleWalkInPayment() {
+const room = rooms.value.find(r => r.id === selectedRoom.value.id);
+if (!room) return;
 
-  try {
-    const amountReceived = parseFloat(paymentDetails.value.amountReceived) || 0;
-    const deposit = parseFloat(paymentDetails.value.deposit) || 0;
-    const paid = !isAmountInsufficient.value;
 
-    // Hours always come from the guest details in the dialog we just opened
-    const hours = Number(selectedRoom.value?.guestDetails?.selectedHours || 0);
-    const now = new Date();
-    const out = new Date(now.getTime() + (hours || 0) * 60 * 60 * 1000);
-
-    lastCheckInByRoom.set(room.id, { inISO: now.toISOString(), outISO: out.toISOString(), at: Date.now() });
-
-    if (paymentFlow.value === "WALKIN") {
-      // Create Occupied booking from transient form
-      const g = selectedRoom.value.guestDetails || {};
-      await bookRoom({
-        room_id: room.id,
-        guest_name: g.guestName,
-        cellphone: g.cellphone,
-        guest_email: g.guestEmail,
-        booking_type: "Walk-In",
-        status: "Occupied",
-        check_in_datetime: toPHDateTimeString(now),
-        check_out_datetime: toPHDateTimeString(out),
-        selected_hours: g.selectedHours,
-        selected_rate: g.selectedrate,
-        room_code: generateroomCode("WI"),
-        book_code: generateroomCode("WI"),
-        amount_received: amountReceived,
-        deposit,
-        is_paid: paid,
-        notes: g.notes || "",
-      });
-
-    } else {
-      // BOOKED → CHECK-IN: only use server booking data + payment
-      const bookingId = selectedRoom.value?.guestDetails?.id;
-      if (!bookingId) throw new Error("No booking found to check in.");
-
-      await checkInBooking(bookingId, {
-        check_in_datetime: toPHDateTimeString(now),
-        check_out_datetime: toPHDateTimeString(out),
-        amount_received: amountReceived,
-        deposit,
-        is_paid: paid,
-      });
-    }
-
-    // Update local UI mirror
-    selectedRoom.value.status = "Occupied";
-    selectedRoom.value.guestDetails.payment = { amountReceived, deposit, isPaid: paid };
-    selectedRoom.value.guestDetails.checkInDateTime = now.toISOString();
-    selectedRoom.value.guestDetails.checkOutDateTime = out.toISOString();
-
-    const idx = rooms.value.findIndex(r => r.id === selectedRoom.value?.id);
-    if (idx !== -1) {
-      const r = rooms.value[idx];
-      r.status = "Occupied";
-      r.guestDetails ||= {};
-      r.guestDetails.payment = { amountReceived, deposit, isPaid: paid };
-      r.guestDetails.checkInDateTime = now.toISOString();
-      r.guestDetails.checkOutDateTime = out.toISOString();
-    }
-
-    // Broadcast
-    if (paymentFlow.value === "WALKIN") {
-      emitBookingsChanged("walkin-booked", null, room.id);
-    } else {
-      emitBookingsChanged("checked-in", selectedRoom.value?.guestDetails?.id || null, room.id);
-    }
-    emitRoomsChanged("status-updated", room.id);
-
-    toast.add({
-      severity: "success",
-      summary: paymentFlow.value === "WALKIN" ? "Walk-In Checked In" : "Booking Checked In",
-      detail: "Payment stored and times persisted.",
-      life: 3000,
-    });
-
-    // Close dialogs after success
-    paymentDialogVisible.value = false;
-    BookingDialogVisible.value = false;
-    DialogVisible.value = false;
-
-  } catch (err) {
-    toast.add({ severity: "error", summary: "Check-In Failed", detail: err?.response?.data?.message || err.message, life: 3000 });
-  }
+try {
+// Require a deposit amount before proceeding
+if (Number(paymentDetails.value.deposit) <= 0) {
+  toast.add({ severity: "warn", summary: "Deposit required", detail: "Enter a deposit amount before confirming.", life: 2500 });
+  return;
 }
+// 0) Sell extras (if any) via POS — this decrements stock + creates bill
+let posBill = null;
+if (cartPD.value.length > 0) {
+try {
+const resBill = await posCheckout({ items: payloadItemsPD.value });
+posBill = resBill?.data; // { bill_id, invoice_no, total }
+} catch (err) {
+toast.add({ severity: "error", summary: "POS Checkout Failed", detail: err?.response?.data?.message || "Unable to sell extras. Adjust quantities or retry.", life: 3500 });
+return; // stop — don’t proceed with check-in if extras failed to sell
+}
+}
+
+
+ // 1) Compute payment fields for the room
+ const amountReceived = parseFloat(paymentDetails.value.amountReceived) || 0;
+ const deposit = parseFloat(paymentDetails.value.deposit) || 0;
+ const paid = !isAmountInsufficient.value;
+
+
+const hours = Number(selectedRoom.value?.guestDetails?.selectedHours || 0);
+const now = new Date();
+const out = new Date(now.getTime() + (hours || 0) * 60 * 60 * 1000);
+
+
+lastCheckInByRoom.set(room.id, { inISO: now.toISOString(), outISO: out.toISOString(), at: Date.now() });
+
+
+  // Promo note (if any)
+  const promo = selectedDiscount.value;
+  const promoNote = promo ? ` [DISCOUNT] ${promo.name} (${roomDiscountPercent.value}%) -₱${roomDiscountAmount.value.toFixed(2)}` : "";
+  const userNote = (paymentDetails.value.note || "").trim();
+  // Build rentals note from selected amenities
+  const amenMap = new Map((amenitiesPD.value || []).map(a => [Number(a.serial_id), a]));
+  const rentals = (selectedAmenityIds.value || []).map(id => amenMap.get(Number(id))).filter(Boolean);
+  const rentalNote = rentals.length
+    ? ` [RENTALS] ` + rentals.map(r => `${r.product_name || 'Amenity'} (${r.serial_number}) ₱${Number(r.unit_rental_price||0).toFixed(2)}`).join(', ')
+    : "";
+ const noteSuffix = (userNote ? ` [NOTE] ${userNote}` : "") + rentalNote;
+
+
+ // 2) Persist room check-in (walk-in or booked)
+  if (paymentFlow.value === "WALKIN") {
+  const g = selectedRoom.value.guestDetails || {};
+  await bookRoom({
+      room_id: room.id,
+      guest_name: g.guestName,
+      cellphone: g.cellphone,
+      guest_email: g.guestEmail,
+      booking_type: "Walk-In",
+      status: "Occupied",
+      check_in_datetime: toPHDateTimeString(now),
+      check_out_datetime: toPHDateTimeString(out),
+      selected_hours: g.selectedHours,
+      selected_rate: g.selectedrate,
+      room_code: generateroomCode("WI"),
+      book_code: generateroomCode("WI"),
+      notes: (posBill?.invoice_no ? `POS invoice: ${posBill.invoice_no}` : (g.notes || "")) + noteSuffix + promoNote
+  });
+} else {
+  const bookingId = selectedRoom.value?.guestDetails?.id;
+  if (!bookingId) throw new Error("No booking found to check in.");
+
+
+  await checkInBooking(bookingId, {
+      check_in_datetime: toPHDateTimeString(now),
+      check_out_datetime: toPHDateTimeString(out)
+  });
+}
+
+ // 3) Record payment to backend payment tables now that we have a booking id (non-blocking)
+ try{
+   let bookingIdForLog = null;
+   if (paymentFlow.value === "WALKIN"){
+     try{
+       const latest = await fetchLatestBooking(room.id);
+       bookingIdForLog = latest?.data?.id || null;
+     }catch{}
+   } else {
+     bookingIdForLog = selectedRoom.value?.guestDetails?.id || null;
+   }
+   const finalRate = Number((selectedDiscount.value ? discountedRoomRate.value : roomRate.value) || 0);
+   const cpPayload = {
+     room_id: room.id,
+     booking_id: bookingIdForLog,
+     guest_name: selectedRoom.value?.guestDetails?.guestName || "",
+     booking_type: paymentFlow.value === "WALKIN" ? "Walk-In" : "Booking",
+     hours_selected: hours,
+     room_rate: finalRate,
+     discount_name: selectedDiscount.value?.name || "",
+     discount_percent: Number(roomDiscountPercent.value || 0),
+     discount_id: selectedDiscount.value?.id || null,
+     extras_bill_id: posBill?.bill_id || null,
+     extras_total: Number((posBill?.total ?? uiTotalExtrasPD.value) || 0),
+     amenities_total: Number(uiTotalAmenitiesPD.value || 0),
+     deposit_amount: deposit,
+     amount_received: amountReceived,
+     total_due: Number(totalAmountDue.value || 0),
+     change_amount: Number(calculateChange.value || 0),
+     note: paymentDetails.value.note || "",
+     amenities: (selectedAmenitiesPD.value || []).map(a => ({ serial_id: a.id, amenity_name: a.name, unit_rental_price: a.price }))
+   };
+   await createCheckinPayment(cpPayload);
+ }catch(e){
+   console.warn("createCheckinPayment failed", e);
+   toast.add({ severity: "warn", summary: "Payment Log", detail: "Saved room, but failed to record payment history.", life: 2500 });
+ }
+
+ // 4) Update local UI mirror
+selectedRoom.value.status = "Occupied";
+selectedRoom.value.guestDetails.payment = { amountReceived, deposit, isPaid: paid };
+selectedRoom.value.guestDetails.checkInDateTime = now.toISOString();
+selectedRoom.value.guestDetails.checkOutDateTime = out.toISOString();
+
+
+const idx = rooms.value.findIndex(r => r.id === selectedRoom.value?.id);
+if (idx !== -1) {
+const r = rooms.value[idx];
+r.status = "Occupied";
+r.guestDetails ||= {};
+r.guestDetails.payment = { amountReceived, deposit, isPaid: paid };
+r.guestDetails.checkInDateTime = now.toISOString();
+r.guestDetails.checkOutDateTime = out.toISOString();
+}
+
+
+ // 5) Clear mini-POS state + refresh products list (stock changed)
+cartPD.value = [];
+previewPD.value = { lines: [], total: 0 };
+try {
+const res = await fetchPOSProducts();
+productsPD.value = res.data || [];
+} catch {}
+
+
+// Broadcast + toasts
+if (paymentFlow.value === "WALKIN") {
+emitBookingsChanged("walkin-booked", null, room.id);
+} else {
+emitBookingsChanged("checked-in", selectedRoom.value?.guestDetails?.id || null, room.id);
+}
+emitRoomsChanged("status-updated", room.id);
+
+
+toast.add({ severity: "success", summary: "Payment Completed", detail: posBill?.invoice_no ? `Extras sold (Invoice ${posBill.invoice_no}). Room checked in.` : "Room checked in.", life: 3500 });
+
+
+paymentDialogVisible.value = false;
+BookingDialogVisible.value = false;
+DialogVisible.value = false;
+
+ // Assign selected amenities to this room (merge with currently assigned)
+ try {
+   if (Array.isArray(selectedAmenityIds.value) && selectedAmenityIds.value.length > 0) {
+     const cur = await getRoomSerialNumbers(room.id);
+     const currentIds = (cur?.data || []).map(s => Number(s.id || s.serial_id)).filter(n => Number.isFinite(n));
+     const merged = Array.from(new Set([...currentIds, ...selectedAmenityIds.value.map(Number)]));
+     await updateRoomSerialNumbers(room.id, { serial_ids: merged });
+   }
+ } catch (_) { /* non-fatal */ }
+
+
+} catch (err) {
+toast.add({ severity: "error", summary: "Check-In Failed", detail: err?.response?.data?.message || err.message, life: 3000 });
+}
+}
+
 
 
     // Modified generator function with prefix support
@@ -759,115 +1148,227 @@ onUnmounted(() => {
     // Rename 'change' to 'calculateChange'
     // Business rule: Change should subtract both the rate and any deposit entered
     const calculateChange = computed(() => {
-        const amountReceived = Number(paymentDetails.value.amountReceived) || 0;
-        const deposit = Number(paymentDetails.value.deposit) || 0;
-        const rate = Number(selectedRoom.value?.guestDetails?.selectedrate) || 0;
-        return amountReceived - (rate + deposit);
-    });
+  const amountReceived = Number(paymentDetails.value.amountReceived) || 0;
+  return amountReceived - totalAmountDue.value;
+});
 
     // Total amount due = rate + deposit
-    const totalAmountDue = computed(() => {
-        const rate = Number(selectedRoom.value?.guestDetails?.selectedrate) || 0;
-        const deposit = Number(paymentDetails.value.deposit) || 0;
-        return rate + deposit;
-    });
+const totalAmountDue = computed(() => {
+  const deposit = Number(paymentDetails.value.deposit) || 0;
+  const extras = Number(uiTotalExtrasPD.value) || 0;
+  const amenRent = Number(uiTotalAmenitiesPD.value) || 0;
+  return discountedRoomRate.value + deposit + extras + amenRent;
+});
 
     // Validation for Insufficient Amount compares against (rate + deposit)
-    const isAmountInsufficient = computed(() => {
-        const amountReceived = Number(paymentDetails.value.amountReceived) || 0;
-        const deposit = Number(paymentDetails.value.deposit) || 0;
-        const rate = Number(selectedRoom.value?.guestDetails?.selectedrate) || 0;
-        return amountReceived < (rate + deposit);
-    });
+const isAmountInsufficient = computed(() => {
+  const amountReceived = Number(paymentDetails.value.amountReceived) || 0;
+  return amountReceived < totalAmountDue.value;
+});
+
+// Visual highlight for Payment card
+const paymentHighlightClass = computed(() => {
+  const amt = Number(paymentDetails.value.amountReceived || 0);
+  if (!amt) {
+    return 'bg-blue-50 text-blue-900 border-blue-200 dark:bg-blue-900/30 dark:text-blue-100 dark:border-blue-700';
+  }
+  return isAmountInsufficient.value
+    ? 'bg-red-50 text-red-900 border-red-200 dark:bg-red-900/30 dark:text-red-100 dark:border-red-700'
+    : 'bg-green-50 text-green-900 border-green-200 dark:bg-green-900/30 dark:text-green-100 dark:border-green-700';
+});
+
+// ---- Occupied room payment view (read-only) ----
+const occupiedPayment = computed(() => (
+  selectedRoom.value?.guestDetails?.payment || { amountReceived: 0, deposit: 0, isPaid: false }
+));
+const occRoomRate = computed(() => {
+  const g = selectedRoom.value?.guestDetails || {};
+  const charged = Number(g.roomRateCharged || g.room_rate_charged || 0);
+  if (charged) return charged;
+  return Number(g.selectedrate) || 0;
+});
+const occExtras = computed(() => Number(selectedRoom.value?.guestDetails?.extrasTotal || 0));
+const occRent = computed(() => Number(selectedRoom.value?.guestDetails?.amenitiesTotal || 0));
+const occTotalDue = computed(() => occRoomRate.value + occExtras.value + occRent.value + Number(occupiedPayment.value.deposit || 0));
+const occChange = computed(() => Number(occupiedPayment.value.amountReceived || 0) - occTotalDue.value);
+
+// Visual highlight for Discount card
+const discountHighlightClass = computed(() => {
+  return selectedDiscount.value
+    ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/20'
+    : 'border-slate-200';
+});
+    
     // Reset Payment Form
-    function resetPaymentForm() {
-        paymentDetails.value = {
-            amountReceived: "",
-            deposit: "",
-        };
-    }
+function resetPaymentForm() {
+    paymentDetails.value = {
+        amountReceived: "",
+        deposit: "",
+        note: "",
+    };
+    selectedAmenityIds.value = [];
+}
+
+// Confirmation dialog before finalizing payment/check-in
+const confirmPaymentDialogVisible = ref(false);
+
+function openConfirmPayment() {
+  // Optional: could validate again here
+  confirmPaymentDialogVisible.value = true;
+}
+
+function confirmAndCheckIn(){
+  confirmPaymentDialogVisible.value = false;
+  handleWalkInPayment();
+}
+
+const confirmSummaryText = computed(() => {
+  const g = selectedRoom.value?.guestDetails || {};
+  const guestName = g.guestName || 'N/A';
+  const roomNo = selectedRoom.value?.roomNumber || '—';
+  const hours = Number(g.selectedHours || 0);
+
+  const hasDiscount = !!selectedDiscount.value;
+  const ratePart = hasDiscount
+    ? `${formatCurrency(roomRate.value)} (Promo ${selectedDiscount.value?.name} ${Number(roomDiscountPercent.value)}% -> ${formatCurrency(discountedRoomRate.value)})`
+    : `${formatCurrency(roomRate.value)}`;
+
+  // Extras summary
+  const extrasRows = cartViewPD.value || [];
+  const extrasList = extrasRows.map(r => `${r.name} x${r.quantity} @ ${formatCurrency(r.unitPrice)}`).join('; ');
+  const extrasTotal = formatCurrency(uiTotalExtrasPD.value || 0);
+
+  // Amenities summary
+  const amenRows = selectedAmenitiesPD.value || [];
+  const amenList = amenRows.map(a => `${a.name} #${a.serial} ${formatCurrency(a.price)}`).join('; ');
+  const amenTotal = formatCurrency(uiTotalAmenitiesPD.value || 0);
+
+  const amtRecv = Number(paymentDetails.value.amountReceived) || 0;
+  const deposit = Number(paymentDetails.value.deposit) || 0;
+  const totalDue = Number(totalAmountDue.value) || 0;
+  const change = Number(calculateChange.value) || 0;
+  const note = (paymentDetails.value.note || '').trim() || '—';
+  const discountText = hasDiscount ? `${selectedDiscount.value?.name} (${Number(roomDiscountPercent.value)}%)` : 'None';
+
+  return `Guest ${guestName} in Room ${roomNo} for ${hours} hour(s); rate ${ratePart}. ` +
+         `Extras ${extrasTotal}: ${extrasList || 'None'}. ` +
+         `Amenities ${amenTotal}: ${amenList || 'None'}. ` +
+         `Payment: received ${formatCurrency(amtRecv)}, deposit ${formatCurrency(deposit)}, total due ${formatCurrency(totalDue)}, change ${formatCurrency(change)}. ` +
+         `Discount: ${discountText}. Note: ${note}.`;
+});
+
+// Compact, readable lists for confirmation dialog
+const extrasListTop = computed(() => {
+  const rows = cartViewPD.value || [];
+  return rows.slice(0, 5).map(r => `${r.name} ×${r.quantity} (${formatCurrency(r.unitPrice)})`);
+});
+const extrasOverflow = computed(() => {
+  const total = (cartViewPD.value || []).length;
+  return total > 5 ? total - 5 : 0;
+});
+const amenitiesListTop = computed(() => {
+  const rows = selectedAmenitiesPD.value || [];
+  return rows.slice(0, 5).map(a => `${a.name} #${a.serial} (${formatCurrency(a.price)})`);
+});
+const amenitiesOverflow = computed(() => {
+  const total = (selectedAmenitiesPD.value || []).length;
+  return total > 5 ? total - 5 : 0;
+});
+const discountBadgeText = computed(() => selectedDiscount.value ? `${selectedDiscount.value.name} (${Number(roomDiscountPercent.value)}%)` : null);
 
     // Open Payment Dialog
-   async function openPaymentDialog(room) {
-  // Always clear payment inputs
-  paymentDetails.value = { amountReceived: "", deposit: "" };
+async function openPaymentDialog(room) {
+paymentDetails.value = { amountReceived: "", deposit: "", note: "" };
+selectedAmenityIds.value = [];
+selectedDiscountId.value = null; // reset promo selection each time
 
-  // Decide the flow strictly from the room state
-  const looksBooked = room?.status === "Booked";
 
-  // Build a clean selectedRoom shell
-  selectedRoom.value = { ...room, guestDetails: null };
+// Use the same reference (or a shallow copy once), don't call openDialog here
+selectedRoom.value = { ...room, guestDetails: room.guestDetails ? { ...room.guestDetails } : null };
 
-  if (looksBooked) {
-    paymentFlow.value = "BOOKED";
 
-    // Ensure we have the latest booking WITH an id
-    let booking = room.guestDetails || null;
-    if (!booking?.id) {
-      try {
-        const res = await fetchLatestBooking(room.id);
-        if (res?.data && Object.keys(res.data).length) {
-          booking = {
-            id: res.data.id,
-            guestName: res.data.guest_name,
-            cellphone: res.data.cellphone,
-            guestEmail: res.data.guest_email,
-            selectedHours: res.data.selected_hours,
-            selectedrate: res.data.selected_rate,
-            notes: res.data.notes,
-            roomCode: res.data.room_code,
-            bookCode: res.data.book_code,
-            createdAt: res.data.created_at,
-            checkInDateTime: res.data.check_in_datetime,
-            checkOutDateTime: res.data.check_out_datetime,
-            bookingType: res.data.booking_type,
-            payment: res.data.payment || null,
-          };
-        }
-      } catch (e) {
-        toast.add({ severity: "error", summary: "Failed to fetch booking", detail: e.message, life: 2500 });
-      }
-    }
-
-    // If still no booking info, block Payment with a clear error
-    if (!booking?.id) {
-      toast.add({ severity: "error", summary: "No booking found", detail: "Cannot check in without a valid booking.", life: 3000 });
-      return;
-    }
-
-    // Deep copy server booking into selectedRoom
-    selectedRoom.value.guestDetails = { ...booking };
-
-    // Optional: scrub transient form so it can’t leak later
-    guestDetails.value = {
-      guestName: "",
-      cellphone: "",
-      guestEmail: "",
-      checkInDateTime: null,
-      selectedHours: null,
-      selectedrate: null,
-      bookingType: guestDetails.value.bookingType, // keep computed to avoid ref errors
-      payment: { amountReceived: 0, deposit: 0, isPaid: false },
-    };
-
-  } else {
-    // WALK-IN flow uses the transient form *once* to create an Occupied booking
-    paymentFlow.value = "WALKIN";
-    const g = guestDetails.value || {};
-    selectedRoom.value.guestDetails = {
-      guestName: g.guestName ?? "",
-      cellphone: g.cellphone ?? "",
-      guestEmail: g.guestEmail ?? "",
-      selectedHours: g.selectedHours ?? null,
-      selectedrate: g.selectedrate ?? null,
-      notes: g.notes ?? "",
-      bookingType: "WALK-IN",
-      payment: { amountReceived: 0, deposit: 0, isPaid: false },
-    };
-  }
-
-  paymentDialogVisible.value = true;
+if (room?.status === "Booked") {
+paymentFlow.value = "BOOKED";
+if (!selectedRoom.value.guestDetails?.id) {
+try {
+const res = await fetchLatestBooking(room.id);
+if (res?.data && Object.keys(res.data).length) {
+selectedRoom.value.guestDetails = {
+id: res.data.id,
+guestName: res.data.guest_name,
+cellphone: res.data.cellphone,
+guestEmail: res.data.guest_email,
+selectedHours: res.data.selected_hours,
+selectedrate: res.data.selected_rate,
+notes: res.data.notes,
+roomCode: res.data.room_code,
+bookCode: res.data.book_code,
+createdAt: res.data.created_at,
+checkInDateTime: res.data.check_in_datetime,
+checkOutDateTime: res.data.check_out_datetime,
+bookingType: res.data.booking_type,
+payment: res.data.payment || null,
+};
 }
+} catch (e) {
+toast.add({ severity: "error", summary: "Failed to fetch booking", detail: e.message, life: 2500 });
+return;
+}
+}
+} else {
+paymentFlow.value = "WALKIN";
+const g = guestDetails.value || {};
+  selectedRoom.value.guestDetails = {
+  guestName: g.guestName ?? "",
+  cellphone: g.cellphone ?? "",
+  guestEmail: g.guestEmail ?? "",
+  selectedHours: g.selectedHours ?? null,
+  selectedrate: g.selectedrate ?? null,
+  bookingType: "WALK-IN",
+  payment: { amountReceived: 0, deposit: 0, isPaid: false },
+  };
+}
+
+
+// finally show dialog
+paymentDialogVisible.value = true;
+
+
+if (!loadedProductsOncePD) {
+try {
+const res = await fetchPOSProducts();
+productsPD.value = res.data || [];
+loadedProductsOncePD = true;
+} catch (e) {
+toast.add({ severity: "error", summary: "POS Products", detail: "Failed to load products.", life: 2500 });
+}
+}
+
+
+// reset cart + preview every time you open payment
+cartPD.value = [];
+previewPD.value = { lines: [], total: 0 };
+productSearchQueryPD.value = "";
+
+
+// load active discounts last
+await loadDiscounts();
+
+ // Load available amenities with unit rental price (in-stock only)
+ try {
+   const resA = await getAvailableAmenities();
+   amenitiesPD.value = (resA?.data || []).map(a => ({
+     serial_id: Number(a.serial_id ?? a.id ?? a.serialId),
+     serial_number: a.serial_number,
+     product_name: a.product_name,
+     brand: a.brand,
+     unit_rental_price: Number(a.unit_rental_price || 0)
+   }));
+ } catch (e) {
+   amenitiesPD.value = [];
+ }
+}
+
 
 
 
@@ -1066,6 +1567,8 @@ onUnmounted(() => {
         return base + additionalRate.value;
     });
 
+    // (reverted) No auto options; hours and rate entered manually
+
     // Reset function
     function resetExtensionForm() {
         additionalHours.value = null;
@@ -1077,6 +1580,7 @@ onUnmounted(() => {
             ...room,
             guestDetails: { ...room.guestDetails },
         };
+        // (reverted) Do not fetch rates here
         resetExtensionForm();
         extendDialogVisible.value = true;
     }
@@ -1099,32 +1603,17 @@ onUnmounted(() => {
                 throw new Error("Room not found");
             }
 
-            // Update local state
-            rooms.value[roomIndex].guestDetails.selectedHours +=
-                additionalHours.value;
-            rooms.value[roomIndex].guestDetails.extendedHours =
-                (rooms.value[roomIndex].guestDetails.extendedHours || 0) +
-                additionalHours.value;
+            // Local-only extension (reverted)
+            rooms.value[roomIndex].guestDetails.selectedHours += Number(additionalHours.value);
+            rooms.value[roomIndex].guestDetails.extendedHours = (rooms.value[roomIndex].guestDetails.extendedHours || 0) + Number(additionalHours.value);
             rooms.value[roomIndex].guestDetails.selectedrate = newTotal.value;
-            // Update check-out time
-            const checkInDate = new Date(
-                rooms.value[roomIndex].guestDetails.checkInDateTime
-            );
-            const newCheckOut = new Date(
-                checkInDate.getTime() +
-                    rooms.value[roomIndex].guestDetails.selectedHours *
-                        60 *
-                        60 *
-                        1000
-            );
-            rooms.value[roomIndex].guestDetails.checkOutDateTime =
-                newCheckOut.toISOString();
-
-            // Persist changes
+            const checkInDate = new Date(rooms.value[roomIndex].guestDetails.checkInDateTime);
+            const newCheckOut = new Date(checkInDate.getTime() + rooms.value[roomIndex].guestDetails.selectedHours * 60 * 60 * 1000);
+            rooms.value[roomIndex].guestDetails.checkOutDateTime = newCheckOut.toISOString();
             localStorage.setItem("rooms", JSON.stringify(rooms.value));
-
-            // Simulate API call
             await updateRoomStatus(selectedRoom.value.id, "Occupied");
+
+            // (reverted) Do not log extension to payment history here
 
             toast.add({
                 severity: "success",
@@ -1203,7 +1692,6 @@ onUnmounted(() => {
                         guestEmail: res.data.guest_email,
                         selectedHours: res.data.selected_hours,
                         selectedrate: res.data.selected_rate,
-                        notes: res.data.notes,
                         roomCode: res.data.room_code,
                         bookCode: res.data.book_code,
                         createdAt: res.data.created_at,
@@ -1212,6 +1700,15 @@ onUnmounted(() => {
                         bookingType: res.data.booking_type,
                         payment: res.data.payment || selectedRoom.value.guestDetails?.payment || null,
                     };
+                    // Attach totals and items from backend if available
+                    selectedRoom.value.guestDetails.extrasTotal = Number(res.data.extras_total || 0);
+                    selectedRoom.value.guestDetails.amenitiesTotal = Number(res.data.amenities_total || 0);
+                    selectedRoom.value.guestDetails.extrasItems = res.data.extras_items || [];
+                    selectedRoom.value.guestDetails.amenitiesItems = res.data.amenities_items || [];
+                    // Charged room rate and discount snapshot (if provided)
+                    selectedRoom.value.guestDetails.roomRateCharged = Number(res.data.room_rate_charged || res.data.room_rate || 0);
+                    selectedRoom.value.guestDetails.discountName = res.data.discount_name || '';
+                    selectedRoom.value.guestDetails.discountPercent = Number(res.data.discount_percent || 0);
                 } else {
                     selectedRoom.value.guestDetails = null;
                 }
@@ -1542,89 +2039,70 @@ if (idx !== -1) {
             </div>
         </div>
 
-        <!-- Dialog -->
+        <!-- Room Dialog -->
         <Dialog
             v-model:visible="DialogVisible"
             header="Room Details"
             :modal="true"
             :dismissable-mask="true"
         >
-            <template #header>
-                <div
-                    class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-4 py-3"
-                >
-                    <!-- Left Section: Room Information -->
-                    <div class="space-y-1">
-                        <div class="flex items-baseline gap-2">
-                            <h2 class="text-2xl font-bold">
-                                Room {{ selectedRoom?.roomNumber }}
-                            </h2>
-                            <span class="text-lg">|</span>
-                            <span class="text-lg font-semibold">
-                                {{ selectedRoom?.type }}
-                            </span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <span class="text-sm font-medium"> Floor: </span>
-                            <span class="text-sm">
-                                {{ selectedRoom?.floor || "N/A" }}
-                            </span>
-                        </div>
-                    
+           <template #header>
+  <div class="px-4 py-3">
+     <div
+  class="p-4 rounded-lg border
+         bg-blue-50 text-blue-900 border-blue-200
+         dark:bg-blue-900/30 dark:text-blue-100 dark:border-blue-700
+         transition-colors duration-200 mt-5"
+>
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <!-- LEFT: Room info -->
+        <div class="space-y-1 md:flex-1">
+          <div class="flex items-baseline gap-2">
+            <h2 class="text-2xl font-bold">Room {{ selectedRoom?.roomNumber }}</h2>
+            <span class="text-lg">|</span>
+            <span class="text-lg font-semibold">{{ selectedRoom?.type }}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium">Floor:</span>
+            <span class="text-sm">{{ selectedRoom?.floor || "N/A" }}</span>
+          </div>
+        </div>
 
-                    </div>
+        <!-- RIGHT: Status -->
+        <div class="flex items-center gap-3 ml-auto">
+          <div
+            class="h-8 w-1 rounded-full"
+            :class="{
+              'bg-green-500': selectedRoom?.status === 'Available',
+              'bg-blue-500': selectedRoom?.status === 'Booked',
+              'bg-yellow-500': selectedRoom?.status === 'Cleaning',
+              'bg-red-500': selectedRoom?.status === 'Occupied',
+              'bg-gray-500': !['Available','Booked','Cleaning','Occupied'].includes(selectedRoom?.status),
+            }"
+          ></div>
+          <div class="space-y-0.5 text-right">
+            <span class="block text-xs font-medium uppercase tracking-wide">Status</span>
+            <p
+              class="text-sm font-semibold"
+              :class="{
+                'text-green-600': selectedRoom?.status === 'Available',
+                'text-blue-600': selectedRoom?.status === 'Booked',
+                'text-yellow-600': selectedRoom?.status === 'Cleaning',
+                'text-red-600': selectedRoom?.status === 'Occupied',
+                'text-gray-600': !['Available','Booked','Cleaning','Occupied'].includes(selectedRoom?.status),
+              }"
+            >
+              {{ selectedRoom?.status }}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+  </div>
+</template>
 
-                    <!-- Right Section: Status Indicator -->
-                    <div class="flex items-center gap-3">
-                        <div
-                            class="h-full w-1 rounded-l-md"
-                            :class="{
-                                'bg-green-500':
-                                    selectedRoom?.status === 'Available',
-                                'bg-blue-500': selectedRoom?.status === 'Booked',
-                                'bg-yellow-500':
-                                    selectedRoom?.status === 'Cleaning',
-                                'bg-red-500': selectedRoom?.status === 'Occupied',
-                                'bg-gray-500': ![
-                                    'Available',
-                                    'Booked',
-                                    'Cleaning',
-                                    'Occupied',
-                                ].includes(selectedRoom?.status),
-                            }"
-                        ></div>
-                        <div class="space-y-1">
-                            <span
-                                class="text-xs font-medium uppercase tracking-wide"
-                            >
-                                Status
-                            </span>
-                            <p
-                                class="text-sm font-semibold"
-                                :class="{
-                                    'text-green-600':
-                                        selectedRoom?.status === 'Available',
-                                    'text-blue-600':
-                                        selectedRoom?.status === 'Booked',
-                                    'text-yellow-600':
-                                        selectedRoom?.status === 'Cleaning',
-                                    'text-red-600':
-                                        selectedRoom?.status === 'Occupied',
-                                    'text-gray-600': ![
-                                        'Available',
-                                        'Booked',
-                                        'Cleaning',
-                                        'Occupied',
-                                    ].includes(selectedRoom?.status),
-                                }"
-                            >
-                                {{ selectedRoom?.status }}
-                            </p>
-                        </div>
-                    </div>
 
-                </div>
-            </template>
             <div v-if="selectedRoom">
                 <!-- Available Room Actions -->
                 <div
@@ -1692,7 +2170,7 @@ if (idx !== -1) {
                         </p>
 
                         <p>
-                            Selected Hours:
+                            Hours:
                             {{ selectedRoom.guestDetails?.selectedHours || "N/A" }}
                             Hours
                         </p>
@@ -1721,12 +2199,13 @@ if (idx !== -1) {
                     </div>
                     <!-- Actions for Booked Rooms -->
                     <div class="flex gap-2 mt-4 justify-center">
-                        <Button
+                       <Button
   label="Check In"
   :disabled="!isCheckInAllowed"
   class="p-button-primary w-full rounded-lg"
-  @click="async () => { await openDialog(selectedRoom); openPaymentDialog(selectedRoom); }"
+  @click="openPaymentDialog(selectedRoom)"
 />
+
                         <Button
                             label="Cancel Booking"
                             class="p-button-primary w-full rounded-lg"
@@ -1773,7 +2252,7 @@ if (idx !== -1) {
                         {{ selectedRoom.guestDetails?.bookCode || "N/A" }}
                     </p>
                     <p>
-                        <strong>Selected Hours:</strong>
+                        <strong>Hours:</strong>
                         {{ selectedRoom.guestDetails?.selectedHours || "N/A" }}
                         Hours
                     </p>
@@ -1797,59 +2276,83 @@ if (idx !== -1) {
 
 
 
-                    <div class="mt-4 pt-4 border-t">
+                    <div class="mt-4 pt-4 border-t space-y-3">
                         <h4 class="text-xl mb-2 font-bold">Payment Details</h4>
-                        <p>
-                            <strong>Total Amount:</strong>
-                            {{
-                                selectedRoom.guestDetails?.selectedrate
-                                    ? formatCurrency(
-                                        selectedRoom.guestDetails.selectedrate
-                                    )
-                                    : "N/A"
-                            }}
-                        </p>
-                        <p>
-                            <strong>Amount Received:</strong>
-                            {{
-                                selectedRoom.guestDetails?.payment?.amountReceived !== undefined &&
-                                selectedRoom.guestDetails?.payment?.amountReceived !== null
-                                    ? formatCurrency(
-                                        selectedRoom.guestDetails.payment.amountReceived
-                                    )
-                                    : "N/A"
-                            }}
-                        </p>
-                        <p>
-                            <strong>Deposit:</strong>
-                            {{
-                                selectedRoom.guestDetails?.payment?.deposit !== undefined &&
-                                selectedRoom.guestDetails?.payment?.deposit !== null
-                                    ? formatCurrency(
-                                        selectedRoom.guestDetails.payment.deposit
-                                    )
-                                    : "N/A"
-                            }}
-                        </p>
 
-                        <p>
-                            <strong>Payment Status:</strong>
-                            <span
-                                :class="{
-                                    'text-white rounded-full px-2 py-1 text-sm ml-2 ': true,
-                                    'bg-green-500':
-                                        selectedRoom.guestDetails?.payment?.isPaid,
-                                    'bg-red-500':
-                                        !selectedRoom.guestDetails?.payment?.isPaid,
-                                }"
-                            >
-                                {{
-                                    selectedRoom.guestDetails?.payment?.isPaid
-                                        ? "Paid"
-                                        : "Pending"
-                                }}
+                        
+
+                        <!-- Extras list -->
+                        <div>
+                          <div class="text-sm uppercase tracking-wide text-gray-500 mb-1">Extras</div>
+                          <div v-if="(selectedRoom.guestDetails?.extrasItems || []).length" class="space-y-1 text-sm">
+                            <div v-for="(it, i) in selectedRoom.guestDetails.extrasItems" :key="i" class="flex items-center justify-between">
+                              <span>{{ it.name }}<span v-if="it.brand" class="opacity-60"> ({{ it.brand }})</span> ×{{ it.quantity }}</span>
+                              <span>{{ formatCurrency(it.price) }}</span>
+                            </div>
+                          </div>
+                          <div v-else class="text-sm opacity-60">No extras.</div>
+                        </div>
+
+                        <!-- Amenities list -->
+                        <div>
+                          <div class="text-sm uppercase tracking-wide text-gray-500 mb-1">Amenities</div>
+                          <div v-if="(selectedRoom.guestDetails?.amenitiesItems || []).length" class="space-y-1 text-sm">
+                            <div v-for="(a, i) in selectedRoom.guestDetails.amenitiesItems" :key="i" class="flex items-center justify-between">
+                              <span>{{ a.amenity_name }} <span v-if="a.serial_number" class="opacity-60">#{{ a.serial_number }}</span></span>
+                              <span>{{ formatCurrency(a.unit_rental_price) }}</span>
+                            </div>
+                          </div>
+                          <div v-else class="text-sm opacity-60">No amenities.</div>
+                        </div>
+
+                        <!-- Payment -->
+                        <div>
+                          <div class="text-sm uppercase tracking-wide text-gray-500 mb-1">Payment</div>
+                          <div class="flex items-center justify-between text-sm">
+                            <span>Room Rate</span>
+                            <span class="flex items-center gap-2">
+                              <strong>{{ formatCurrency(occRoomRate) }}</strong>
+                              <span
+                                v-if="Number(selectedRoom.guestDetails?.discountPercent || 0) > 0"
+                                class="discount-pill"
+                              >
+                                {{ selectedRoom.guestDetails?.discountName || 'Promo' }} -{{ Number(selectedRoom.guestDetails.discountPercent) }}%
+                              </span>
                             </span>
-                        </p>
+                          </div>
+                          <div class="flex items-center justify-between text-sm">
+                            <span>Extras</span>
+                            <strong>{{ formatCurrency(occExtras) }}</strong>
+                          </div>
+                          <div class="flex items-center justify-between text-sm">
+                            <span>Rent</span>
+                            <strong>{{ formatCurrency(occRent) }}</strong>
+                          </div>
+                          <div class="flex items-center justify-between text-sm">
+                            <span>Deposit</span>
+                            <strong>{{ formatCurrency(occupiedPayment.deposit || 0) }}</strong>
+                          </div>
+                          <div class="flex items-center justify-between text-sm">
+                            <span>Amount Received</span>
+                            <strong>{{ formatCurrency(occupiedPayment.amountReceived || 0) }}</strong>
+                          </div>
+                          <hr>
+                          <div class="flex items-center justify-between text-m">
+                            <span>Total Due</span>
+                            <strong>{{ formatCurrency(occTotalDue) }}</strong>
+                          </div>
+                          <div class="flex items-center justify-between text-xl">
+                            <span>Change</span>
+                            <strong :class="{ 'text-red-600': (occupiedPayment.amountReceived||0) < occTotalDue, 'text-green-700': (occupiedPayment.amountReceived||0) >= occTotalDue }">
+                              {{ formatCurrency(occChange) }}
+                            </strong>
+                          </div>
+                          <hr></hr>
+                          <div class="flex items-start justify-between text-sm">
+                            <span>Note</span>
+                            <span class="text-right opacity-80">{{ selectedRoom.guestDetails?.payment?.note || '—' }}</span>
+                          </div>
+                        </div>
                     </div>
 
                     <!-- Action Buttons -->
@@ -1972,25 +2475,37 @@ if (idx !== -1) {
                                     Select Stay Duration:
                                     </label>
 
-  <div class="grid grid-cols-3 gap-4">
-    <div
-      v-for="(rate, hours) in selectedRoom?.rate"
-      :key="hours"
-      :class="[
-        'p-4 border rounded-lg cursor-pointer',
-        { 'border-blue-500 bg-blue-50': guestDetails.selectedHours === parseInt(hours) },
-      ]"
-      @click="BookingselectRateAndHours(parseInt(hours), Number(selectedRoom?.rate?.[hours] ?? 0))"
-    >
-      <div class="font-semibold text-lg">
-        {{ hours }} Hours
-      </div>
-
-      <div class="text-gray-700 mt-1">
-        {{ formatCurrency(selectedRoom?.rate?.[hours]) }}
-      </div>
+  <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+  <div
+    v-for="(rate, hours) in selectedRoom?.rate"
+    :key="hours"
+    role="button"
+    tabindex="0"
+    :class="[
+      // base
+      'p-4 border rounded-lg cursor-pointer select-none transition-colors',
+      // light & dark defaults
+      'bg-white border-neutral-200 text-neutral-900 hover:bg-neutral-50',
+      'dark:bg-neutral-900 dark:border-neutral-700 dark:text-neutral-100 dark:hover:bg-neutral-800',
+      // selected state
+      guestDetails.selectedHours === parseInt(hours)
+        ? 'border-blue-500 ring-2 ring-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200'
+        : ''
+    ]"
+    @click="BookingselectRateAndHours(parseInt(hours), Number(selectedRoom?.rate?.[hours] ?? 0))"
+    @keydown.enter="BookingselectRateAndHours(parseInt(hours), Number(selectedRoom?.rate?.[hours] ?? 0))"
+    @keydown.space.prevent="BookingselectRateAndHours(parseInt(hours), Number(selectedRoom?.rate?.[hours] ?? 0))"
+  >
+    <div class="font-semibold text-lg">
+      {{ hours }} Hours
     </div>
+
+    <div class="mt-1 text-neutral-700 dark:text-neutral-300">
+      {{ formatCurrency(selectedRoom?.rate?.[hours]) }}
+    </div>
+
   </div>
+</div>
 </div>
 
                 <!-- Action Buttons -->
@@ -2134,10 +2649,7 @@ if (idx !== -1) {
                             : "N/A"
                     }}
                 </p>
-                <p class="font-medium mb-2">
-                    Additional Notes:
-                    {{ selectedRoom?.guestDetails?.notes || "N/A" }}
-                </p>
+                <!-- Notes removed: bookings.notes no longer exists -->
             </div>
             <div class="flex justify-end mt-4">
                 <Button
@@ -2154,103 +2666,294 @@ if (idx !== -1) {
         </Dialog>
 
         <!-- Payment Dialog -->
-        <Dialog
-            v-model:visible="paymentDialogVisible"
-            header="Payment for Check-In"
-            :modal="true"
-            :dismissable-mask="true"
-            style="width: 70vh"
-        >
+       <Dialog
+  v-model:visible="paymentDialogVisible"
+  header="Payment for Check-In"
+  :modal="true"
+  :dismissable-mask="true"
+  :style="{ width: '90vw', maxWidth: '1400px' }"
+  :breakpoints="{ '1600px': '80vw', '1200px': '85vw', '960px': '95vw', '640px': '98vw' }"
+  maximizable
+>
+
             <template #header>
                 <div class="font-bold text-xl">
                     Payment for Room {{ selectedRoom?.roomNumber }}
                 </div>
             </template>
 
-            <div class="p-4 space-y-4">
-                <!-- Booking Details -->
-                <div class="bg-gray-50 p-4 rounded-lg">
-                    <div class="space-y-2">
-                        <h4 class="text-lg font-semibold">Details</h4>
-                        <p>
-                            Guest Name:
-                            {{ selectedRoom?.guestDetails?.guestName || "N/A" }}
-                        </p>
-                        <p>
-                            Selected Hours:
-                            {{ selectedRoom?.guestDetails?.selectedHours || "N/A" }}
-                            Hours
-                        </p>
-                        <p>
-                            Rate:
-                            {{
-                                formatCurrency(
-                                    selectedRoom?.guestDetails?.selectedrate || 0
-                                )
-                            }}
-                        </p>
-                        <p>
-                            Total Amount:
-                            {{
-                                formatCurrency(
-                                    selectedRoom?.guestDetails?.selectedrate || 0
-                                )
-                            }}
-                        </p>
-                    </div>
-                </div>
+           <div
+  class="p-4 rounded-lg border
+         bg-blue-50 text-blue-900 border-blue-200
+         dark:bg-blue-900/30 dark:text-blue-100 dark:border-blue-700
+         transition-colors duration-200"
+>
+    <div class="space-y-2">
+      <h4 class="text-lg font-semibold">Details</h4>
+      <div v-if="(selectedRoom?.guestDetails?.extendedHours || 0) > 0" class="inline-block px-2 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold">
+        Extended: +{{ selectedRoom.guestDetails.extendedHours }}h
+      </div>
+      <p>Guest Name: {{ selectedRoom?.guestDetails?.guestName || "N/A" }}</p>
+      <p>Hours: {{ selectedRoom?.guestDetails?.selectedHours || "N/A" }} Hours</p>
+      <p>Room Rate: {{ formatCurrency(selectedRoom?.guestDetails?.selectedrate || 0) }}</p>
+    </div>
+  </div>
 
-                <!-- Payment Details -->
-                <div class="space-y-4">
-                    <!-- Total Amount Due -->
-                    <div class="bg-gray-50 p-4 rounded-lg">
-                        <div class="flex justify-between items-center">
-                            <span class="font-medium">Total Amount Due:</span>
-                            <span class="font-semibold text-lg">
-                                {{ formatCurrency(totalAmountDue) }}
-                            </span>
-                        </div>
-                    </div>
+  <!-- Simple POS: Search + Products + Cart (no history) -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-5">
+    <!-- Products -->
+    <div class="border rounded-lg p-3">
+      <div class="font-semibold mb-2">Consumables (POS)</div>
+      <InputText v-model="productSearchQueryPD" placeholder="Search product..." class="w-full mb-3" />
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 overflow-y-auto" style="max-height: 260px">
+        <div
+          v-for="p in filteredProductsPD"
+          :key="p.id"
+          class="p-3 border rounded-md"
+        >
+          <div class="font-medium">{{ p.name }}</div>
+          <div class="text-xs opacity-70"> {{ p.brand || "—" }}</div>
+          <div class="text-xs opacity-70">Stock: {{ p.stock }}</div>
+          <div class="text-sm font-semibold mt-1">₱{{ Number(p.price).toFixed(2) }}</div>
+          <Button
+            label="Add"
+            icon="pi pi-plus"
+            class="p-button-primary mt-2 w-full"
+            :disabled="p.stock <= 0"
+            @click="addToCartPD(p)"
+          />
+        </div>
+      </div>
+    </div>
 
-                    <!-- Amount Received -->
-                    <div class="space-y-2">
-                        <InputText
-                            v-model="paymentDetails.amountReceived"
-                            placeholder="Enter amount received"
-                            class="w-full"
-                            type="number"
-                        />
-                    </div>
+    <!-- Cart -->
+    <div class="border rounded-lg p-3">
+      <div class="font-semibold mb-2">Extras Cart</div>
 
-                    <!-- Deposit -->
-                    <div class="space-y-2">
-                        <InputText
-                            v-model="paymentDetails.deposit"
-                            placeholder="Enter deposit amount"
-                            class="w-full"
-                            type="number"
-                        />
-                    </div>
-
-                    <!-- Change -->
-                    <div v-if="calculateChange !== null" class="space-y-2">
-                        <label class="block text-sm font-medium text-gray-600">
-                            Change
-                        </label>
-                        <InputText
-                            :modelValue="formatCurrency(calculateChange)"
-                            readonly
-                            class="w-full bg-gray-100"
-                        />
-                    </div>
-
-                    <!-- Validation Message -->
-                    <div v-if="isAmountInsufficient" class="text-red-500 text-sm">
-                        The amount received is insufficient. Please provide more
-                        funds.
-                    </div>
-                </div>
+      <DataTable
+        :value="cartViewPD"
+        class="p-datatable-sm"
+        responsiveLayout="scroll"
+        dataKey="vkey"
+        :showGridlines="true"
+        scrollable
+        scrollHeight="220px"
+      >
+        <Column field="name" header="Product" />
+        <Column field="brand" header="Brand">
+  <template #body="{ data }">
+    <span class="text-sm">{{ data.brand || '—' }}</span>
+  </template>
+</Column>
+        <Column header="Qty" class="flex items-center justify-center">>
+          <template #body="{ data }">
+            <div class="flex items-center gap-1">
+              <Button icon="pi pi-minus" class="p-button-text" @click.stop="decreaseBatchPD(data)" />
+              <span class="inline-block min-w-[2ch] text-center">{{ data.quantity }}</span>
+              <Button
+                icon="pi pi-plus"
+                class="p-button-text"
+                :disabled="(cartPD.find(i => Number(i.id) === Number(data.id))?.quantity || 0) >= (stockByIdPD.get(Number(data.id)) || 0)"
+                @click.stop="increaseBatchPD(data)"
+              />
             </div>
+          </template>
+        </Column>
+        <Column header="Unit">
+          <template #body="{ data }">₱{{ Number(data.unitPrice ?? uiUnitPricePD(data)).toFixed(2) }}</template>
+        </Column>
+        <Column header="Subtotal">
+          <template #body="{ data }">₱{{ Number(data.subtotal ?? uiSubtotalPD(data)).toFixed(2) }}</template>
+        </Column>
+        <Column header="Action" class="flex items-center justify-center">
+          <template #body="{ data }">
+            <Button icon="pi pi-trash" class="p-button-danger p-button-text" @click.stop="removeBatchPD(data)" />
+          </template>
+        </Column>
+      </DataTable>
+
+      <div class="text-right mt-3">
+        <div> Total: <span class="font-semibold">₱{{ Number(uiTotalExtrasPD).toFixed(2) }}</span></div>
+      </div>
+    </div>
+
+    
+  
+  </div>
+
+
+  <!-- Payment inputs + Totals -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div class="space-y-2 mt-5">
+        <!-- Amenities for Rent -->
+      <div class="border rounded-lg p-3">
+        <div class="flex items-center justify-between mb-2">
+          <span class="font-semibold">Amenities Rent</span>
+        </div>
+        <InputText v-model="amenitiesSearch" placeholder="Search amenity..." class="w-full mb-2" />
+        <div class="space-y-2 overflow-y-auto" style="max-height: 220px">
+          <label v-for="a in filteredAmenitiesPD" :key="a.serial_id" class="flex items-center gap-2 p-2 rounded hover:bg-gray-50">
+            <Checkbox v-model="selectedAmenityIds" :inputId="`amen-${a.serial_id}`" :value="a.serial_id" />
+            <div class="flex-1">
+              <div class="font-medium text-sm">{{ a.product_name }} <span class="opacity-60">#{{ a.serial_number }}</span></div>
+              <div class="text-xs opacity-60">{{ a.brand || '—' }}</div>
+            </div>
+            <div class="text-sm font-semibold">₱{{ Number(a.unit_rental_price).toFixed(2) }}</div>
+          </label>
+        </div>
+      </div>
+
+    
+    
+
+
+      <div :class="['rounded-lg p-3 border', paymentHighlightClass]">
+        <div class="flex items-center justify-between mb-2">
+          <div class="font-semibold">Payment</div>
+          <div class="text-sm font-bold">Total: {{ formatCurrency(totalAmountDue) }}</div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <InputText
+            v-model="paymentDetails.amountReceived"
+            placeholder="Amount received (cash)"
+            type="number"
+            :class="['w-full', { 'p-invalid': isAmountInsufficient }]"
+          />
+          <InputText v-model="paymentDetails.deposit" placeholder="Deposit" type="number" />
+        </div>
+        <div v-if="isAmountInsufficient" class="text-xs text-red-700 mt-1">Insufficient amount received.</div>
+      </div>
+       <div :class="['rounded-lg p-3 border', discountHighlightClass]">
+<div class="flex flex-col md:flex-row md:items-center gap-3">
+<span class="font-medium">Discount</span>
+<Dropdown
+v-model="selectedDiscountId"
+:options="activeDiscounts"
+optionLabel="name"
+optionValue="id"
+placeholder="Select promo"
+class="w-full md:w-80"
+:showClear="true"
+/>
+<span v-if="selectedDiscount" class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+{{ selectedDiscount.name }} – {{ Number(selectedDiscount.percent) }}%
+</span>
+</div>
+</div>
+      <div class="border rounded-lg p-3">
+        <div class="font-semibold mb-2">Note</div>
+        <textarea
+          v-model="paymentDetails.note"
+          rows="3"
+          placeholder="e.g., No change available; will return ₱20 later."
+          class="w-full p-2 border rounded-md focus:outline-none focus:ring"
+        />
+      </div>
+      
+    </div>
+        
+    <div class="space-y-2 mt-5">
+      
+        <!-- Amenities Cart -->
+        <div class="border rounded-lg p-3">
+          <div class="flex items-center justify-between mb-2">
+            <div class="font-semibold mb-2">Amenities Cart</div>
+          </div>
+
+          <DataTable
+            
+            :value="selectedAmenitiesPD"
+            class="p-datatable-sm"
+            responsiveLayout="scroll"
+            :showGridlines="true"
+            scrollable
+            scrollHeight="220px"
+          >
+            <Column field="name" header="Amenity" />
+            <Column field="brand" header="Brand">
+              <template #body="{ data }">
+                <span class="text-sm">{{ data.brand || '—' }}</span>
+              </template>
+            </Column>
+            <Column field="serial" header="Serial" />
+            <Column field="price" header="Price">
+              <template #body="{ data }">{{ formatCurrency(data.price) }}</template>
+            </Column>
+            <Column header="Action" class="flex items-center justify-center text-center">
+              <template #body="{ data }">
+                <Button icon="pi pi-trash" class=" p-button-danger p-button-text" @click="removeAmenityPD(data.id)" />
+              </template>
+            </Column>
+          </DataTable>
+          
+           <div class="text-right mt-3">
+        <div>Total: <span class="font-semibold">₱{{ Number(uiTotalAmenitiesPD).toFixed(2) }}</span></div>
+      </div>
+        
+        </div>
+      
+
+      
+      <div
+  class="p-4 rounded-lg border
+         bg-blue-50 text-blue-900 border-blue-200
+         dark:bg-blue-900/30 dark:text-blue-100 dark:border-blue-700
+         transition-colors duration-200"
+>
+  <div class="font-semibold mb-2">Summary</div>
+  <!-- Room price -->
+  <div class="flex items-center justify-between">
+    <span>Room Rate</span>
+    <div class="text-right">
+      <template v-if="selectedDiscount">
+        <div class="inline-flex items-center gap-1">
+          <span class="price-old">{{ formatCurrency(roomRate) }}</span>
+          <span class="discount-pill">-{{ Number(roomDiscountPercent) }}%</span>
+        </div>
+        <div class="price-new">{{ formatCurrency(discountedRoomRate) }}</div>
+      </template>
+      <template v-else>
+        <div class="price-new">{{ formatCurrency(roomRate) }}</div>
+      </template>
+    </div>
+  </div>
+
+  <!-- Extras & deposit -->
+  <div class="flex items-center justify-between py-1">
+    <span>Extras</span>
+    <span class="font-semibold">₱{{ Number(uiTotalExtrasPD).toFixed(2) }}</span>
+  </div>
+  <div class="flex items-center justify-between py-1">
+    <span>Amenities Rent</span>
+    <span class="font-semibold">₱{{ Number(uiTotalAmenitiesPD).toFixed(2) }}</span>
+  </div>
+  <div class="flex items-center justify-between py-1">
+    <span>Deposit</span>
+    <span class="font-semibold">₱{{ Number(paymentDetails.deposit || 0).toFixed(2) }}</span>
+  </div>
+
+  <hr />
+
+  <!-- Totals -->
+  <div class="flex items-center justify-between text-lg font-bold">
+    <span>Total Due</span>
+    <span>{{ formatCurrency(totalAmountDue) }}</span>
+  </div>
+
+  <div class="flex items-center justify-between mt-1">
+    <span>Change</span>
+    <span class="font-semibold" :class="{ 'text-red-600': isAmountInsufficient, 'text-green-700': !isAmountInsufficient }">
+      {{ formatCurrency(calculateChange) }}
+    </span>
+  </div>
+
+  <div v-if="isAmountInsufficient" class="text-red-500 text-xs">
+    Insufficient amount received.
+  </div>
+</div>
+</div>
+  </div>
+
 
             <!-- Action Buttons -->
             <div class="flex gap-4 mt-6">
@@ -2268,9 +2971,146 @@ if (idx !== -1) {
                     icon="pi pi-check"
                     class="flex-1 p-button-primary"
                     :disabled="isAmountInsufficient"
-                    @click="handleWalkInPayment"
+                    @click="openConfirmPayment"
                 />
             </div>
+        </Dialog>
+
+        <!-- Confirm Payment Summary Dialog -->
+        <Dialog
+          v-model:visible="confirmPaymentDialogVisible"
+          header="Confirm Payment"
+          :modal="true"
+          :dismissable-mask="true"
+          :style="{ width: '30vw', maxWidth: '1200px' }"
+        >
+          <div class="space-y-4">
+            <div class="rounded-lg border p-4 bg-white dark:bg-slate-900">
+              <div class="text-lg font-semibold mb-3">Review & Confirm</div>
+
+              <!-- Guest -->
+              <div class="mb-3">
+                <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Guest</div>
+                <div class="text-sm">Name: <strong>{{ selectedRoom?.guestDetails?.guestName || 'N/A' }}</strong></div>
+                <div class="text-sm">Room: <strong>{{ selectedRoom?.roomNumber || '—' }}</strong></div>
+                <div class="text-sm">Hours: <strong>{{ selectedRoom?.guestDetails?.selectedHours || 0 }}</strong></div>
+              </div>
+
+              <!-- Rate / Discount -->
+              <div class="border-t pt-3 mb-3">
+                <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Rate</div>
+                <div class="flex items-center justify-between">
+                  <span class="text-sm">Room:</span>
+                  <template v-if="selectedDiscount">
+                    <div class="text-right">
+                      <div class="inline-flex items-center gap-1">
+                        <span class="price-old">{{ formatCurrency(roomRate) }}</span>
+                        <span class="discount-pill">-{{ Number(roomDiscountPercent) }}%</span>
+                      </div>
+                      <div class="price-new mt-1">{{ formatCurrency(discountedRoomRate) }}</div>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <span class="font-semibold">{{ formatCurrency(roomRate) }}</span>
+                  </template>
+                </div>
+                <div v-if="discountBadgeText" class="mt-1 inline-block px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs">{{ discountBadgeText }}</div>
+              </div>
+
+              <!-- Extras -->
+              <div class="border-t pt-3 mb-3">
+                <div class="flex items-center justify-between">
+                  <div class="text-xs uppercase tracking-wide text-gray-500">Extras</div>
+                  <div class="text-m"> <strong>{{ formatCurrency(uiTotalExtrasPD) }}</strong></div>
+                </div>
+                <div class="mt-1 space-y-1">
+                  <div v-if="extrasListTop.length" class="text-sm">
+                    <div v-for="(t, idx) in extrasListTop" :key="idx">• {{ t }}</div>
+                    <div v-if="extrasOverflow > 0" class="text-xs text-gray-500">+ {{ extrasOverflow }} more</div>
+                  </div>
+                  <div v-else class="text-sm opacity-60">None</div>
+                </div>
+              </div>
+
+              <!-- Amenities -->
+              <div class="border-t pt-3 mb-3">
+                <div class="flex items-center justify-between">
+                  <div class="text-xs uppercase tracking-wide text-gray-500">Amenities</div>
+                  <div class="text-m"> <strong>{{ formatCurrency(uiTotalAmenitiesPD) }}</strong></div>
+                </div>
+                <div class="mt-1 space-y-1">
+                  <div v-if="amenitiesListTop.length" class="text-sm">
+                    <div v-for="(t, idx) in amenitiesListTop" :key="idx">• {{ t }}</div>
+                    <div v-if="amenitiesOverflow > 0" class="text-xs text-gray-500">+ {{ amenitiesOverflow }} more</div>
+                  </div>
+                  <div v-else class="text-sm opacity-60">None</div>
+                </div>
+              </div>
+
+              <!-- Payment -->
+              <div class="border-t pt-3 mb-3">
+                <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Payment</div>
+                <div class="text-sm flex items-center justify-between">
+                  <span>Room Rate</span>
+                  <strong>
+                    <template v-if="selectedDiscount">
+                      {{ formatCurrency(discountedRoomRate) }}
+                    </template>
+                    <template v-else>
+                      {{ formatCurrency(roomRate) }}
+                    </template>
+                  </strong>
+                </div>
+                <div class="text-sm flex items-center justify-between">
+                  <span>Extras</span>
+                  <strong>{{ formatCurrency(uiTotalExtrasPD) }}</strong>
+                </div>
+                <div class="text-sm flex items-center justify-between">
+                  <span>Rent</span>
+                  <strong>{{ formatCurrency(uiTotalAmenitiesPD) }}</strong>
+                </div>
+                <div class="text-sm flex items-center justify-between">
+                  <span>Deposit</span>
+                  <strong>{{ formatCurrency(paymentDetails.deposit) }}</strong>
+                </div>
+                 <div class="text-sm flex items-center justify-between">
+                  <span>Amount Received</span>
+                  <strong>{{ formatCurrency(paymentDetails.amountReceived) }}</strong>
+                </div>
+                  <hr />
+                <div class="text-xl flex items-center justify-between">
+                  <span>Total Due</span>
+                  <strong>{{ formatCurrency(totalAmountDue) }}</strong>
+                </div>
+                <div class="text-m flex items-center justify-between">
+                  <span>Change</span>
+                  <strong :class="{ 'text-red-600': isAmountInsufficient, 'text-green-700': !isAmountInsufficient }">{{ formatCurrency(calculateChange) }}</strong>
+                </div>
+              </div>
+
+              <!-- Note -->
+              <div class="border-t pt-3">
+                <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Note</div>
+                <div class="text-sm whitespace-pre-line border rounded p-2">{{ paymentDetails.note || '—' }}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="flex gap-4 mt-6">
+            <Button
+              label="Back"
+              class="flex-1"
+              @click="confirmPaymentDialogVisible = false"
+            />
+            <Button
+              label="Confirm & Check-In"
+              icon="pi pi-check"
+              class="flex-1 p-button-primary"
+              :disabled="isAmountInsufficient"
+              @click="confirmAndCheckIn"
+            />
+          </div>
         </Dialog>
 
         <!-- Checkout Dialog -->
@@ -2577,5 +3417,37 @@ if (idx !== -1) {
     0%   { background-position:   0% 50%; }
     100% { background-position: 200% 50%; }
     }
+
+    .price-old {
+  position: relative;
+  display: inline-block;
+  color: #9ca3af;          /* gray-400 */
+  text-decoration: line-through;
+}
+
+.price-old::after {
+  content: "";
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  top: 50%;
+  border-top: 2px solid #ef4444; /* red-500 */
+  transform: rotate(-10deg);
+}
+
+.price-new {
+  font-weight: 700;
+  font-size: 1.125rem; /* text-lg */
+}
+
+.discount-pill {
+  display: inline-block;
+  font-weight: 700;
+  font-size: 0.75rem;       /* text-xs */
+  background: #fee2e2;      /* red-100 */
+  color: #b91c1c;           /* red-700 */
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;    /* pill */
+}
 
     </style>
