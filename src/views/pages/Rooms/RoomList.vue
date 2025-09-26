@@ -1788,9 +1788,14 @@ const occDeposit = computed(() => {
   return Number(g.payment?.deposit ?? g.payment?.deposit_amount ?? 0);
 });
 const occTotalDue = computed(() => {
-  const payVal = Number(occupiedPayment.value.totalDue ?? occupiedPayment.value.total_due ?? NaN);
-  if (Number.isFinite(payVal) && payVal > 0) return payVal;
-  return occRoomRate.value + occExtras.value + occRent.value + occDeposit.value + occExtend.value + occDamageCharges.value;
+  const base = occRoomRate.value + occExtras.value + occRent.value + occExtend.value;
+  const liveDamage = checkoutDamageChargesNumber.value;
+  if (Number.isFinite(liveDamage) && liveDamage > 0) {
+    return roundCurrency(base + liveDamage);
+  }
+  const storedTotal = Number(occupiedPayment.value.totalDue ?? occupiedPayment.value.total_due ?? NaN);
+  if (Number.isFinite(storedTotal) && storedTotal > 0) return storedTotal;
+  return roundCurrency(base + occDamageCharges.value);
 });
 const occChange = computed(() => {
   const pay = occupiedPayment.value;
@@ -4191,40 +4196,37 @@ class="w-full md:w-80"
                     </div>
                     <div v-if="checkoutAmenitiesLoading" class="text-sm text-gray-500">Loading assigned amenities...</div>
                     <div v-else-if="checkoutAmenitiesError" class="text-sm text-red-600">{{ checkoutAmenitiesError }}</div>
-                    <div v-else-if="checkoutAssignedAmenities.length" class="space-y-3">
+                    <div v-else-if="checkoutAssignedAmenities.length" class="max-h-32 overflow-y-auto space-y-2 pr-1">
                       <div
                         v-for="(amenity, idx) in checkoutAssignedAmenities"
                         :key="amenity.serial_id ?? amenity.id ?? idx"
-                        :class="['border rounded-lg p-3 space-y-2 transition-colors', amenity.damaged ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-white']"
+                        :class="['border rounded-md p-2 text-sm transition-colors', amenity.damaged ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-white']"
                       >
-                        <div class="flex items-start justify-between gap-3">
-                          <div>
-                            <div class="font-semibold">
-                              {{ amenity.product_name || amenity.amenity_name || ('Amenity ' + (idx + 1)) }}
+                        <div class="flex items-start justify-between gap-2">
+                          <div class="space-y-0.5">
+                            <div class="font-semibold text-xs uppercase tracking-wide text-gray-600">{{ amenity.product_name || amenity.amenity_name || ('Amenity ' + (idx + 1)) }}</div>
+                            <div class="text-xs text-gray-500 flex flex-wrap gap-x-2">
+                              <span v-if="amenity.brand">Brand: {{ amenity.brand }}</span>
+                              <span v-if="amenity.product_type">Type: {{ amenity.product_type }}</span>
+                              <span v-if="amenity.serial_number">SN: {{ amenity.serial_number }}</span>
                             </div>
-                            <div v-if="amenity.brand" class="text-xs text-gray-500">{{ amenity.brand }}</div>
-                            <div v-if="amenity.product_type" class="text-xs text-gray-500">Type: {{ amenity.product_type }}</div>
-                            <div v-if="amenity.serial_number" class="text-xs text-gray-500">SN: {{ amenity.serial_number }}</div>
                           </div>
                           <span
                             v-if="amenity.status || amenity.damaged"
-                            class="text-xs px-2 py-1 rounded-full border"
+                            class="text-[10px] px-2 py-0.5 rounded-full border self-start"
                             :class="amenity.damaged ? 'border-red-300 text-red-600 bg-red-50' : 'border-gray-300 text-gray-600 bg-gray-50'"
                           >
                             {{ amenity.damaged ? 'Damaged (pending)' : (amenity.status || 'Assigned') }}
                           </span>
                         </div>
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-2 mt-2 text-xs">
                           <Checkbox
                             :binary="true"
                             v-model="amenity.damaged"
                             :inputId="`checkout-damage-${idx}`"
                             @change="toggleCheckoutAmenityDamage(amenity)"
                           />
-                          <label :for="`checkout-damage-${idx}`" class="text-sm font-medium">
-                            Mark as damaged
-                           
-                          </label>
+                          <label :for="`checkout-damage-${idx}`" class="font-medium">Mark as damaged</label>
                         </div>
                       </div>
                     </div>
