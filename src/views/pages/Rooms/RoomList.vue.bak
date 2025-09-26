@@ -86,9 +86,6 @@ async function confirmExtension() {
   try {
     const { hours, amount, amountReceived } = validateExtendInputs();
 
-    const roomId = Number(selectedRoom.value?.id);
-    if (!roomId) throw new Error('Room not found');
-
     const roomIndex = rooms.value.findIndex(r => r.id === selectedRoom.value.id);
     if (roomIndex === -1) throw new Error("Room not found");
 
@@ -113,7 +110,7 @@ async function confirmExtension() {
     const newExtendAmount = +(prevExtendAmount + amount).toFixed(2);
 
     const payload = {
-      room_id: roomId,
+      room_id: Number(selectedRoom.value.id),
       booking_id: bookingId,
       extend_hours: hours,
       extend_amount: amount,
@@ -135,18 +132,9 @@ async function confirmExtension() {
       amount: newExtendAmount,
     };
 
-    const baseInTsRaw = parseDateMaybePH(gd.checkInDateTime);
-    const baseInTs = Number.isFinite(baseInTsRaw) ? baseInTsRaw : Date.now();
-    if (!gd.checkInDateTime || !Number.isFinite(baseInTsRaw)) {
-      gd.checkInDateTime = new Date(baseInTs).toISOString();
-    }
-    const originalHours = Number(gd.selectedHours || 0);
-    const prevOutRaw = parseDateMaybePH(gd.checkOutDateTime);
-    const fallbackPrevOut = baseInTs + (originalHours + prevExtendHours) * 60 * 60 * 1000;
-    const prevOutTs = Number.isFinite(prevOutRaw) ? prevOutRaw : fallbackPrevOut;
-    const extensionStartTs = Math.max(Date.now(), prevOutTs);
-    const newCheckoutTs = extensionStartTs + hours * 60 * 60 * 1000;
-    gd.checkOutDateTime = new Date(newCheckoutTs).toISOString();
+    const baseIn = parseDateMaybePH(gd.checkInDateTime) || Date.now();
+    const totalBookedHours = Number(gd.selectedHours || 0) + newExtendHours;
+    gd.checkOutDateTime = new Date(baseIn + totalBookedHours * 60 * 60 * 1000).toISOString();
 
     if (!gd.payment) gd.payment = { amountReceived: 0, deposit: 0, isPaid: false, note: '' };
     if (paymentSnapshot) {
@@ -174,12 +162,6 @@ async function confirmExtension() {
       ...selectedRoom.value,
       guestDetails: { ...gd },
     };
-
-    lastCheckInByRoom.set(roomId, {
-      inISO: gd.checkInDateTime,
-      outISO: gd.checkOutDateTime,
-      at: Date.now(),
-    });
 
     localStorage.setItem("rooms", JSON.stringify(rooms.value));
 
@@ -348,14 +330,13 @@ const occCartTotal = computed(() => {
     return sum + price * Number(it.quantity || 0);
   }, 0);
 });
-
 const occAmountReceived = ref(null);
-const occTotalAddOn = computed(() => Number(occCartTotal.value || 0) + Number(occAmenitiesTotal.value || 0));
 const occChangeDelta = computed(() => {
   const received = Number(occAmountReceived.value || 0);
-  return received - occTotalAddOn.value;
+  const total = occCartTotal.value + occAmenitiesTotal.value;
+  return received - total;
 });
-const occIsInsufficient = computed(() => occTotalAddOn.value > 0 && occChangeDelta.value < 0);
+const occIsInsufficient = computed(() => (occCartTotal.value + occAmenitiesTotal.value) > 0 && occChangeDelta.value < 0);
 
 function removeAmenityPD(id){
   const nid = Number(id);
@@ -875,17 +856,13 @@ const bumpSort = () => { sortTick.value++; };
     return ms != null && ms <= 0;
     }
 
-function formatRemaining(ms) {
+    function formatRemaining(ms) {
   if (ms == null) return "";
   const sec = ms > 0 ? Math.floor(ms / 1000) : 0; // floor keeps first tick at 59:59
-  const d = Math.floor(sec / 86400);
-  const h = Math.floor((sec % 86400) / 3600);
+  const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
   const s = sec % 60;
-  if (d > 0) return `${d}d ${h}h ${m}m ${s}s`;
-  if (h > 0) return `${h}h ${m}m ${s}s`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
+  return h > 0 ? `${h}h ${m}m` : `${m}m ${s}s`;
 }
 
 
@@ -1767,12 +1744,6 @@ const occExtend = computed(() => {
   const g = selectedRoom.value?.guestDetails || {};
   return Number(g.extend?.amount ?? g.extend_amount ?? 0);
 });
-const occDamageCharges = computed(() => {
-  const payVal = Number(occupiedPayment.value.damage_charges ?? occupiedPayment.value.damageCharges ?? NaN);
-  if (Number.isFinite(payVal)) return payVal;
-  const g = selectedRoom.value?.guestDetails || {};
-  return Number(g.payment?.damage_charges ?? g.payment?.damageCharges ?? 0);
-});
 const occExtendHours = computed(() => {
   const payHrs = Number(occupiedPayment.value.extend_hours ?? occupiedPayment.value.extendHours ?? NaN);
   if (Number.isFinite(payHrs)) return payHrs;
@@ -1787,10 +1758,13 @@ const occDeposit = computed(() => {
   const g = selectedRoom.value?.guestDetails || {};
   return Number(g.payment?.deposit ?? g.payment?.deposit_amount ?? 0);
 });
+const occInvoiceTotal = computed(() =>
+  occRoomRate.value + occExtras.value + occRent.value + occExtend.value + occDeposit.value
+);
 const occTotalDue = computed(() => {
   const payVal = Number(occupiedPayment.value.totalDue ?? occupiedPayment.value.total_due ?? NaN);
   if (Number.isFinite(payVal) && payVal > 0) return payVal;
-  return occRoomRate.value + occExtras.value + occRent.value + occDeposit.value + occExtend.value + occDamageCharges.value;
+  return occInvoiceTotal.value;
 });
 const occChange = computed(() => {
   const pay = occupiedPayment.value;
@@ -1799,25 +1773,6 @@ const occChange = computed(() => {
   const amt = Number(pay.amountReceived ?? pay.amount_received ?? 0);
   return amt - occTotalDue.value;
 });
-
-function roomExtendedHours(room){
-  const g = room?.guestDetails || {};
-  const payHours = Number(g.payment?.extend_hours ?? g.payment?.extendHours ?? NaN);
-  if (Number.isFinite(payHours) && payHours > 0) return payHours;
-  const dataHours = Number(g.extend?.hours ?? g.extendedHours ?? 0);
-  return Number.isFinite(dataHours) && dataHours > 0 ? dataHours : 0;
-}
-
-function roomExtendedLabel(room){
-  const hrs = Math.floor(roomExtendedHours(room));
-  if (!hrs) return '';
-  const days = Math.floor(hrs / 24);
-  const remHours = hrs % 24;
-  const parts = [];
-  if (days) parts.push(`${days} ${days === 1 ? 'day' : 'days'}`);
-  if (remHours) parts.push(`${remHours}h`);
-  return parts.join(' ');
-}
 
 const occupiedAmountDraft = ref(0);
 const updatingOccupiedAmount = ref(false);
@@ -1964,8 +1919,16 @@ async function confirmOccupiedExtras(){
   const items = occPayloadItems.value;
   const amenitiesSelected = occSelectedAmenities.value;
 
+  const totalAddOn = occCartTotal.value + occAmenitiesTotal.value;
+  const amountReceived = Number(occAmountReceived.value || 0);
+
   if (!items.length && !amenitiesSelected.length){
     toast.add({ severity: 'warn', summary: 'Add Extras', detail: 'Select consumables or amenities to add.', life: 2500 });
+    return;
+  }
+
+  if (amountReceived <= 0 || amountReceived < totalAddOn){
+    toast.add({ severity: 'warn', summary: 'Add Extras', detail: 'Please enter an amount received that covers the add-on total.', life: 2500 });
     return;
   }
 
@@ -1990,9 +1953,11 @@ async function confirmOccupiedExtras(){
       room_id: roomId,
       booking_id: bookingId,
       extras_bill_id: posBill?.bill_id || null,
-      extras_total: Number(posBill?.total ?? (occCartTotal.value || 0)),
+      extras_total: extrasTotalDelta,
       amenities_total: amenitiesTotalDelta,
       amenities: amenitiesSelected,
+      amount_received: amountReceived,
+      change_amount: occChangeDelta.value,
     });
 
     const totals = res?.data?.totals || {};
@@ -2272,30 +2237,14 @@ await loadDiscounts();
         }).format(value);
     }
 
-    function roundCurrency(value) {
-        const num = Number(value);
-        if (!Number.isFinite(num)) return 0;
-        return Math.round(num * 100) / 100;
-    }
-
-
+    // Function to open the checkout dialog
     function openCheckoutDialog(room) {
         selectedRoom.value = {
             ...room,
             guestDetails: { ...room.guestDetails }, // Copy nested object
             selectedrate: room.rate || 0,
         };
-        const pay = selectedRoom.value?.guestDetails?.payment || {};
-        const existingDamage = Number(pay.damage_charges ?? pay.damageCharges ?? 0);
-        checkoutDamageCharges.value = roundCurrency(Math.max(0, existingDamage));
-        const existingDeposit = Number(pay.deposit ?? pay.deposit_amount ?? 0);
-        checkoutDepositOriginal.value = roundCurrency(Math.max(0, existingDeposit));
-        checkoutAssignedAmenities.value = [];
-        checkoutAmenitiesError.value = null;
         checkoutDialogVisible.value = true;
-        if (room?.id) {
-            loadCheckoutAssignedAmenities(room.id);
-        }
     }
 
     // Function to select rate and hours
@@ -2352,178 +2301,28 @@ await loadDiscounts();
 
     // Reactive state for checkout dialog
     const checkoutDialogVisible = ref(false);
-    const checkoutDamageCharges = ref(0);
-    const checkoutDamageChargesNumber = computed(() => roundCurrency(Math.max(0, Number(checkoutDamageCharges.value || 0))));
-    const checkoutDepositOriginal = ref(0);
-    const checkoutPayment = computed(() => selectedRoom.value?.guestDetails?.payment || {});
-    const checkoutDepositOriginalNumber = computed(() => roundCurrency(Math.max(0, Number(checkoutDepositOriginal.value || 0))));
-    const checkoutRefundToGuest = computed(() => roundCurrency(Math.max(0, checkoutDepositOriginalNumber.value - checkoutDamageChargesNumber.value)));
-    const checkoutDamageShortfall = computed(() => roundCurrency(Math.max(0, checkoutDamageChargesNumber.value - checkoutDepositOriginalNumber.value)));
 
-    const checkoutAssignedAmenities = ref([]);
-    const checkoutAmenitiesLoading = ref(false);
-    const checkoutAmenitiesError = ref(null);
 
-    const watcherStopCheckout = watch(checkoutDialogVisible, (visible) => {
-        if (!visible) {
-            checkoutAssignedAmenities.value = [];
-            checkoutAmenitiesError.value = null;
-            checkoutAmenitiesLoading.value = false;
-        }
+    // Checkout payment computed values
+    const checkoutPayment = computed(() => {
+        const p = selectedRoom.value?.guestDetails?.payment;
+        return p ? p : { amountReceived: 0, deposit: 0, isPaid: false };
     });
-
-    watch(checkoutDamageCharges, (val) => {
-        const normalized = checkoutDamageChargesNumber.value;
-        const roomRef = selectedRoom.value;
-        if (!roomRef) return;
-        const guest = roomRef.guestDetails || (roomRef.guestDetails = {});
-        const payment = guest.payment || (guest.payment = { amountReceived: 0, deposit: 0, isPaid: false });
-        payment.damage_charges = normalized;
-        payment.damageCharges = normalized;
-        const idx = rooms.value.findIndex(r => Number(r.id) === Number(roomRef.id));
-        if (idx >= 0) {
-            const target = rooms.value[idx];
-            target.guestDetails = target.guestDetails || {};
-            const targetPayment = target.guestDetails.payment || (target.guestDetails.payment = { amountReceived: 0, deposit: 0, isPaid: false });
-            targetPayment.damage_charges = normalized;
-            targetPayment.damageCharges = normalized;
-        }
-    });
-
-    const checkoutDamagedSerialIds = computed(() => (
-        (checkoutAssignedAmenities.value || [])
-            .filter(item => item && item.damaged)
-            .map(item => Number(item.serial_id ?? item.id))
-            .filter(id => Number.isFinite(id))
-    ));
-
-    async function loadCheckoutAssignedAmenities(roomId) {
-        if (!roomId) {
-            checkoutAssignedAmenities.value = [];
-            return;
-        }
-        const currentRoomId = Number(roomId);
-        checkoutAmenitiesLoading.value = true;
-        checkoutAmenitiesError.value = null;
-        checkoutAssignedAmenities.value = [];
-        try {
-            const res = await getRoomSerialNumbers(roomId);
-            const rows = Array.isArray(res?.data) ? res.data : [];
-            if (selectedRoom.value?.id && Number(selectedRoom.value.id) !== currentRoomId) {
-                return;
-            }
-            const processed = rows.map((item, idx) => {
-                const serialId = Number(item?.serial_id ?? item?.id ?? item?.serialId);
-                const statusRaw = String(item?.status ?? '').toLowerCase();
-                const isDamaged = statusRaw === 'damaged';
-                const productType = (item?.product_type ?? item?.type ?? '').toString().trim();
-                const productCategory = (item?.product_category ?? item?.category ?? '').toString().trim();
-                const normalizeLabel = (value) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
-                const linenKey = 'bathbedlinens';
-                const cleanEligible = normalizeLabel(productType) === linenKey || normalizeLabel(productCategory) === linenKey;
-                return {
-                    ...item,
-                    id: serialId,
-                    serial_id: serialId,
-                    serial_number: item?.serial_number || '',
-                    product_name: item?.product_name || item?.amenity_name || item?.name || ('Amenity ' + (idx + 1)),
-                    brand: item?.brand || item?.product_brand || '',
-                    product_type: productType,
-                    product_category: productCategory,
-                    cleanEligible,
-                    damaged: cleanEligible ? false : isDamaged,
-                };
-            }).filter(entry => entry && !entry.cleanEligible);
-            checkoutAssignedAmenities.value = processed;
-        } catch (error) {
-            checkoutAmenitiesError.value = error?.response?.data?.error || error?.message || 'Failed to load amenities.';
-            toast.add({ severity: 'error', summary: 'Amenities', detail: checkoutAmenitiesError.value, life: 3000 });
-        } finally {
-            checkoutAmenitiesLoading.value = false;
-        }
-    }
+    const checkoutDeposit = computed(() => Number(checkoutPayment.value.deposit) || 0);
+    // Amount to give back to guest at checkout (refund of deposit)
+    const checkoutRefundToGuest = computed(() => checkoutDeposit.value);
 
     // Function to confirm checkout
     async function confirmCheckout() {
-        const roomRef = selectedRoom.value;
-        if (!roomRef) return;
+        console.log("Checkout confirmed:", selectedRoom.value);
 
-        const roomId = Number(roomRef.id);
-        if (!roomId) {
-            toast.add({
-                severity: "error",
-                summary: "Checkout Failed",
-                detail: "Room not found. Please try again.",
-                life: 3000,
-            });
-            return;
-        }
+        const roomId = Number(selectedRoom.value?.id);
+        if (!roomId) return;
 
-        const damagedSerialIds = checkoutDamagedSerialIds.value.slice();
-        const damageCount = damagedSerialIds.length;
-        const roomNumberLabel = roomRef?.roomNumber || roomRef?.room_number || roomRef?.roomCode || 'Room';
-        const bookingRef = Number(roomRef?.guestDetails?.id) || null;
-
-        const originalDepositVal = checkoutDepositOriginalNumber.value;
-        const damageVal = checkoutDamageChargesNumber.value;
-        const newDepositVal = 0;
-        const totalDueVal = roundCurrency(occRoomRate.value + occExtras.value + occRent.value + occExtend.value + damageVal);
-        const storedAmount = Number(occupiedPayment.value.amountReceived ?? occupiedPayment.value.amount_received ?? 0);
-        const amountReceivedVal = roundCurrency(Number.isFinite(storedAmount) ? storedAmount : 0);
-        const changeVal = roundCurrency(amountReceivedVal - totalDueVal);
-
-        try {
-            const res = await updateCheckinPaymentAmount({
-                room_id: roomId,
-                booking_id: bookingRef,
-                amount_received: amountReceivedVal,
-                total_due: totalDueVal,
-                change_amount: changeVal,
-                deposit_amount: newDepositVal,
-                damage_charges: damageVal,
-            });
-
-            const snapshot = res?.data?.payment || null;
-            const resolvedDamage = roundCurrency(Number(snapshot?.damage_charges ?? damageVal));
-            const resolvedDeposit = roundCurrency(Number(snapshot?.deposit_amount ?? newDepositVal));
-            const resolvedTotal = roundCurrency(Number(snapshot?.total_due ?? totalDueVal));
-            const resolvedAmountReceived = roundCurrency(Number(snapshot?.amount_received ?? amountReceivedVal));
-            const resolvedChange = roundCurrency(Number(snapshot?.change_amount ?? changeVal));
-
-            const payment = roomRef.guestDetails?.payment || (roomRef.guestDetails.payment = { amountReceived: 0, deposit: 0, isPaid: false });
-            payment.damage_charges = resolvedDamage;
-            payment.damageCharges = resolvedDamage;
-            payment.deposit = resolvedDeposit;
-            payment.deposit_amount = resolvedDeposit;
-            payment.totalDue = resolvedTotal;
-            payment.total_due = resolvedTotal;
-            payment.amountReceived = resolvedAmountReceived;
-            payment.amount_received = resolvedAmountReceived;
-            payment.change = resolvedChange;
-            payment.change_amount = resolvedChange;
-
-            const roomIdx = rooms.value.findIndex(r => Number(r.id) === roomId);
-            if (roomIdx >= 0) {
-                const target = rooms.value[roomIdx];
-                target.guestDetails = target.guestDetails || {};
-                target.guestDetails.payment = { ...(target.guestDetails.payment || {}), ...payment };
-            }
-
-            checkoutDamageCharges.value = resolvedDamage;
-            checkoutDepositOriginal.value = originalDepositVal;
-        } catch (error) {
-            toast.add({
-                severity: "error",
-                summary: "Checkout Failed",
-                detail: error?.response?.data?.error || error.message || 'Failed to update payment.',
-                life: 3500,
-            });
-            return;
-        }
-
-        const roomIndex = rooms.value.findIndex((r) => r.id === roomRef.id);
+        const roomIndex = rooms.value.findIndex((r) => Number(r.id) === roomId);
 
         if (roomIndex === -1) {
+            console.error("Room not found in the rooms array.");
             toast.add({
                 severity: "error",
                 summary: "Checkout Failed",
@@ -2533,39 +2332,53 @@ await loadDiscounts();
             return;
         }
 
-        const previousStatus = rooms.value[roomIndex].status;
-        const previousGuestDetails = rooms.value[roomIndex].guestDetails;
+        const bookingId = Number(selectedRoom.value?.guestDetails?.id) || null;
+        const payment = selectedRoom.value?.guestDetails?.payment || {};
+        const amountReceived = Number(payment.amountReceived ?? payment.amount_received ?? 0);
+        const totalDueFinal = Number(occInvoiceTotal.value || 0);
+        const changeVal = Number((amountReceived - totalDueFinal).toFixed(2));
+
+        try {
+            await updateCheckinPaymentAmount({
+                room_id: roomId,
+                booking_id: bookingId,
+                amount_received: amountReceived,
+                total_due: totalDueFinal,
+                change_amount: changeVal,
+            });
+
+            if (selectedRoom.value?.guestDetails?.payment) {
+                const p = selectedRoom.value.guestDetails.payment;
+                p.amountReceived = amountReceived;
+                p.amount_received = amountReceived;
+                p.totalDue = totalDueFinal;
+                p.total_due = totalDueFinal;
+                p.change = changeVal;
+                p.change_amount = changeVal;
+                p.isPaid = amountReceived >= totalDueFinal - 0.009;
+            }
+        } catch (err) {
+            console.warn('updateCheckinPaymentAmount failed', err);
+        }
 
         rooms.value[roomIndex].status = "Cleaning";
         rooms.value[roomIndex].guestDetails = null;
-        if (selectedRoom.value) {
-            selectedRoom.value = { ...selectedRoom.value, status: 'Cleaning', guestDetails: null };
-        }
-
         localStorage.setItem("rooms", JSON.stringify(rooms.value));
 
         try {
-            await checkoutRoom(roomId, { damaged_serial_ids: damagedSerialIds });
-            const damageLabel = damageCount === 1 ? 'amenity' : 'amenities';
-            const detailMessage = damageCount
-                ? `Room ${roomNumberLabel} checked out. ${damageCount} ${damageLabel} marked damaged.`
-                : `Room ${roomNumberLabel} has been checked out.`;
+            await checkoutRoom(roomId);
             toast.add({
                 severity: "success",
                 summary: "Checkout Successful",
-                detail: detailMessage,
+                detail: `Room ${selectedRoom.value.roomNumber} has been checked out.`,
                 life: 3000,
             });
             lastCheckInByRoom.delete(roomId);
-            emitBookingsChanged("checked-out", bookingRef, roomId);
+            emitBookingsChanged("checked-out", bookingId, roomId);
             emitRoomsChanged("status-updated", roomId);
         } catch (error) {
             console.error("API Error:", error);
-            rooms.value[roomIndex].status = previousStatus || 'Occupied';
-            rooms.value[roomIndex].guestDetails = previousGuestDetails || roomRef.guestDetails || null;
-            if (selectedRoom.value) {
-                selectedRoom.value = { ...selectedRoom.value, status: previousStatus || 'Occupied', guestDetails: rooms.value[roomIndex].guestDetails };
-            }
+            rooms.value[roomIndex].status = "Occupied";
             localStorage.setItem("rooms", JSON.stringify(rooms.value));
 
             toast.add({
@@ -2578,7 +2391,6 @@ await loadDiscounts();
 
         checkoutDialogVisible.value = false;
         DialogVisible.value = false;
-        checkoutAssignedAmenities.value = [];
     }
 
     // Mock version: Update room status in local storage
@@ -2893,7 +2705,7 @@ if (idx !== -1) {
     @click="openDialog(room)"
     >
     <div
-        class="room-card__inner relative w-full p-6 rounded-lg shadow-md cursor-pointer hover:shadow-lg transition-shadow text-white min-h-[130px]"
+        class="room-card__inner relative w-full p-6 rounded-lg shadow-md cursor-pointer hover:shadow-lg transition-shadow text-white min-h-[120px]"
         :class="{
         'bg-green-500': room.status === 'Available',
         'bg-blue-500': room.status === 'Booked',
@@ -2905,10 +2717,10 @@ if (idx !== -1) {
         <!-- keep ALL your existing inner content exactly as-is, e.g.: -->
 
         <div
-        v-if="roomExtendedHours(room) > 0"
+        v-if="room.guestDetails?.extendedHours > 0"
         class="absolute top-2 right-2 bg-yellow-400 text-white text-xs font-semibold px-2 py-1 rounded-full"
         >
-        +{{ roomExtendedLabel(room) }}
+        +{{ room.guestDetails.extendedHours }} hrs
         </div>
 
         <div
@@ -4183,154 +3995,51 @@ class="w-full md:w-80"
                     />
                 </div>
 
+                <!-- Duration and Rate Summary -->
                 <div class="space-y-4">
-                  <div>
-                    <div class="flex items-center justify-between mb-1">
-                      <div class="text-sm uppercase tracking-wide text-gray-500">Assigned Amenities</div>
-                      <span v-if="checkoutDamagedSerialIds.length" class="text-xs font-semibold text-red-600">{{ checkoutDamagedSerialIds.length }} damaged</span>
+                    <div class="flex justify-between items-center">
+                        <span class="font-medium">Duration:</span>
+                        <span class="font-semibold">
+                            {{ selectedRoom.guestDetails?.selectedHours || "N/A" }}
+                            Hours
+                        </span>
                     </div>
-                    <div v-if="checkoutAmenitiesLoading" class="text-sm text-gray-500">Loading assigned amenities...</div>
-                    <div v-else-if="checkoutAmenitiesError" class="text-sm text-red-600">{{ checkoutAmenitiesError }}</div>
-                    <div v-else-if="checkoutAssignedAmenities.length" class="space-y-3">
-                      <div
-                        v-for="(amenity, idx) in checkoutAssignedAmenities"
-                        :key="amenity.serial_id ?? amenity.id ?? idx"
-                        :class="['border rounded-lg p-3 space-y-2 transition-colors', amenity.damaged ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-white']"
-                      >
-                        <div class="flex items-start justify-between gap-3">
-                          <div>
-                            <div class="font-semibold">
-                              {{ amenity.product_name || amenity.amenity_name || ('Amenity ' + (idx + 1)) }}
-                            </div>
-                            <div v-if="amenity.brand" class="text-xs text-gray-500">{{ amenity.brand }}</div>
-                            <div v-if="amenity.product_type" class="text-xs text-gray-500">Type: {{ amenity.product_type }}</div>
-                            <div v-if="amenity.serial_number" class="text-xs text-gray-500">SN: {{ amenity.serial_number }}</div>
-                          </div>
-                          <span
-                            v-if="amenity.status || amenity.damaged"
-                            class="text-xs px-2 py-1 rounded-full border"
-                            :class="amenity.damaged ? 'border-red-300 text-red-600 bg-red-50' : 'border-gray-300 text-gray-600 bg-gray-50'"
-                          >
-                            {{ amenity.damaged ? 'Damaged (pending)' : (amenity.status || 'Assigned') }}
-                          </span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                          <Checkbox
-                            :binary="true"
-                            v-model="amenity.damaged"
-                            :inputId="`checkout-damage-${idx}`"
-                            @change="toggleCheckoutAmenityDamage(amenity)"
-                          />
-                          <label :for="`checkout-damage-${idx}`" class="text-sm font-medium">
-                            Mark as damaged
-                           
-                          </label>
-                        </div>
-                      </div>
+                    <div class="flex justify-between items-center">
+                        <span class="font-medium">Rate:</span>
+                        <span class="font-semibold">
+                            {{
+                                formatCurrency(
+                                    selectedRoom.guestDetails?.selectedrate || 0
+                                )
+                            }}
+                        </span>
                     </div>
-                    <div v-else class="text-sm opacity-60">No assigned amenities found.</div>
-                  </div>
-                  <div>
-                    <div class="text-sm uppercase tracking-wide text-gray-500 mb-1">Consumables</div>
-                    <div v-if="(selectedRoom.guestDetails?.extrasItems || []).length" class="space-y-1 text-sm">
-                      <div
-                        v-for="(it, i) in selectedRoom.guestDetails.extrasItems"
-                        :key="`checkout-extra-${i}`"
-                        class="flex items-center justify-between"
-                      >
-                        <span>{{ it.name }}<span v-if="it.brand" class="opacity-60"> ({{ it.brand }})</span> {{ it.quantity }}x</span>
-                        <span>{{ formatCurrency(it.price) }}</span>
-                      </div>
-                    </div>
-                    <div v-else class="text-sm opacity-60">No consumables.</div>
-                  </div>
-                  <div>
-                    <div class="text-sm uppercase tracking-wide text-gray-500 mb-1">Amenities</div>
-                    <div v-if="(selectedRoom.guestDetails?.amenitiesItems || []).length" class="space-y-1 text-sm">
-                      <div
-                        v-for="(a, i) in selectedRoom.guestDetails.amenitiesItems"
-                        :key="`checkout-amenity-${i}`"
-                        class="flex items-center justify-between"
-                      >
-                        <span>{{ a.amenity_name }}<span v-if="a.serial_number" class="opacity-60"> #{{ a.serial_number }}</span></span>
-                        <span>{{ formatCurrency(a.unit_rental_price) }}</span>
-                      </div>
-                    </div>
-                    <div v-else class="text-sm opacity-60">No amenities.</div>
-                  </div>
-                  <div class="border rounded-lg p-4 space-y-3 bg-white">
-                    <div class="text-sm uppercase tracking-wide text-gray-500">Payment</div>
-                    <div class="flex items-center justify-between text-sm">
-                      <span>Room Rate</span>
-                      <span class="flex items-center gap-2">
-                        <template v-if="Number(occDiscountPercent || 0) > 0">
-                          <span class="price-old">{{ formatCurrency(occBaseRoomRate) }}</span>
-                          <span class="discount-pill">
-                            {{ occDiscountName || "Promo" }} -{{ Number(occDiscountPercent) }}%
-                          </span>
-                          <span class="price-new">{{ formatCurrency(occRoomRate) }}</span>
-                        </template>
-                        <strong v-else>{{ formatCurrency(occRoomRate) }}</strong>
-                      </span>
-                    </div>
-                    <div class="flex items-center justify-between text-sm">
-                      <span>Consumables</span>
-                      <strong>{{ formatCurrency(occExtras) }}</strong>
-                    </div>
-                    <div class="flex items-center justify-between text-sm">
-                      <span>Amenities Rent</span>
-                      <strong>{{ formatCurrency(occRent) }}</strong>
-                    </div>
-                    <div class="flex items-center justify-between text-sm">
-                      <span>Extend</span>
-                      <div class="flex items-center gap-2">
-                        <span v-if="occExtendHours" class="text-xs font-semibold text-amber-700">+{{ occExtendHours }}h</span>
-                        <strong>{{ formatCurrency(occExtend) }}</strong>
-                      </div>
-                    </div>
-                    <div class="flex items-center justify-between text-sm gap-3">
-                      <span>Damage Charges</span>
-                      <div class="flex items-center gap-2">
-                        <InputNumber
-                          v-model="checkoutDamageCharges"
-                          mode="currency"
-                          currency="PHP"
-                          :min="0"
-                          :maxFractionDigits="2"
-                          input-class="w-28 text-right"
-                          class="w-32"
-                        />
-                        
-                      </div>
-                    </div>
-                    <div class="flex items-center justify-between text-sm">
-                      <span>Damage (Recorded)</span>
-                      <strong>{{ formatCurrency(checkoutDamageChargesNumber) }}</strong>
-                    </div>
-                    <div class="flex items-center justify-between text-sm">
-                      <span>Deposit Collected</span>
-                      <strong>{{ formatCurrency(checkoutDepositOriginalNumber) }}</strong>
-                    </div>
-                    <div class="flex items-center justify-between text-xl p-2 rounded-md border bg-green-50 text-green-800 border-green-300 dark:bg-green-900/20 dark:text-green-200 dark:border-green-700">
-                      <span>Total Due</span>
-                      <strong>{{ formatCurrency(occTotalDue) }}</strong>
-                    </div>
-                    <div class="flex items-center justify-between text-sm font-semibold bg-amber-100 text-amber-900 border border-amber-300 rounded-lg px-3 py-2">
-                      <span>Deposit Returned</span>
-                      <strong>{{ formatCurrency(checkoutRefundToGuest) }}</strong>
-                    </div>
-                    <div
-                      v-if="checkoutDamageShortfall > 0"
-                      class="flex items-center justify-between text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2"
-                    >
-                      <span>Additional Payment Due</span>
-                      <strong>{{ formatCurrency(checkoutDamageShortfall) }}</strong>
-                    </div>
-                  </div>
                 </div>
 
+                <!-- Payment Section -->
+                <div class="bg-gray-50 p-4 rounded-lg space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="font-medium">Rate (Total):</span>
+                        <span class="font-semibold text-lg">
+                            {{ formatCurrency(selectedRoom.guestDetails?.selectedrate || 0) }}
+                        </span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="font-medium">Deposit (to refund):</span>
+                        <span class="font-semibold text-lg">
+                            {{ formatCurrency(checkoutDeposit) }}
+                        </span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="font-medium">Amount to give to guest:</span>
+                        <span class="font-semibold text-lg text-green-700">
+                            {{ formatCurrency(checkoutRefundToGuest) }}
+                        </span>
+                    </div>
                 </div>
+            </div>
 
+            <!-- Action Buttons -->
             <div class="flex gap-4 mt-6">
                 <Button
                     label="Cancel"
@@ -4347,7 +4056,7 @@ class="w-full md:w-80"
                 />
             </div>
         </Dialog>
-      <!-- Add Consumables & Amenities dialog -->
+
         <Dialog
             v-model:visible="occExtrasDialogVisible"
             header="Add Consumables & Amenities"
@@ -4456,7 +4165,10 @@ class="w-full md:w-80"
 
               <div class="space-y-4">
                 <div class="border rounded-lg p-3">
-                  <div class="font-semibold mb-2">Amenities Cart</div>
+                  <div class="flex items-center justify-between mb-3">
+                    <span class="font-semibold">Amenities Cart</span>
+                    <span class="text-sm text-slate-500">Total: {{ formatCurrency(occAmenitiesTotal) }}</span>
+                  </div>
                   <DataTable
                     :value="occSelectedAmenities"
                     class="p-datatable-sm"
@@ -4482,9 +4194,6 @@ class="w-full md:w-80"
                       </template>
                     </Column>
                   </DataTable>
-                  <div class="text-right mt-3">
-                    <div>Total: <span class="font-semibold">{{ formatCurrency(occAmenitiesTotal) }}</span></div>
-                  </div>
                 </div>
 
                 <div class="border rounded-lg p-3 space-y-3">
@@ -4837,10 +4546,4 @@ class="w-full md:w-80"
 }
 
     </style>
-
-
-
-
-
-
 

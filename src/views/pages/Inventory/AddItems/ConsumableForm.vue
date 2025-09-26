@@ -219,7 +219,8 @@ onMounted(() => {
       { label: 'Basic needs/Essentials', value: 'Basic needs/Essentials' },
       { label: 'Furniture', value: 'Furniture' },
       { label: 'Appliances', value: 'Appliances' },
-      { label: 'Extras', value: 'Extras' }   
+      { label: 'Bath & Bed Linens', value: 'Bath & Bed Linens' },
+      { label: 'Foam', value: 'Foam' }   
     ]"
     optionLabel="label"
     optionValue="value"

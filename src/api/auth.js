@@ -1,4 +1,4 @@
-import axios from 'axios';
+﻿import axios from 'axios';
 
 const API_URL = 'http://127.0.0.1:5000';
 
@@ -140,7 +140,6 @@ export async function fetchSerialNumbers() {
   return await axios.get(`${API_URL}/serial-numbers`);
 }
 
-// Get serial numbers assigned to a room
 
 
 // Update a room (PUT)
@@ -213,8 +212,14 @@ export async function checkInBooking(bookingId, payload = {}) {
   return axios.put(`${API_URL}/bookings/${bookingId}/checkin`, payload);
 }
 
-export async function checkoutRoom(roomId) {
-  return axios.put(`${API_URL}/rooms/${roomId}/checkout`);
+// Extend an occupied/active booking
+export function extendBooking(bookingId, payload) {
+  return axios.put(`${API_URL}/bookings/${bookingId}/extend`, payload);
+}
+
+
+export async function checkoutRoom(roomId, payload = {}) {
+  return axios.put(`${API_URL}/rooms/${roomId}/checkout`, payload);
 }
 
 export async function cleaningComplete(roomId) {
@@ -281,4 +286,27 @@ export function createCheckinPayment(payload){
   return axios.post(`${API_URL}/checkin-payments`, payload);
 }
 
+// Update the latest check-in payment note for a room/booking
+export function updateCheckinPaymentNote(payload){
+  // payload: { room_id: number, booking_id?: number, note: string }
+  return axios.put(`${API_URL}/checkin-payments/note`, payload);
+}
+
+export function updateCheckinPaymentAmount(payload){
+  // payload: { room_id: number, booking_id?: number, amount_received?: number, total_due?: number, change_amount?: number, deposit_amount?: number, damage_charges?: number }
+  return axios.put(`${API_URL}/checkin-payments/amount`, payload);
+}
+
+export function extendCheckinPayment(payload){
+  // payload: { room_id, booking_id?, extend_hours, extend_amount, amount_received, change_amount }
+  return axios.put(`${API_URL}/checkin-payments/extend`, payload);
+}
+
+export function updateCheckinPaymentExtras(payload){
+  // payload: { room_id, booking_id?, extras_total, amenities_total, extras_bill_id?, amenities? }
+  return axios.put(`${API_URL}/checkin-payments/extras`, payload);
+}
+
+
  
+
