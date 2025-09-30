@@ -183,21 +183,137 @@ const handleClick = (event, bookingData) => {
         <!-- Popover Overlay -->
         <Popover ref="op">
             <div class="p-4" v-if="selectedBooking">
-                <div class="flex flex-col gap-3">
-                    <div class="flex items-center gap-2">
-                        <i class="pi pi-user"></i>
-                        <span class="font-semibold">Guest Name:</span>
-                        {{ selectedBooking.guestName }}
+                <!-- Main Horizontal Container -->
+                <div class="flex flex-row gap-4">
+                    <!-- Left Column - Guest & Booking Info -->
+                    <div class="flex-1 flex flex-col gap-3 min-w-[200px]">
+                        <!-- Guest Name -->
+                        <div class="font-bold text-lg border-b pb-2">
+                            {{ selectedBooking.guestName }}
+                        </div>
+
+                        <!-- Booking Details -->
+                        <div class="flex flex-col gap-2">
+                            <div>
+                                <label class="font-medium">Booking Code:</label>
+                                <div class="mt-1">
+                                    {{ selectedBooking.BookingCode }}
+                                </div>
+                            </div>
+                            <div>
+                                <label class="font-medium">Room Number:</label>
+                                <div class="mt-1">
+                                    {{ selectedBooking.roomNumber }}
+                                </div>
+                            </div>
+                            <div>
+                                <label class="font-medium">Room Type:</label>
+                                <div class="mt-1">
+                                    {{ selectedBooking.roomType }}
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <i class="pi pi-phone"></i>
-                        <span class="font-semibold">Contact Number:</span>
-                        {{ selectedBooking.contactInfo || "N/A" }}
+
+                    <!-- Middle Column - Booking Details -->
+                    <div class="flex-1 flex flex-col gap-3 min-w-[200px]">
+                        <!-- Selected Hours & Rate -->
+                        <div class="flex flex-col gap-2">
+                            <div>
+                                <label class="font-medium">Selected Hours:</label>
+                                <Tag
+                                    :value="`${selectedBooking.selectedHours}hrs`"
+                                    severity="info"
+                                    class="mt-1"
+                                />
+                            </div>
+                            <div>
+                                <label class="font-medium">Selected Rate:</label>
+                                <div class="flex items-center gap-1 mt-1">
+                                    <i class="pi pi-money-bill text-blue-500"></i>
+                                    <span>₱{{ parseFloat(selectedBooking.selectedRate || 0).toLocaleString() }}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Scheduled Times -->
+                        <div class="flex flex-col gap-2" v-if="selectedBooking.check_in_datetime">
+                            <div>
+                                <label class="font-medium">Scheduled Check-In:</label>
+                                <div class="mt-1 text-sm text-gray-600">
+                                    {{ new Date(selectedBooking.check_in_datetime).toLocaleString('en-US', {
+                                        year: 'numeric',
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: 'numeric',
+                                        minute: 'numeric',
+                                        hour12: true
+                                    }) }}
+                                </div>
+                            </div>
+                            <div v-if="selectedBooking.check_out_datetime">
+                                <label class="font-medium">Scheduled Check-Out:</label>
+                                <div class="mt-1 text-sm text-gray-600">
+                                    {{ new Date(selectedBooking.check_out_datetime).toLocaleString('en-US', {
+                                        year: 'numeric',
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: 'numeric',
+                                        minute: 'numeric',
+                                        hour12: true
+                                    }) }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Cancellation Status -->
+                        <div class="bg-red-50  rounded">
+                            <div class="flex items-center gap-2 text-red-700">
+                                <i class="pi pi-times-circle"></i>
+                                <span class="text-sm font-medium">Booking Cancelled</span>
+                            </div>
+                            <div class="text-xs text-red-600 mt-1">
+                                {{ formatCancellation(selectedBooking.cancellationDate) }}
+                            </div>
+                        </div>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <i class="pi pi-home"></i>
-                        <span class="font-semibold">Room Type:</span>
-                        {{ selectedBooking.roomType }}
+
+                    <!-- Right Column - Contact Info -->
+                    <div class="flex-1 flex flex-col gap-3 min-w-[200px]">
+                        <!-- Contact Information -->
+                        <div class="flex flex-col gap-2">
+                            <div>
+                                <label class="font-medium">Contact Info:</label>
+                                <div class="mt-1 flex flex-col gap-1">
+                                    <div class="flex items-center gap-2">
+                                        <i class="pi pi-phone text-blue-500"></i>
+                                        {{ selectedBooking.cellphone || 'N/A' }}
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <i class="pi pi-envelope text-blue-500"></i>
+                                        {{ selectedBooking.guest_email || 'N/A' }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Booking Dates -->
+                        <div class="bg-gray-50 rounded">
+                            <div class="flex items-center gap-2 text-gray-700 mb-2">
+                                <i class="pi pi-calendar"></i>
+                                <span class="text-sm font-medium">Booking Created</span>
+                            </div>
+                            <div class="text-xs text-gray-600">
+                                {{ selectedBooking.created_at ? new Date(selectedBooking.created_at).toLocaleString('en-US', {
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: 'numeric',
+                                    minute: 'numeric',
+                                    hour12: true
+                                }) : 'N/A' }}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -1,64 +1,135 @@
 <script setup>
 import { FilterMatchMode, FilterOperator } from "@primevue/core/api";
-import { onBeforeMount, ref } from "vue";
+import { onBeforeMount, ref, computed } from "vue";
+import { fetchCheckOutList } from "@/api/auth";
 
 const reservations = ref(null);
-
 const filters = ref(null);
+const loading = ref(false);
 
-const mockReservations = [
-    {
-        BookingCode: "RES-1001",
-        guestName: "John Doe",
-        roomNumber: "201",
-        roomType: "Double Size Bed",
-        selectedHours: 24,
-        selectedRate: 299.99,
-        checkInDate: "2023-12-25T15:00:00",
-        checkOutDate: "2023-12-30T11:00:00",
-        isCheckOutExtended: true,
-        extendedCheckOutDate: "2023-12-30T15:00:00",
-        paymentStatus: {
-            ratePaid: true,
-            depositAmount: 100.0,
-            depositStatus: "Paid",
-            balanceDue: 0.0,
-        },
-        ExtraAmenities: [" pillows"],
-        contactInfo: " +1 (555) 123-4567",
-        loyaltyStatus: "Gold Member",
-        checkInStatus: "Completed",
-        notes: "Lorem Ipsum",
-    },
-    {
-        BookingCode: "RES-1002",
-        guestName: "Jane Smith",
-        roomNumber: "305",
-        roomType: "Single Size Bed",
-        selectedHours: 12,
-        selectedRate: 399.99,
-        checkInDate: "2023-12-24T14:00:00",
-        checkOutDate: "2023-12-28T10:00:00",
-        isCheckOutExtended: false,
-        paymentStatus: {
-            ratePaid: true,
-            depositAmount: 150.0,
-            depositStatus: "Paid",
-            balanceDue: 399.99,
-        },
-        ExtraAmenities: ["Blankets", "Towels"],
-        contactInfo: " +1 (555) 987-6543",
-        loyaltyStatus: "Silver Member",
-        checkInStatus: "Pending",
-        notes: "Lorem Ipsum",
-    },
-];
+async function loadCheckOuts() {
+    try {
+        loading.value = true;
+        console.log('Fetching check-out list...');
+        console.log('Token from localStorage:', localStorage.getItem('token'));
+        const response = await fetchCheckOutList();
+        console.log('Raw response:', response);
+        console.log('Response data:', response.data);
+        
+        if (!response.data || response.data.error) {
+            console.error('Server error:', response.data?.error);
+            throw new Error(response.data?.error || 'Failed to load check-out list');
+        }
+        
+        reservations.value = response.data.map(booking => ({
+            BookingCode: booking.room_code,
+            guestName: booking.guest_name,
+            roomNumber: booking.room_number,
+            roomType: booking.room_type_name,
+            selectedHours: booking.selected_hours,
+            selectedRate: booking.selected_rate,
+            checkInDate: new Date(booking.check_in_datetime),
+            checkOutDate: new Date(booking.check_out_datetime),
+            // Payment data from checkin_payments table
+            paymentData: {
+                roomRate: parseFloat(booking.room_rate) || parseFloat(booking.selected_rate) || 0,
+                extrasTotal: parseFloat(booking.extras_total) || 0,
+                amenitiesTotal: parseFloat(booking.amenities_total) || 0,
+                damageCharges: parseFloat(booking.damage_charges) || 0,
+                extendHours: parseInt(booking.extend_hours) || 0,
+                extendAmount: parseFloat(booking.extend_amount) || 0,
+                depositAmount: parseFloat(booking.deposit_amount) || 0,
+                totalDue: parseFloat(booking.total_due) || 0,
+                balanceDue: 0 // Checkout list shows completed payments, so balance is typically 0
+            },
+            paymentStatus: {
+                ratePaid: true, // Checkout list shows completed bookings, typically paid
+                depositAmount: booking.deposit_amount,
+                depositStatus: booking.deposit_amount > 0 ? "Paid" : "Pending",
+                balanceDue: 0, // Checkout list shows completed payments
+            },
+            contactInfo: {
+                cellphone: booking.cellphone || 'N/A',
+                email: booking.guest_email || 'N/A'
+            },
+            checkOutStatus: booking.status,
+            notes: booking.note,
+            extras_total: parseFloat(booking.extras_total) || 0,
+            amenities_total: parseFloat(booking.amenities_total) || 0,
+            rentalAmenities: booking.rental_amenities ? booking.rental_amenities.split(',').map(item => item.trim()) : [],
+            consumableProducts: booking.consumable_products ? 
+                booking.consumable_products.split('||').map(item => {
+                    const parts = item.trim().split(' - ');
+                    return {
+                        name: parts[0] || '',
+                        quantity: parts[1] || '',
+                        price: parts[2] || '0'
+                    };
+                }) : [],
+            discount: {
+                name: booking.discount_name,
+                percent: booking.discount_percent
+            }
+        }));
+    } catch (error) {
+        console.error("Error loading check-out list:", error);
+        if (error.response) {
+            console.error("Server response:", error.response.data);
+            console.error("Status:", error.response.status);
+        }
+        // Set reservations to empty array on error to prevent template errors
+        reservations.value = [];
+    } finally {
+        loading.value = false;
+    }
+}
+
+// Computed property for filtered reservations
+const filteredReservations = computed(() => {
+    if (!reservations.value) return [];
+    
+    let filtered = reservations.value;
+    
+    // Apply global search filter
+    if (filters.value?.global?.value) {
+        const globalSearch = filters.value.global.value.toLowerCase();
+        filtered = filtered.filter(reservation => 
+            reservation.BookingCode.toLowerCase().includes(globalSearch) ||
+            reservation.guestName.toLowerCase().includes(globalSearch) ||
+            reservation.roomNumber.toString().includes(globalSearch)
+        );
+    }
+    
+    // Apply date filter
+    if (filters.value?.checkOutDate?.value) {
+        const filterDate = new Date(filters.value.checkOutDate.value);
+        filtered = filtered.filter(reservation => {
+            const checkOutDate = new Date(reservation.checkOutDate);
+            return checkOutDate.toDateString() === filterDate.toDateString();
+        });
+    }
+    
+    // Apply time filter
+    if (filters.value?.checkOutTime?.value) {
+        const filterTime = new Date(filters.value.checkOutTime.value);
+        const filterHour = filterTime.getHours();
+        const filterMinute = filterTime.getMinutes();
+        
+        filtered = filtered.filter(reservation => {
+            const checkOutDate = new Date(reservation.checkOutDate);
+            const checkOutHour = checkOutDate.getHours();
+            const checkOutMinute = checkOutDate.getMinutes();
+            
+            // Match exact hour and minute
+            return checkOutHour === filterHour && checkOutMinute === filterMinute;
+        });
+    }
+    
+    return filtered;
+});
+
 onBeforeMount(() => {
-    reservations.value = mockReservations.map((reservation) => ({
-        ...reservation,
-        checkInDate: new Date(reservation.checkInDate),
-        checkOutDate: new Date(reservation.checkOutDate),
-    }));
+    loadCheckOuts();
     initFilters();
 });
 
@@ -73,16 +144,12 @@ const handleClick = (event, reservation) => {
 function initFilters() {
     filters.value = {
         global: { value: null, matchMode: FilterMatchMode.CONTAINS },
-        guestName: {
+        BookingCode: {
             operator: FilterOperator.AND,
-            constraints: [
-                { value: null, matchMode: FilterMatchMode.STARTS_WITH },
-            ],
+            constraints: [{ value: null, matchMode: FilterMatchMode.CONTAINS }],
         },
-        roomNumber: {
-            operator: FilterOperator.AND,
-            constraints: [{ value: null, matchMode: FilterMatchMode.EQUALS }],
-        },
+        checkOutDate: { value: null, matchMode: FilterMatchMode.DATE_IS },
+        checkOutTime: { value: null, matchMode: FilterMatchMode.CONTAINS }
     };
 }
 
@@ -98,25 +165,45 @@ function formatCurrency(value) {
     <div class="card">
         <div class="font-semibold text-xl mb-4">Check-Out List</div>
 
-        <!-- Clear and Search -->
-        <div class="flex gap-4 mb-4">
+        <!-- Search -->
+        <div class="flex gap-2 mb-3 items-center">
             <Button
                 type="button"
                 icon="pi pi-filter-slash"
                 label="Clear"
                 outlined
-                class="mb-4"
+                @click="initFilters"
             />
-            <IconField>
-                <InputText placeholder="Keyword Search" class="w-full" />
+            <IconField class="p-input-icon-left">
+                <InputText 
+                    v-model="filters['global'].value" 
+                    placeholder="Search room code" 
+                    style="width: 200px" 
+                />
             </IconField>
+            <DatePicker  
+                v-model="filters['checkOutDate'].value"
+                placeholder="Select Date"
+                showIcon
+                dateFormat="mm/dd/yy"
+                style="width: 200px"
+            />
+            <DatePicker  
+                v-model="filters['checkOutTime'].value"
+                placeholder="Select Time"
+                timeOnly
+                showIcon
+                hourFormat="12"
+                style="width: 150px"
+            />
         </div>
+        
         <DataTable
-            :value="reservations"
+            :value="filteredReservations"
             scrollable
             scrollHeight="600px"
             class="mt-6"
-            :filters="filters"
+            :loading="loading"
         >
             <!-- Visible Columns -->
             <Column
@@ -127,7 +214,7 @@ function formatCurrency(value) {
 
             <Column
                 field="BookingCode"
-                header="Booking Code"
+                header="Room Code"
                 style="min-width: 150px"
             ></Column>
 
@@ -135,34 +222,17 @@ function formatCurrency(value) {
                 field="checkOutDate"
                 header="Check-Out Date/Time"
                 style="min-width: 200px"
-                class="text-center text-red-500"
+                class="text-red-500"
             >
                 <template #body="{ data }">
-                    <div class="flex flex-col items-center gap-1">
-                        <div
-                            v-if="data.isCheckOutExtended"
-                            class="text-red-500"
-                        >
-                            {{
-                                new Date(
-                                    data.extendedCheckOutDate,
-                                ).toLocaleString()
-                            }}
-                            <Tag
-                                :value="`+${Math.round((new Date(data.extendedCheckOutDate) - new Date(data.checkOutDate)) / (1000 * 60 * 60))}hrs`"
-                                severity="danger"
-                                class="ml-2 text-xs"
-                            />
-                        </div>
-                        <div
-                            :class="{
-                                'text-gray-400 line-through text-sm':
-                                    data.isCheckOutExtended,
-                            }"
-                        >
-                            {{ new Date(data.checkOutDate).toLocaleString() }}
-                        </div>
-                    </div>
+                    {{ data.checkOutDate.toLocaleString('en-US', {
+                        year: 'numeric',
+                        month: 'numeric',
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: 'numeric',
+                        hour12: true
+                    }) }}
                 </template>
             </Column>
 
@@ -227,61 +297,58 @@ function formatCurrency(value) {
                             </div>
                         </div>
 
-                        <div
-                            v-if="selectedReservation.isCheckOutExtended"
-                            class="bg-orange-50 p-2 rounded"
-                        >
-                            <div
-                                class="flex items-center gap-2 text-orange-700"
-                            >
-                                <i class="pi pi-clock"></i>
-                                <div class="flex flex-col">
-                                    <span class="text-sm font-medium"
-                                        >Extended Check-Out</span
-                                    >
-                                    <span class="text-xs">
-                                        New time:
-                                        {{
-                                            selectedReservation.extendedCheckOutDate.toLocaleString()
-                                        }}
-                                    </span>
-                                </div>
+
+
+                        <!-- Discount Information -->
+                        <div v-if="selectedReservation.discount.name" class="bg-green-50 p-3 rounded">
+                            <div class="flex items-center gap-2 text-green-700 mb-2">
+                                <i class="pi pi-percentage"></i>
+                                <span class="text-sm font-medium">Discount Applied</span>
+                            </div>
+                            <div class="text-sm">
+                                <div>{{ selectedReservation.discount.name }}</div>
+                                <div class="text-green-600 font-medium">{{ selectedReservation.discount.percent }}% off</div>
                             </div>
                         </div>
 
-                        <!-- Payment Status -->
-
-                        <div class="flex flex-col gap-2">
-                            <label class="font-medium">Deposit</label>
-                            <div class="flex items-center gap-3">
-                                <Tag
-                                    :severity="
-                                        selectedReservation.paymentStatus
-                                            .ratePaid
-                                            ? 'success'
-                                            : 'danger'
-                                    "
-                                    :icon="
-                                        selectedReservation.paymentStatus
-                                            .ratePaid
-                                            ? 'pi pi-check'
-                                            : 'pi pi-times'
-                                    "
-                                    :value="
-                                        selectedReservation.paymentStatus
-                                            .ratePaid
-                                            ? 'Paid'
-                                            : 'Pending'
-                                    "
-                                />
-                                <div class="flex items-center gap-1">
-                                    <i class="pi pi-wallet text-blue-500"></i>
-                                    <span>{{
-                                        formatCurrency(
-                                            selectedReservation.paymentStatus
-                                                .depositAmount,
-                                        )
-                                    }}</span>
+                        <!-- Payment Summary -->
+                        <div class="bg-blue-50 p-3 rounded">
+                            <div class="flex items-center gap-2 text-blue-700 mb-2">
+                                <i class="pi pi-credit-card"></i>
+                                <span class="text-sm font-medium">Payment Summary</span>
+                            </div>
+                            <div class="space-y-1 text-sm">
+                                <div class="flex justify-between">
+                                    <span>Room Rate:</span>
+                                    <span>{{ formatCurrency(selectedReservation.paymentData.roomRate) }}</span>
+                                </div>
+                                <div v-if="selectedReservation.paymentData.extendAmount > 0" class="flex justify-between">
+                                    <span>Extend Charges <span v-if="selectedReservation.paymentData.extendHours > 0" class="bg-orange-200 text-orange-800 px-2 py-1 rounded-full text-xs font-medium ml-2">{{ selectedReservation.paymentData.extendHours }}h</span>:</span>
+                                    <span>{{ formatCurrency(selectedReservation.paymentData.extendAmount) }}</span>
+                                </div>
+                                <div v-if="selectedReservation.paymentData.extrasTotal > 0" class="flex justify-between">
+                                    <span>Consumables:</span>
+                                    <span>{{ formatCurrency(selectedReservation.paymentData.extrasTotal) }}</span>
+                                </div>
+                                <div v-if="selectedReservation.paymentData.amenitiesTotal > 0" class="flex justify-between">
+                                    <span>Amenities:</span>
+                                    <span>{{ formatCurrency(selectedReservation.paymentData.amenitiesTotal) }}</span>
+                                </div>
+                                <div v-if="selectedReservation.paymentData.damageCharges > 0" class="flex justify-between text-red-600">
+                                    <span>Damage Charges:</span>
+                                    <span>{{ formatCurrency(selectedReservation.paymentData.damageCharges) }}</span>
+                                </div>
+                                <div class="border-t pt-1 font-medium flex justify-between">
+                                    <span>Total Due:</span>
+                                    <span>{{ formatCurrency(selectedReservation.paymentData.totalDue) }}</span>
+                                </div>
+                                <div v-if="selectedReservation.paymentData.balanceDue > 0" class="flex justify-between text-red-600 font-medium">
+                                    <span>Balance Due:</span>
+                                    <span>{{ formatCurrency(selectedReservation.paymentData.balanceDue) }}</span>
+                                </div>
+                                <div v-else class="flex justify-between text-green-600 font-medium">
+                                    <span>Payment Status:</span>
+                                    <span>✓ Fully Paid</span>
                                 </div>
                             </div>
                         </div>
@@ -293,23 +360,63 @@ function formatCurrency(value) {
                         <div class="flex flex-col gap-2">
                             <div>
                                 <label class="font-medium">Contact Info:</label>
-                                <div class="mt-1">
-                                    {{ selectedReservation.contactInfo }}
+                                <div class="mt-1 flex flex-col gap-1">
+                                    <div class="flex items-center gap-2">
+                                        <i class="pi pi-phone text-blue-500"></i>
+                                        {{ selectedReservation.contactInfo.cellphone }}
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <i class="pi pi-envelope text-blue-500"></i>
+                                        {{ selectedReservation.contactInfo.email }}
+                                    </div>
                                 </div>
                             </div>
                             <div>
-                                <label class="font-medium">Amenities:</label>
-                                <div
-                                    v-if="selectedReservation.ExtraAmenities"
-                                    class="mt-1"
-                                >
-                                    <div
-                                        v-for="(
-                                            amenity, index
-                                        ) in selectedReservation.ExtraAmenities"
-                                        :key="index"
-                                    >
-                                        • {{ amenity }}
+                                <i class="pi pi-box text-blue-500 mr-2"></i>
+                                <label class="font-medium">Rented Amenities:</label>
+                                <div class="mt-1">
+                                    <div v-if="selectedReservation.rentalAmenities.length > 0" 
+                                         class="overflow-y-auto" 
+                                         style="max-height: 50px;">
+                                        <div
+                                            v-for="(amenity, index) in selectedReservation.rentalAmenities"
+                                            :key="index"
+                                            class="flex items-center justify-between gap-2 py-1 border-b last:border-b-0 border-gray-100"
+                                        >
+                                            <div class="flex items-center gap-2">
+                                                <span>{{ amenity.split(' - ')[0] }}</span>
+                                            </div>
+                                            <span class="text-green-600 font-medium">₱{{ parseFloat(amenity.split(' - ')[1]).toFixed(2) }}</span>
+                                        </div>
+                                    </div>
+                                    <div v-else class="text-gray-500 italic">
+                                        No rented amenities
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Consumables (Extras Bill) -->
+                            <div>
+                                <i class="pi pi-shopping-cart text-blue-500 mr-2"></i>
+                                <label class="font-medium">Consumables:</label>
+                                <div class="mt-1">
+                                    <div v-if="selectedReservation.consumableProducts.length > 0"
+                                         class="overflow-y-auto"
+                                         style="max-height: 100px;">
+                                        <div
+                                            v-for="(product, index) in selectedReservation.consumableProducts"
+                                            :key="index"
+                                            class="flex items-center justify-between gap-2 py-1 border-b last:border-b-0 border-gray-100"
+                                        >
+                                            <div class="flex items-center gap-2">
+                                                <span>{{ product.name }}</span>
+                                                <span class="text-gray-500">{{ product.quantity }}</span>
+                                            </div>
+                                           
+                                        </div>
+                                    </div>
+                                    <div v-else class="text-gray-500 italic">
+                                        No consumables
                                     </div>
                                 </div>
                             </div>

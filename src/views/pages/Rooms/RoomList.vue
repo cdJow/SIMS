@@ -9,6 +9,12 @@ import RoomSummary from "./RoomSummary.vue";
 const extendRates = ref({ "6": 0, "12": 0, "24": 0 });   // fetched via getRoomTypeRates
 const extendHoursSel = ref(null);                        // 6 | 12 | 24
 const extendAmount = computed(() => {
+  // If we have an extended duration selected, use its rate
+  if (selectedExtendDuration.value) {
+    return selectedExtendDuration.value.rate;
+  }
+  
+  // Otherwise, use regular rates for 6/12/24 hours
   const h = String(extendHoursSel.value ?? "");
   return Number(extendRates.value[h] || 0);
 });
@@ -22,6 +28,29 @@ const extendIsInsufficient = computed(() => extendAmount.value > 0 && extendChan
 const extendHasAmount = computed(() => Number(extendAmountReceived.value || 0) > 0);
 const confirmExtendDialogVisible = ref(false);
 
+// More Stay Duration for Extend Dialog
+const extendMoreDurationDialogVisible = ref(false);
+const selectedExtendDuration = ref(null);
+const settingExtendedHours = ref(false); // Flag to prevent watch interference
+const preventingAutoRefetch = ref(false); // Flag to prevent automatic refetch during extension
+
+// Calculate daily rates for extend based on 24-hour rate
+const extendDailyRates = computed(() => {
+    const rate24h = extendRates.value?.["24"] || 0;
+    return {
+        1: rate24h, // 1 day
+        2: rate24h * 2, // 2 days
+        3: rate24h * 3, // 3 days
+        4: rate24h * 4, // 4 days
+        5: rate24h * 5, // 5 days
+        6: rate24h * 6, // 6 days
+        7: rate24h * 7, // 7 days
+        week: rate24h * 7, // 1 week (same as 7 days but separate for display)
+        twoWeeks: rate24h * 14, // 2 weeks
+        month: rate24h * 30, // 1 month
+    };
+});
+
 // Show extend amount inside dialogs
 const extendAmountPD = computed(() =>
   Number(selectedRoom.value?.guestDetails?.extend?.amount || 0)
@@ -32,7 +61,59 @@ function resetExtensionForm() {
   extendHoursSel.value = null;
   extendAmountReceived.value = null;
   confirmExtendDialogVisible.value = false;
+  selectedExtendDuration.value = null;
 }
+
+function openExtendMoreDurationDialog() {
+    extendMoreDurationDialogVisible.value = true;
+}
+
+function selectExtendDailyRateAndHours(days, rate) {
+    let actualDays;
+    if (days === 'week') actualDays = 7;
+    else if (days === 'twoWeeks') actualDays = 14;
+    else if (days === 'month') actualDays = 30;
+    else actualDays = parseInt(days);
+    
+    const hours = actualDays * 24; // Convert days to hours
+    
+    // Set flag to prevent watch interference
+    settingExtendedHours.value = true;
+    
+    // Store the selected duration for highlighting BEFORE setting hours
+    selectedExtendDuration.value = {
+        days: days,
+        label: getDayLabel(days),
+        hours: hours,
+        rate: rate
+    };
+    
+    // Set hours after storing duration
+    extendHoursSel.value = hours;
+    
+    // Clear flag after a brief delay
+    setTimeout(() => {
+        settingExtendedHours.value = false;
+    }, 100);
+    
+    extendMoreDurationDialogVisible.value = false; // Close dialog after selection
+}
+
+// Helper function to check if current selection matches extended duration
+function isSelectedExtendDays(days) {
+    return selectedExtendDuration.value?.days === days;
+}
+
+// Watch for regular hour selections to clear extended duration
+watch(extendHoursSel, (newValue, oldValue) => {
+    // Don't interfere if we're setting extended hours programmatically
+    if (settingExtendedHours.value) return;
+    
+    // Only clear if user selects regular hours (6, 12, 24) from dropdown
+    if ([6, 12, 24].includes(newValue) && oldValue !== newValue) {
+        selectedExtendDuration.value = null;
+    }
+});
 
 async function openExtendDialog(room) {
   selectedRoom.value = {
@@ -40,6 +121,7 @@ async function openExtendDialog(room) {
     guestDetails: { ...room.guestDetails },
   };
   resetExtensionForm();
+  selectedExtendDuration.value = null; // Reset extended duration selection
 
   try {
     const res = await getRoomTypeRates(selectedRoom.value.type_id);
@@ -61,8 +143,8 @@ function validateExtendInputs() {
   const hours = Number(extendHoursSel.value || 0);
   const amount = Number(extendAmount.value || 0);
   const amountReceived = Number(extendAmountReceived.value || 0);
-  if (!hours) throw new Error("Please select hours (6 / 12 / 24).");
-  if (amount <= 0) throw new Error("Rate not available for the selected hours.");
+  if (!hours) throw new Error("Please select extension duration from the available options.");
+  if (amount <= 0) throw new Error("Rate not available for the selected duration.");
   if (!amountReceived) throw new Error("Please enter amount received.");
   if (amountReceived < amount) throw new Error("Insufficient amount received for the extension.");
   return { hours, amount, amountReceived };
@@ -96,12 +178,53 @@ async function confirmExtension() {
     const gd = roomRef.guestDetails ||= {};
     const bookingId = Number(selectedRoom.value?.guestDetails?.id) || null;
 
+    // Handle extended durations by making multiple API calls if needed
     if (bookingId) {
       try {
-        await extendBooking(bookingId, {
-          extend_hours: hours,
-          extend_amount: amount,
-        });
+        if (hours > 24) {
+          // For extended durations, break into 24-hour chunks
+          const fullDays = Math.floor(hours / 24);
+          const remainderHours = hours % 24;
+          const rate24h = extendRates.value?.["24"] || 0;
+          
+          // Make multiple 24-hour extension calls
+          for (let i = 0; i < fullDays; i++) {
+            await extendBooking(bookingId, {
+              extend_hours: 24,
+              extend_amount: rate24h,
+            });
+          }
+          
+          // Handle remainder hours if any
+          if (remainderHours > 0) {
+            let remainderRate = 0;
+            if (remainderHours <= 6) {
+              remainderRate = extendRates.value?.["6"] || 0;
+              await extendBooking(bookingId, {
+                extend_hours: 6,
+                extend_amount: remainderRate,
+              });
+            } else if (remainderHours <= 12) {
+              remainderRate = extendRates.value?.["12"] || 0;
+              await extendBooking(bookingId, {
+                extend_hours: 12,
+                extend_amount: remainderRate,
+              });
+            } else {
+              remainderRate = extendRates.value?.["24"] || 0;
+              await extendBooking(bookingId, {
+                extend_hours: 24,
+                extend_amount: remainderRate,
+              });
+            }
+          }
+        } else {
+          // Regular extension (6, 12, or 24 hours)
+          await extendBooking(bookingId, {
+            extend_hours: hours,
+            extend_amount: amount,
+          });
+        }
       } catch (apiError) {
         throw new Error(apiError?.response?.data?.error || apiError.message || 'Failed to update booking extension');
       }
@@ -112,13 +235,14 @@ async function confirmExtension() {
     const newExtendHours = prevExtendHours + hours;
     const newExtendAmount = +(prevExtendAmount + amount).toFixed(2);
 
+    // For the payment API, send the full hours to properly track cumulative extension
+    let paymentExtendHours = hours;
+
     const payload = {
       room_id: roomId,
       booking_id: bookingId,
-      extend_hours: hours,
-      extend_amount: amount,
-      amount_received: amountReceived,
-      change_amount: Math.max(0, Number(extendChange.value || 0)),
+      extend_hours: paymentExtendHours,
+      extend_amount: amount, // Use full amount for payment
     };
 
     let paymentSnapshot = null;
@@ -148,19 +272,21 @@ async function confirmExtension() {
     const newCheckoutTs = extensionStartTs + hours * 60 * 60 * 1000;
     gd.checkOutDateTime = new Date(newCheckoutTs).toISOString();
 
-    if (!gd.payment) gd.payment = { amountReceived: 0, deposit: 0, isPaid: false, note: '' };
+    if (!gd.payment) gd.payment = { deposit: 0, isPaid: false, note: '' };
     if (paymentSnapshot) {
-      const amtRecv = Number(paymentSnapshot.amount_received ?? paymentSnapshot.amountReceived ?? gd.payment.amountReceived ?? 0);
       const totalDue = Number(paymentSnapshot.total_due ?? paymentSnapshot.totalDue ?? gd.payment.totalDue ?? 0);
-      const changeVal = Number(paymentSnapshot.change_amount ?? paymentSnapshot.change ?? gd.payment.change ?? 0);
       const extendAmt = Number(paymentSnapshot.extend_amount ?? paymentSnapshot.extendAmount ?? newExtendAmount);
-      const extendHours = Number(paymentSnapshot.extend_hours ?? paymentSnapshot.extendHours ?? newExtendHours);
-      gd.payment.amountReceived = amtRecv;
-      gd.payment.amount_received = amtRecv;
+      
+      // IMPORTANT: Use our calculated newExtendHours, not the backend's limited extend_hours
+      // The backend only knows about the last 24-hour payment, but we track the total extension
+      const extendHours = newExtendHours; // Always use our correct total
+      
+      // Get amount received from localStorage since we removed it from database
+      const storageKey = `amountReceived_room_${roomId}`;
+      const amtRecv = Number(localStorage.getItem(storageKey) || 0);
+      
       gd.payment.totalDue = totalDue;
       gd.payment.total_due = totalDue;
-      gd.payment.change = changeVal;
-      gd.payment.change_amount = changeVal;
       gd.payment.extend_amount = extendAmt;
       gd.payment.extendAmount = extendAmt;
       gd.payment.extend_hours = extendHours;
@@ -190,11 +316,28 @@ async function confirmExtension() {
       life: 3000,
     });
 
+    // Store extension data in localStorage for persistence across refreshes
+    const persistentExtensionData = JSON.parse(localStorage.getItem('roomExtensions') || '{}');
+    persistentExtensionData[roomId] = {
+      totalExtendedHours: newExtendHours,
+      totalExtendedAmount: newExtendAmount,
+      timestamp: Date.now()
+    };
+    localStorage.setItem('roomExtensions', JSON.stringify(persistentExtensionData));
+
+    // Prevent automatic refetch temporarily to preserve our extension data
+    preventingAutoRefetch.value = true;
+    
     emitRoomsChanged("extended", Number(selectedRoom.value.id));
     emitBookingsChanged("extended", Number(selectedRoom.value?.guestDetails?.id) || null, Number(selectedRoom.value.id));
 
+    // Re-enable refetch after a delay to allow events to settle
+    setTimeout(() => {
+        preventingAutoRefetch.value = false;
+    }, 3000);
+
     extendDialogVisible.value = false;
-    extendAmountReceived.value = null;
+
     confirmExtendDialogVisible.value = false;
   } catch (error) {
     toast.add({
@@ -1043,6 +1186,76 @@ onUnmounted(() => {
     function BookingselectRateAndHours(hours, rate) {
         guestDetails.value.selectedHours = hours; // Update booking state
         guestDetails.value.selectedrate = rate;
+        // Clear extended duration when regular hours are selected
+        selectedExtendedDuration.value = null;
+    }
+
+    // More Stay Duration Dialog
+    const moreDurationDialogVisible = ref(false);
+    const selectedExtendedDuration = ref(null); // Track selection from More Duration Dialog
+    
+    // Calculate daily rates based on 24-hour rate
+    const dailyRates = computed(() => {
+        const rate24h = selectedRoom.value?.rate?.["24"] || 0;
+        return {
+            1: rate24h, // 1 day
+            2: rate24h * 2, // 2 days
+            3: rate24h * 3, // 3 days
+            4: rate24h * 4, // 4 days
+            5: rate24h * 5, // 5 days
+            6: rate24h * 6, // 6 days
+            7: rate24h * 7, // 7 days
+            week: rate24h * 7, // 1 week (same as 7 days but separate for display)
+            twoWeeks: rate24h * 14, // 2 weeks
+            month: rate24h * 30, // 1 month
+        };
+    });
+    
+    function selectDailyRateAndHours(days, rate) {
+        let actualDays;
+        if (days === 'week') actualDays = 7;
+        else if (days === 'twoWeeks') actualDays = 14;
+        else if (days === 'month') actualDays = 30;
+        else actualDays = parseInt(days);
+        
+        const hours = actualDays * 24; // Convert days to hours
+        guestDetails.value.selectedHours = hours;
+        guestDetails.value.selectedrate = rate;
+        
+        // Store the selected duration for highlighting
+        selectedExtendedDuration.value = {
+            days: days,
+            label: getDayLabel(days),
+            hours: hours,
+            rate: rate
+        };
+        
+        moreDurationDialogVisible.value = false; // Close dialog after selection
+    }
+    
+    function openMoreDurationDialog() {
+        moreDurationDialogVisible.value = true;
+    }
+    
+    // Helper functions for More Duration Dialog
+    function getDayLabel(days) {
+        if (days === 'week') return '1 Week';
+        if (days === 'twoWeeks') return '2 Weeks';
+        if (days === 'month') return '1 Month';
+        return `${days} Day${days > 1 ? 's' : ''}`;
+    }
+    
+    function getDaysCount(days) {
+        if (days === 'week') return 7;
+        if (days === 'twoWeeks') return 14;
+        if (days === 'month') return 30;
+        return parseInt(days);
+    }
+    
+    function isSelectedDays(days) {
+        const actualDays = getDaysCount(days);
+        const selectedHours = guestDetails.value.selectedHours;
+        return selectedHours === (actualDays * 24);
     }
 
     const isWalkIn = computed({
@@ -1059,7 +1272,6 @@ onUnmounted(() => {
         selectedrate: null,
         bookingType: computed(() => (isWalkIn.value ? "WALK-IN" : "BOOKING")),
         payment: {
-            amountReceived: 0,
             deposit: 0,
             isPaid: false,
         },
@@ -1082,7 +1294,6 @@ onUnmounted(() => {
             extendedHours: 0,
             bookingType: computed(() => (isWalkIn.value ? "WALK-IN" : "BOOKING")),
             payment: {
-                amountReceived: 0,
                 deposit: 0,
                 isPaid: false,
             },
@@ -1107,7 +1318,7 @@ async function savePaymentNote(){
     await updateCheckinPaymentNote({ room_id: roomId, booking_id: bookingId, note: editPaymentNoteText.value });
 
     // Update local state for immediate reflection
-    if (!selectedRoom.value.guestDetails.payment) selectedRoom.value.guestDetails.payment = { amountReceived: 0, deposit: 0, isPaid: false };
+    if (!selectedRoom.value.guestDetails.payment) selectedRoom.value.guestDetails.payment = { deposit: 0, isPaid: false };
     selectedRoom.value.guestDetails.payment.note = editPaymentNoteText.value;
 
     // Also mirror into rooms list
@@ -1115,7 +1326,7 @@ async function savePaymentNote(){
     if (idx >= 0) {
       const r = rooms.value[idx];
       if (r.guestDetails) {
-        if (!r.guestDetails.payment) r.guestDetails.payment = { amountReceived: 0, deposit: 0, isPaid: false };
+        if (!r.guestDetails.payment) r.guestDetails.payment = { deposit: 0, isPaid: false };
         r.guestDetails.payment.note = editPaymentNoteText.value;
       }
     }
@@ -1145,9 +1356,26 @@ async function savePaymentNote(){
     const selectedBookingId = ref(null);
 
     async function fetchRooms() {
+        // Skip automatic refetch if we're in the middle of an extension process
+        if (preventingAutoRefetch.value) {
+            console.log('Skipping automatic room refetch during extension process');
+            return;
+        }
+        
         try {
             const response = await getRooms();
             const baseRooms = response.data || [];
+
+            // Preserve local extension data before fetching
+            const localExtensionData = new Map();
+            for (const room of rooms.value || []) {
+                if (room.guestDetails?.extendedHours || room.guestDetails?.extend?.hours) {
+                    localExtensionData.set(room.id, {
+                        extendedHours: room.guestDetails.extendedHours || room.guestDetails.extend?.hours || 0,
+                        extendAmount: room.guestDetails.extend?.amount || 0
+                    });
+                }
+            }
 
             // Enrich with latest booking so filters can search booking codes reliably
             const withBookings = await Promise.all(
@@ -1210,6 +1438,69 @@ if (uiStart) {
                 })
             );
 
+            // Restore extension data from both local state and localStorage
+            const persistentExtensionData = JSON.parse(localStorage.getItem('roomExtensions') || '{}');
+            const now = Date.now();
+            
+            for (const room of withBookings) {
+                const localData = localExtensionData.get(room.id);
+                const persistentData = persistentExtensionData[room.id];
+                
+                // Use persistent data if it's recent (within 1 hour) and valid
+                const isPersistentDataValid = persistentData && 
+                                            (now - persistentData.timestamp) < (60 * 60 * 1000) &&
+                                            persistentData.totalExtendedHours > 0;
+                
+                // Only apply extension data to rooms that are currently occupied or booked
+                if (room.guestDetails && room.status && ['Occupied', 'Booked'].includes(room.status)) {
+                    const backendHours = room.guestDetails.extend?.hours || room.guestDetails.extendedHours || 0;
+                    let finalExtendedHours = backendHours;
+                    let finalExtendedAmount = room.guestDetails.extend?.amount || 0;
+                    
+                    // Use local data if it's higher than backend data
+                    if (localData && localData.extendedHours > backendHours) {
+                        finalExtendedHours = localData.extendedHours;
+                        finalExtendedAmount = localData.extendAmount;
+                    }
+                    
+                    // Use persistent data if it's valid and higher than current values
+                    if (isPersistentDataValid && persistentData.totalExtendedHours > finalExtendedHours) {
+                        finalExtendedHours = persistentData.totalExtendedHours;
+                        finalExtendedAmount = persistentData.totalExtendedAmount;
+                    }
+                    
+                    // Apply the final extension data if it's different from backend
+                    if (finalExtendedHours > backendHours) {
+                        room.guestDetails.extendedHours = finalExtendedHours;
+                        room.guestDetails.extend = {
+                            hours: finalExtendedHours,
+                            amount: finalExtendedAmount
+                        };
+                        
+                        // Also update payment data if it exists
+                        if (room.guestDetails.payment) {
+                            room.guestDetails.payment.extend_hours = finalExtendedHours;
+                            room.guestDetails.payment.extendHours = finalExtendedHours;
+                            room.guestDetails.payment.extend_amount = finalExtendedAmount;
+                            room.guestDetails.payment.extendAmount = finalExtendedAmount;
+                        }
+                    }
+                }
+            }
+            
+            // Clean up persistent extension data for rooms that are no longer occupied/booked or expired
+            Object.keys(persistentExtensionData).forEach(roomId => {
+                const data = persistentExtensionData[roomId];
+                const room = withBookings.find(r => r.id === parseInt(roomId));
+                
+                // Remove if expired (older than 24 hours) or room is no longer occupied/booked
+                if ((now - data.timestamp > (24 * 60 * 60 * 1000)) || 
+                    (!room || !room.guestDetails || !['Occupied', 'Booked'].includes(room.status))) {
+                    delete persistentExtensionData[roomId];
+                }
+            });
+            localStorage.setItem('roomExtensions', JSON.stringify(persistentExtensionData));
+
             rooms.value = withBookings;
         } catch (err) {
             toast.add({
@@ -1219,7 +1510,23 @@ if (uiStart) {
             });
         }
     }
+    // Initialize persistent extension data
+    function initializePersistentExtensions() {
+        const persistentExtensionData = JSON.parse(localStorage.getItem('roomExtensions') || '{}');
+        const now = Date.now();
+        
+        // Clean up expired data (older than 24 hours)
+        Object.keys(persistentExtensionData).forEach(roomId => {
+            const data = persistentExtensionData[roomId];
+            if (now - data.timestamp > (24 * 60 * 60 * 1000)) {
+                delete persistentExtensionData[roomId];
+            }
+        });
+        localStorage.setItem('roomExtensions', JSON.stringify(persistentExtensionData));
+    }
+
     onMounted(() => {
+    initializePersistentExtensions();
     fetchRooms();
 
     // Existing listeners for data refresh
@@ -1583,9 +1890,7 @@ lastCheckInByRoom.set(room.id, { inISO: now.toISOString(), outISO: out.toISOStri
      extras_total: Number((posBill?.total ?? uiTotalExtrasPD.value) || 0),
      amenities_total: Number(uiTotalAmenitiesPD.value || 0),
      deposit_amount: deposit,
-     amount_received: amountReceived,
      total_due: Number(totalAmountDue.value || 0),
-     change_amount: Number(calculateChange.value || 0),
      note: paymentDetails.value.note || "",
      amenities: (selectedAmenitiesPD.value || []).map(a => ({ serial_id: a.id, amenity_name: a.name, unit_rental_price: a.price }))
    };
@@ -1597,7 +1902,7 @@ lastCheckInByRoom.set(room.id, { inISO: now.toISOString(), outISO: out.toISOStri
 
  // 4) Update local UI mirror
 selectedRoom.value.status = "Occupied";
-selectedRoom.value.guestDetails.payment = { amountReceived, deposit, isPaid: paid, note: paymentDetails.value.note || "" };
+selectedRoom.value.guestDetails.payment = { deposit, isPaid: paid, note: paymentDetails.value.note || "" };
 selectedRoom.value.guestDetails.checkInDateTime = now.toISOString();
 selectedRoom.value.guestDetails.checkOutDateTime = out.toISOString();
 
@@ -1607,7 +1912,7 @@ if (idx !== -1) {
 const r = rooms.value[idx];
 r.status = "Occupied";
 r.guestDetails ||= {};
- r.guestDetails.payment = { amountReceived, deposit, isPaid: paid, note: paymentDetails.value.note || "" };
+ r.guestDetails.payment = { deposit, isPaid: paid, note: paymentDetails.value.note || "" };
 r.guestDetails.checkInDateTime = now.toISOString();
 r.guestDetails.checkOutDateTime = out.toISOString();
 }
@@ -1705,14 +2010,10 @@ const occupiedPayment = computed(() => {
   const pay = selectedRoom.value?.guestDetails?.payment;
   if (!pay) {
     return {
-      amountReceived: 0,
-      amount_received: 0,
       deposit: 0,
       deposit_amount: 0,
       totalDue: 0,
       total_due: 0,
-      change: 0,
-      change_amount: 0,
       extend_amount: 0,
       discountName: '',
       discountPercent: 0,
@@ -1798,45 +2099,48 @@ const occTotalDue = computed(() => {
   return roundCurrency(base + occDamageCharges.value);
 });
 const occChange = computed(() => {
-  const pay = occupiedPayment.value;
-  const stored = Number(pay.change ?? pay.change_amount ?? NaN);
-  if (Number.isFinite(stored)) return stored;
-  const amt = Number(pay.amountReceived ?? pay.amount_received ?? 0);
+  // Calculate change using localStorage amount since we removed it from database
+  const roomId = selectedRoom.value?.id;
+  if (!roomId) return 0;
+  const storageKey = `amountReceived_room_${roomId}`;
+  const amt = Number(localStorage.getItem(storageKey) || 0);
   return amt - occTotalDue.value;
 });
 
 function roomExtendedHours(room){
   const g = room?.guestDetails || {};
-  const payHours = Number(g.payment?.extend_hours ?? g.payment?.extendHours ?? NaN);
-  if (Number.isFinite(payHours) && payHours > 0) return payHours;
-  const dataHours = Number(g.extend?.hours ?? g.extendedHours ?? 0);
-  return Number.isFinite(dataHours) && dataHours > 0 ? dataHours : 0;
+  // Prioritize total extended hours over individual payment hours
+  const totalExtendedHours = Number(g.extendedHours ?? g.extend?.hours ?? 0);
+  if (Number.isFinite(totalExtendedHours) && totalExtendedHours > 0) return totalExtendedHours;
+  
+  // Fallback to payment hours if no total is available
+  const payHours = Number(g.payment?.extend_hours ?? g.payment?.extendHours ?? 0);
+  return Number.isFinite(payHours) && payHours > 0 ? payHours : 0;
 }
 
 function roomExtendedLabel(room){
   const hrs = Math.floor(roomExtendedHours(room));
   if (!hrs) return '';
-  const days = Math.floor(hrs / 24);
-  const remHours = hrs % 24;
-  const parts = [];
-  if (days) parts.push(`${days} ${days === 1 ? 'day' : 'days'}`);
-  if (remHours) parts.push(`${remHours}h`);
-  return parts.join(' ');
+  
+  // Always display as hours instead of days
+  return `${hrs}h`;
 }
 
 const occupiedAmountDraft = ref(0);
 const updatingOccupiedAmount = ref(false);
 
 watch(
-  () => [
-    selectedRoom.value?.id,
-    selectedRoom.value?.guestDetails?.payment?.amountReceived,
-    selectedRoom.value?.guestDetails?.payment?.amount_received,
-  ],
+  () => selectedRoom.value?.id,
   () => {
-    const pay = selectedRoom.value?.guestDetails?.payment;
-    const amt = Number(pay?.amountReceived ?? pay?.amount_received ?? 0);
-    occupiedAmountDraft.value = Number.isFinite(amt) ? amt : 0;
+    const roomId = selectedRoom.value?.id;
+    if (!roomId) {
+      occupiedAmountDraft.value = 0;
+      return;
+    }
+    // Load amount received from localStorage since we removed it from database
+    const storageKey = `amountReceived_room_${roomId}`;
+    const storedAmount = Number(localStorage.getItem(storageKey) || 0);
+    occupiedAmountDraft.value = Number.isFinite(storedAmount) ? storedAmount : 0;
   },
   { immediate: true }
 );
@@ -1849,7 +2153,11 @@ const occChangeDraft = computed(() => {
 const occIsDraftInsufficient = computed(() => occChangeDraft.value < 0);
 
 const occHasPendingAmountChange = computed(() => {
-  const stored = Number(occupiedPayment.value.amountReceived ?? occupiedPayment.value.amount_received ?? 0);
+  // Use localStorage to get the stored amount since we removed it from database
+  const roomId = selectedRoom.value?.id;
+  if (!roomId) return false;
+  const storageKey = `amountReceived_room_${roomId}`;
+  const stored = Number(localStorage.getItem(storageKey) || 0);
   const draft = Number(occupiedAmountDraft.value || 0);
   return Math.abs(stored - draft) > 0.009;
 });
@@ -1871,22 +2179,21 @@ async function saveOccupiedAmountReceived(){
 
   updatingOccupiedAmount.value = true;
   try {
+    // Store amount received in localStorage instead of database
+    const storageKey = `amountReceived_room_${roomId}`;
+    localStorage.setItem(storageKey, amountVal.toString());
+
+    // Update only the total_due in the database (without amount_received and change_amount)
     await updateCheckinPaymentAmount({
       room_id: roomId,
       booking_id: bookingId,
-      amount_received: amountVal,
       total_due: totalDueVal,
-      change_amount: changeVal,
     });
 
     if (selectedRoom.value?.guestDetails) {
-      const payment = selectedRoom.value.guestDetails.payment || (selectedRoom.value.guestDetails.payment = { amountReceived: 0, deposit: 0, isPaid: false, note: '' });
-      payment.amountReceived = amountVal;
-      payment.amount_received = amountVal;
+      const payment = selectedRoom.value.guestDetails.payment || (selectedRoom.value.guestDetails.payment = { deposit: 0, isPaid: false, note: '' });
       payment.totalDue = totalDueVal;
       payment.total_due = totalDueVal;
-      payment.change = changeVal;
-      payment.change_amount = changeVal;
       payment.isPaid = amountVal >= totalDueVal - 0.009;
     }
 
@@ -1894,13 +2201,9 @@ async function saveOccupiedAmountReceived(){
     if (idx >= 0) {
       const targetRoom = rooms.value[idx];
       if (!targetRoom.guestDetails) targetRoom.guestDetails = {};
-      const payment = targetRoom.guestDetails.payment || (targetRoom.guestDetails.payment = { amountReceived: 0, deposit: 0, isPaid: false, note: '' });
-      payment.amountReceived = amountVal;
-      payment.amount_received = amountVal;
+      const payment = targetRoom.guestDetails.payment || (targetRoom.guestDetails.payment = { deposit: 0, isPaid: false, note: '' });
       payment.totalDue = totalDueVal;
       payment.total_due = totalDueVal;
-      payment.change = changeVal;
-      payment.change_amount = changeVal;
       payment.isPaid = amountVal >= totalDueVal - 0.009;
       rooms.value = rooms.value.slice();
     }
@@ -2030,7 +2333,7 @@ async function confirmOccupiedExtras(){
     if (!guestDetails.amenitiesItems) guestDetails.amenitiesItems = [];
     if (amenitiesItemsToAppend.length) guestDetails.amenitiesItems = guestDetails.amenitiesItems.concat(amenitiesItemsToAppend);
 
-    guestDetails.payment = guestDetails.payment || { amountReceived: 0, deposit: 0, isPaid: false, note: '' };
+    guestDetails.payment = guestDetails.payment || { deposit: 0, isPaid: false, note: '' };
     if (paymentSnap) {
       guestDetails.payment = { ...guestDetails.payment, ...paymentSnap };
     }
@@ -2203,7 +2506,7 @@ const g = guestDetails.value || {};
   selectedHours: g.selectedHours ?? null,
   selectedrate: g.selectedrate ?? null,
   bookingType: "WALK-IN",
-  payment: { amountReceived: 0, deposit: 0, isPaid: false },
+  payment: { deposit: 0, isPaid: false },
   };
 }
 
@@ -2368,6 +2671,7 @@ await loadDiscounts();
     const checkoutAssignedAmenities = ref([]);
     const checkoutAmenitiesLoading = ref(false);
     const checkoutAmenitiesError = ref(null);
+    const checkoutFoamSerialIds = ref([]);
 
     const watcherStopCheckout = watch(checkoutDialogVisible, (visible) => {
         if (!visible) {
@@ -2382,14 +2686,14 @@ await loadDiscounts();
         const roomRef = selectedRoom.value;
         if (!roomRef) return;
         const guest = roomRef.guestDetails || (roomRef.guestDetails = {});
-        const payment = guest.payment || (guest.payment = { amountReceived: 0, deposit: 0, isPaid: false });
+        const payment = guest.payment || (guest.payment = { deposit: 0, isPaid: false });
         payment.damage_charges = normalized;
         payment.damageCharges = normalized;
         const idx = rooms.value.findIndex(r => Number(r.id) === Number(roomRef.id));
         if (idx >= 0) {
             const target = rooms.value[idx];
             target.guestDetails = target.guestDetails || {};
-            const targetPayment = target.guestDetails.payment || (target.guestDetails.payment = { amountReceived: 0, deposit: 0, isPaid: false });
+            const targetPayment = target.guestDetails.payment || (target.guestDetails.payment = { deposit: 0, isPaid: false });
             targetPayment.damage_charges = normalized;
             targetPayment.damageCharges = normalized;
         }
@@ -2417,15 +2721,25 @@ await loadDiscounts();
             if (selectedRoom.value?.id && Number(selectedRoom.value.id) !== currentRoomId) {
                 return;
             }
+            const normalizeLabel = (value) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+            // Reset foam IDs
+            checkoutFoamSerialIds.value = [];
+            
             const processed = rows.map((item, idx) => {
                 const serialId = Number(item?.serial_id ?? item?.id ?? item?.serialId);
                 const statusRaw = String(item?.status ?? '').toLowerCase();
                 const isDamaged = statusRaw === 'damaged';
                 const productType = (item?.product_type ?? item?.type ?? '').toString().trim();
                 const productCategory = (item?.product_category ?? item?.category ?? '').toString().trim();
-                const normalizeLabel = (value) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
                 const linenKey = 'bathbedlinens';
                 const cleanEligible = normalizeLabel(productType) === linenKey || normalizeLabel(productCategory) === linenKey;
+                const isFoam = normalizeLabel(productType) === 'foam' || normalizeLabel(productCategory) === 'foam';
+                
+                // Track foam items for auto-return
+                if (isFoam && serialId) {
+                    checkoutFoamSerialIds.value.push(serialId);
+                }
+                
                 return {
                     ...item,
                     id: serialId,
@@ -2436,9 +2750,10 @@ await loadDiscounts();
                     product_type: productType,
                     product_category: productCategory,
                     cleanEligible,
+                    isFoam,
                     damaged: cleanEligible ? false : isDamaged,
                 };
-            }).filter(entry => entry && !entry.cleanEligible);
+            }).filter(entry => entry && !entry.cleanEligible && !entry.isFoam);
             checkoutAssignedAmenities.value = processed;
         } catch (error) {
             checkoutAmenitiesError.value = error?.response?.data?.error || error?.message || 'Failed to load amenities.';
@@ -2473,7 +2788,9 @@ await loadDiscounts();
         const damageVal = checkoutDamageChargesNumber.value;
         const newDepositVal = 0;
         const totalDueVal = roundCurrency(occRoomRate.value + occExtras.value + occRent.value + occExtend.value + damageVal);
-        const storedAmount = Number(occupiedPayment.value.amountReceived ?? occupiedPayment.value.amount_received ?? 0);
+        // Use localStorage to get the amount received since we removed it from database
+        const storageKey = `amountReceived_room_${roomId}`;
+        const storedAmount = Number(localStorage.getItem(storageKey) || 0);
         const amountReceivedVal = roundCurrency(Number.isFinite(storedAmount) ? storedAmount : 0);
         const changeVal = roundCurrency(amountReceivedVal - totalDueVal);
 
@@ -2481,9 +2798,8 @@ await loadDiscounts();
             const res = await updateCheckinPaymentAmount({
                 room_id: roomId,
                 booking_id: bookingRef,
-                amount_received: amountReceivedVal,
+
                 total_due: totalDueVal,
-                change_amount: changeVal,
                 deposit_amount: newDepositVal,
                 damage_charges: damageVal,
             });
@@ -2492,20 +2808,14 @@ await loadDiscounts();
             const resolvedDamage = roundCurrency(Number(snapshot?.damage_charges ?? damageVal));
             const resolvedDeposit = roundCurrency(Number(snapshot?.deposit_amount ?? newDepositVal));
             const resolvedTotal = roundCurrency(Number(snapshot?.total_due ?? totalDueVal));
-            const resolvedAmountReceived = roundCurrency(Number(snapshot?.amount_received ?? amountReceivedVal));
-            const resolvedChange = roundCurrency(Number(snapshot?.change_amount ?? changeVal));
-
-            const payment = roomRef.guestDetails?.payment || (roomRef.guestDetails.payment = { amountReceived: 0, deposit: 0, isPaid: false });
+            const payment = roomRef.guestDetails?.payment || (roomRef.guestDetails.payment = { deposit: 0, isPaid: false });
             payment.damage_charges = resolvedDamage;
             payment.damageCharges = resolvedDamage;
             payment.deposit = resolvedDeposit;
             payment.deposit_amount = resolvedDeposit;
             payment.totalDue = resolvedTotal;
             payment.total_due = resolvedTotal;
-            payment.amountReceived = resolvedAmountReceived;
-            payment.amount_received = resolvedAmountReceived;
-            payment.change = resolvedChange;
-            payment.change_amount = resolvedChange;
+            // Note: amountReceived and change are now calculated client-side only
 
             const roomIdx = rooms.value.findIndex(r => Number(r.id) === roomId);
             if (roomIdx >= 0) {
@@ -2550,7 +2860,10 @@ await loadDiscounts();
         localStorage.setItem("rooms", JSON.stringify(rooms.value));
 
         try {
-            await checkoutRoom(roomId, { damaged_serial_ids: damagedSerialIds });
+            await checkoutRoom(roomId, { 
+                damaged_serial_ids: damagedSerialIds,
+                foam_serial_ids: checkoutFoamSerialIds.value 
+            });
             const damageLabel = damageCount === 1 ? 'amenity' : 'amenities';
             const detailMessage = damageCount
                 ? `Room ${roomNumberLabel} checked out. ${damageCount} ${damageLabel} marked damaged.`
@@ -2561,6 +2874,11 @@ await loadDiscounts();
                 detail: detailMessage,
                 life: 3000,
             });
+            
+            // Clean up localStorage entries for this room
+            const storageKey = `amountReceived_room_${roomId}`;
+            localStorage.removeItem(storageKey);
+            
             lastCheckInByRoom.delete(roomId);
             emitBookingsChanged("checked-out", bookingRef, roomId);
             emitRoomsChanged("status-updated", roomId);
@@ -2760,6 +3078,7 @@ await loadDiscounts();
     // Function to open the booking dialog
     async function openBookingDialog() {
   uiBookingTs.value = Date.now();
+  selectedExtendedDuration.value = null; // Reset extended duration selection
 
   // NEW: when opening as Book, freeze to "now"
   if (isBook.value) {
@@ -3150,13 +3469,13 @@ if (idx !== -1) {
                             Booked on:
                             {{ selectedRoom.guestDetails?.createdAt ? formatDate(selectedRoom.guestDetails.createdAt) : "N/A" }}
                         </p>
-                        <p>
-                            Room Code:
-                            {{ selectedRoom.guestDetails?.roomCode || "N/A" }}
-                        </p>
-                        <p>
+                        <p v-if="selectedRoom?.status === 'Booked' && selectedRoom.guestDetails?.bookCode">
                             Book Code:
                             {{ selectedRoom.guestDetails?.bookCode || "N/A" }}
+                        </p>
+                        <p v-else-if="selectedRoom.guestDetails?.roomCode">
+                            Room Code:
+                            {{ selectedRoom.guestDetails?.roomCode || "N/A" }}
                         </p>
                         <p>
                             Guest Name:
@@ -3245,13 +3564,13 @@ if (idx !== -1) {
                         <strong>Email:</strong>
                         {{ selectedRoom.guestDetails?.guestEmail || "N/A" }}
                     </p>
-                    <p>
+                    <p v-if="selectedRoom?.status === 'Booked' && selectedRoom.guestDetails?.bookCode">
+                        <strong>Book Code:</strong>
+                        {{ selectedRoom.guestDetails?.bookCode || "N/A" }}
+                    </p>
+                    <p v-else-if="selectedRoom.guestDetails?.roomCode">
                         <strong>Room Code:</strong>
                         {{ selectedRoom.guestDetails?.roomCode || "N/A" }}
-                    </p>
-                    <p>
-                        <strong>Booking Code:</strong>
-                        {{ selectedRoom.guestDetails?.bookCode || "N/A" }}
                     </p>
                     <p>
                         <strong>Hours:</strong>
@@ -3504,9 +3823,30 @@ if (idx !== -1) {
                 />
 
                 <div>
-                                    <label class="block text-sm font-medium mb-1 mt-3">
-                                    Select Stay Duration:
-                                    </label>
+                    <div class="flex items-center justify-between mb-3 mt-3">
+                        <label class="block text-sm font-medium">
+                            Select Stay Duration:
+                        </label>
+                        <Button
+                            label="More Stay Duration"
+                            class="p-button-outlined p-button-sm"
+                            icon="pi pi-calendar-plus"
+                            @click="openMoreDurationDialog"
+                        />
+                    </div>
+                    
+                    <!-- Highlight selected extended duration -->
+                    <div v-if="selectedExtendedDuration" class="mt-3 mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg dark:bg-blue-900/30 dark:border-blue-700">
+                        <div class="flex items-center gap-2 text-sm">
+                            <i class="pi pi-check-circle text-blue-600 dark:text-blue-400"></i>
+                            <span class="font-medium text-blue-900 dark:text-blue-100">
+                                Selected: {{ selectedExtendedDuration.label }}
+                            </span>
+                        </div>
+                        <div class="mt-1 text-xs text-blue-700 dark:text-blue-300">
+                            {{ selectedExtendedDuration.hours }} hours • {{ formatCurrency(selectedExtendedDuration.rate) }}
+                        </div>
+                    </div>
 
   <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
   <div
@@ -3597,6 +3937,66 @@ if (idx !== -1) {
     class="p-button-danger w-32"
     @click="confirmAndCancelBooking(selectedRoom.guestDetails.id)"
     />
+            </div>
+        </Dialog>
+
+        <!-- More Stay Duration Dialog -->
+        <Dialog
+            v-model:visible="moreDurationDialogVisible"
+            header="Select Extended Stay Duration"
+            :modal="true"
+            :dismissable-mask="true"
+            :style="{ width: '800px' }"
+            :breakpoints="{ '1024px': '90vw', '768px': '95vw', '640px': '98vw' }"
+        >
+            <div class="p-4">
+                <div class="mb-4 text-center">
+                    <p class="text-lg font-semibold mb-2">Daily Rate Options</p>
+                    <p class="text-sm text-gray-600">
+                        Based on 24-hour rate: {{ formatCurrency(selectedRoom?.rate?.['24'] || 0) }}
+                    </p>
+                </div>
+                
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                    <div
+                        v-for="(rate, days) in dailyRates"
+                        :key="days"
+                        role="button"
+                        tabindex="0"
+                        :class="[
+                            'p-4 border-2 rounded-lg cursor-pointer select-none transition-all duration-200 hover:shadow-lg',
+                            'bg-white border-gray-200 text-gray-900 hover:bg-blue-50 hover:border-blue-300',
+                            'dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-blue-900/20 dark:hover:border-blue-500',
+                            isSelectedDays(days) ? 'border-blue-500 ring-2 ring-blue-200 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200' : ''
+                        ]"
+                        @click="selectDailyRateAndHours(days, Number(rate))"
+                        @keydown.enter="selectDailyRateAndHours(days, Number(rate))"
+                        @keydown.space.prevent="selectDailyRateAndHours(days, Number(rate))"
+                    >
+                        <div class="text-center">
+                            <div class="font-bold text-lg mb-1">
+                                {{ getDayLabel(days) }}
+                            </div>
+                            <div class="text-xs text-gray-600 dark:text-gray-400 mb-2">
+                                {{ getDaysCount(days) * 24 }}h
+                            </div>
+                            <div class="font-semibold text-sm text-green-600 dark:text-green-400">
+                                {{ formatCurrency(rate) }}
+                            </div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                {{ formatCurrency(rate / getDaysCount(days)) }}/day
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end gap-2 mt-6">
+                    <Button
+                        label="Cancel"
+                        class="p-button-secondary"
+                        @click="moreDurationDialogVisible = false"
+                    />
+                </div>
             </div>
         </Dialog>
 
@@ -4555,7 +4955,31 @@ class="w-full md:w-80"
             <!-- Extend Stay Dialog body -->
 <div class="p-4 space-y-4">
   <div class="space-y-2">
-    <label class="block text-sm font-medium text-gray-600">Hours</label>
+    <div class="flex items-center justify-between mb-3">
+        <label class="block text-sm font-medium text-gray-600">
+            Select Extension Hours:
+        </label>
+        <Button
+            label="More Stay Duration"
+            class="p-button-outlined p-button-sm"
+            icon="pi pi-calendar-plus"
+            @click="openExtendMoreDurationDialog"
+        />
+    </div>
+    
+    <!-- Highlight selected extended duration -->
+    <div v-if="selectedExtendDuration" class="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg dark:bg-blue-900/30 dark:border-blue-700">
+        <div class="flex items-center gap-2 text-sm">
+            <i class="pi pi-check-circle text-blue-600 dark:text-blue-400"></i>
+            <span class="font-medium text-blue-900 dark:text-blue-100">
+                Selected: {{ selectedExtendDuration.label }}
+            </span>
+        </div>
+        <div class="mt-1 text-xs text-blue-700 dark:text-blue-300">
+            {{ selectedExtendDuration.hours }} hours • {{ formatCurrency(selectedExtendDuration.rate) }}
+        </div>
+    </div>
+    
     <Dropdown
       v-model="extendHoursSel"
       :options="[{label:'6 Hours', value:6},{label:'12 Hours', value:12},{label:'24 Hours', value:24}]"
@@ -4629,6 +5053,50 @@ class="w-full md:w-80"
     @click="openConfirmExtend"
   />
 </template>
+        </Dialog>
+
+        <!-- Extend More Stay Duration Dialog -->
+        <Dialog
+            v-model:visible="extendMoreDurationDialogVisible"
+            header="Select Extended Stay Duration"
+            :modal="true"
+            :dismissable-mask="true"
+            :style="{ width: '800px' }"
+            :breakpoints="{ '1024px': '90vw', '768px': '95vw', '640px': '98vw' }"
+        >
+            <div class="p-4">
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                    <div
+                        v-for="(rate, days) in extendDailyRates"
+                        :key="days"
+                        role="button"
+                        tabindex="0"
+                        :class="[
+                            'p-4 border rounded-lg cursor-pointer select-none transition-colors text-center',
+                            'bg-white border-neutral-200 text-neutral-900 hover:bg-neutral-50',
+                            'dark:bg-neutral-900 dark:border-neutral-700 dark:text-neutral-100 dark:hover:bg-neutral-800',
+                            isSelectedExtendDays(days)
+                                ? 'border-blue-500 bg-blue-50 text-blue-900 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-100'
+                                : ''
+                        ]"
+                        @click="selectExtendDailyRateAndHours(days, rate)"
+                        @keydown.enter="selectExtendDailyRateAndHours(days, rate)"
+                        @keydown.space.prevent="selectExtendDailyRateAndHours(days, rate)"
+                    >
+                        <div class="font-semibold text-base mb-2">
+                            {{ getDayLabel(days) }}
+                        </div>
+                        
+                        <div class="text-sm text-neutral-700 dark:text-neutral-300 mb-1">
+                            {{ getDaysCount(days) * 24 }} hours
+                        </div>
+                        
+                        <div class="font-medium text-green-600 dark:text-green-400">
+                            {{ formatCurrency(rate) }}
+                        </div>
+                    </div>
+                </div>
+            </div>
         </Dialog>
 
         <Dialog

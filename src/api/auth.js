@@ -245,6 +245,9 @@ export function fetchBills() {
 export function deleteBill(id) {
     return axios.delete(`${API_URL}/pos/bills/${id}`);
 }
+export function fetchAmenityRentals() {
+  return axios.get(`${API_URL}/pos/amenity-rentals`);
+}
 
 export function fetchPOSPreview(data) {
   return axios.post(`${API_URL}/pos/preview`, data); // expects {items:[{id,quantity}]}
@@ -305,6 +308,37 @@ export function extendCheckinPayment(payload){
 export function updateCheckinPaymentExtras(payload){
   // payload: { room_id, booking_id?, extras_total, amenities_total, extras_bill_id?, amenities? }
   return axios.put(`${API_URL}/checkin-payments/extras`, payload);
+}
+
+// Fetch check-in list with payment information
+export function fetchCheckInList() {
+  return axios.get(`${API_URL}/check-in-list`);
+}
+
+// Fetch check-out list with payment information
+export function fetchCheckOutList() {
+  return axios.get(`${API_URL}/check-out-list`);
+}
+
+// Damage Reports API
+export function fetchRoomsForDamageReport() {
+  return axios.get(`${API_URL}/damage-reports/rooms`);
+}
+
+export function fetchRoomAmenitiesWithDamageStatus(roomId) {
+  return axios.get(`${API_URL}/damage-reports/rooms/${roomId}/amenities`);
+}
+
+export function createDamageReport(damageData) {
+  return axios.post(`${API_URL}/damage-reports`, damageData);
+}
+
+export function updateDamageReport(damageReportId, updateData) {
+  return axios.put(`${API_URL}/damage-reports/${damageReportId}`, updateData);
+}
+
+export function removeDamageReport(damageReportId) {
+  return axios.delete(`${API_URL}/damage-reports/${damageReportId}`);
 }
 
 

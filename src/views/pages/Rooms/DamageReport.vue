@@ -1,203 +1,198 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, onMounted } from "vue";
+import { 
+    fetchRoomsForDamageReport, 
+    fetchRoomAmenitiesWithDamageStatus, 
+    createDamageReport, 
+    removeDamageReport,
+    updateDamageReport
+} from "@/api/auth";
+import { useToast } from "primevue/usetoast";
 
-const rooms = ref([
-    {
-        number: "101",
-        status: "Occupied",
-        lastChecked: "2024-03-20",
-        damageCount: 0,
-        amenities: [
-            {
-                id: 1,
-                name: "King Bed",
-                category: "Furniture",
-                condition: "Good",
-                isDamaged: false,
-                serialNumber: "FUR-101-KB-001",
-            },
-            {
-                id: 2,
-                name: "Smart TV",
-                category: "Electronics",
-                condition: "Excellent",
-                isDamaged: false,
-                serialNumber: "ELE-101-TV-002",
-                damage: {
-                    type: {
-                        name: "HVAC Malfunction",
-                        value: "hvac_malfunction",
-                    },
-                    severity: { label: "Medium", value: "medium" },
-                    notes: "",
-                },
-            },
-        ],
-    },
-    {
-        number: "102",
-        status: "Available",
-        lastChecked: "2024-03-18",
-        damageCount: 1,
-        amenities: [
-            {
-                id: 3,
-                name: "Queen Bed",
-                category: "Furniture",
-                condition: "Good",
-                isDamaged: false,
-                serialNumber: "FUR-102-QB-003",
-            },
-            {
-                id: 4,
-                name: "LED TV",
-                category: "Electronics",
-                condition: "Excellent",
-                isDamaged: false,
-                serialNumber: "ELE-102-TV-004",
-            },
-            {
-                id: 5,
-                name: "Air Conditioner",
-                category: "Appliance",
-                condition: "Needs Repair",
-                isDamaged: true,
-                serialNumber: "APP-102-AC-005",
-                damage: {
-                    type: {
-                        name: "HVAC Malfunction",
-                        value: "hvac_malfunction",
-                    },
-                    severity: { label: "Medium", value: "medium" },
-                    notes: "",
-                },
-            },
-        ],
-    },
-    {
-        number: "103",
-        status: "Booked",
-        lastChecked: "2024-03-19",
-        damageCount: 2,
-        amenities: [
-            {
-                id: 6,
-                name: "Twin Beds",
-                category: "Furniture",
-                condition: "Good",
-                isDamaged: false,
-                serialNumber: "FUR-103-TB-006",
-            },
-            {
-                id: 7,
-                name: "Smart TV",
-                category: "Electronics",
-                condition: "Good",
-                isDamaged: false,
-                serialNumber: "ELE-103-TV-007",
-            },
-            {
-                id: 8,
-                name: "Bathroom Mirror",
-                category: "Fixture",
-                condition: "Cracked",
-                isDamaged: true,
-                serialNumber: "FIX-103-MIR-008",
-                damage: {
-                    type: { name: "Broken", value: "broken" },
-                    severity: { label: "Minor", value: "minor" },
-                    notes: "",
-                },
-            },
-        ],
-    },
-]);
+const toast = useToast();
+const rooms = ref([]);
 
 const selectedRoom = ref({});
 const showAmenitiesDialog = ref(false);
 const showDamageDialog = ref(false);
 const selectedItem = ref(null);
-const damageReport = ref({ type: null, severity: null, notes: "" });
-
-// Constants
-const damageTypes = ref([
-    { name: "Broken", value: "broken" },
-    { name: "Stained", value: "stained" },
-    { name: "Malfunctioning", value: "malfunction" },
-    { name: "Water Damage", value: "water_damage" },
-    { name: "Burn Marks", value: "burn_marks" },
-    { name: "Scratches", value: "scratches" },
-    { name: "Torn Fabric", value: "torn_fabric" },
-    { name: "Pest Infestation", value: "pest_infestation" },
-    { name: "Odor Issues", value: "odor_issues" },
-    { name: "Electrical Fault", value: "electrical_fault" },
-    { name: "Plumbing Issue", value: "plumbing_issue" },
-    { name: "Furniture Damage", value: "furniture_damage" },
-    { name: "Wall Damage", value: "wall_damage" },
-    { name: "Carpet Stains", value: "carpet_stains" },
-    { name: "Bed Frame Issue", value: "bed_frame_issue" },
-    { name: "HVAC Malfunction", value: "hvac_malfunction" },
-    { name: "Window Damage", value: "window_damage" },
-    { name: "Door Lock Issue", value: "door_lock_issue" },
-    { name: "Lighting Issue", value: "lighting_issue" },
-]);
-
-const severityLevels = ref([
-    { label: "Minor", value: "minor" },
-    { label: "Medium", value: "medium" },
-    { label: "Severe", value: "severe" },
-]);
+const damageReport = ref({ damage_description: "", notes: "" });
+const loading = ref(false);
+const amenitiesLoading = ref(false);
 
 const damagedItems = computed(
-    () => selectedRoom.value.amenities?.filter((item) => item.isDamaged) || []
+    () => selectedRoom.value.amenities?.filter((item) => item.is_damaged) || []
 );
 
 // Methods
-const selectRoom = (room) => {
-    selectedRoom.value = { ...room };
-    showAmenitiesDialog.value = true;
+const loadRooms = async () => {
+    try {
+        loading.value = true;
+        console.log("Loading rooms for damage report...");
+        const response = await fetchRoomsForDamageReport();
+        console.log("Rooms response:", response);
+        rooms.value = response.data;
+        console.log("Loaded rooms:", rooms.value);
+    } catch (error) {
+        console.error("Error loading rooms:", error);
+        console.error("Error details:", {
+            message: error.message,
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data
+        });
+        
+        const errorMessage = error.response?.data?.error || error.message || "Failed to load rooms";
+        toast.add({
+            severity: "error",
+            summary: "Error",
+            detail: errorMessage,
+            life: 5000,
+        });
+    } finally {
+        loading.value = false;
+    }
+};
+
+const selectRoom = async (room) => {
+    try {
+        amenitiesLoading.value = true;
+        const response = await fetchRoomAmenitiesWithDamageStatus(room.id);
+        selectedRoom.value = { 
+            ...room, 
+            amenities: response.data 
+        };
+        showAmenitiesDialog.value = true;
+    } catch (error) {
+        console.error("Error loading room amenities:", error);
+        toast.add({
+            severity: "error",
+            summary: "Error",
+            detail: "Failed to load room amenities",
+            life: 3000,
+        });
+    } finally {
+        amenitiesLoading.value = false;
+    }
 };
 
 const openDamageReport = (item) => {
     selectedItem.value = item;
+    damageReport.value = { damage_description: "", notes: "" };
     showDamageDialog.value = true;
 };
 
-const submitDamageReport = () => {
-    const roomIndex = rooms.value.findIndex(
-        (r) => r.number === selectedRoom.value.number
-    );
-    const amenityIndex = rooms.value[roomIndex].amenities.findIndex(
-        (a) => a.id === selectedItem.value.id
-    );
+const submitDamageReport = async () => {
+    if (!damageReport.value.damage_description.trim()) {
+        toast.add({
+            severity: "warn",
+            summary: "Validation Error",
+            detail: "Please describe the damage",
+            life: 3000,
+        });
+        return;
+    }
 
-    rooms.value[roomIndex].amenities[amenityIndex] = {
-        ...selectedItem.value,
-        isDamaged: true,
-        damage: { ...damageReport.value },
-        condition: "Damaged",
-    };
+    try {
+        const reportData = {
+            room_id: selectedRoom.value.id,
+            serial_id: selectedItem.value.serial_id,
+            item_name: selectedItem.value.item_name,
+            damage_description: damageReport.value.damage_description,
+            notes: damageReport.value.notes
+        };
 
-    rooms.value[roomIndex].damageCount++;
-    cancelDamageReport();
+        await createDamageReport(reportData);
+        
+        toast.add({
+            severity: "success",
+            summary: "Success",
+            detail: "Damage report created successfully",
+            life: 3000,
+        });
+        
+        // Refresh the amenities for this room
+        await selectRoom(selectedRoom.value);
+        
+        // Refresh the rooms list to update damage count
+        await loadRooms();
+        
+        cancelDamageReport();
+    } catch (error) {
+        console.error("Error creating damage report:", error);
+        toast.add({
+            severity: "error",
+            summary: "Error", 
+            detail: error.response?.data?.error || "Failed to create damage report",
+            life: 3000,
+        });
+    }
 };
 
-const removeDamageReport = (item) => {
-    const roomIndex = rooms.value.findIndex(
-        (r) => r.number === selectedRoom.value.number
-    );
-    const amenityIndex = rooms.value[roomIndex].amenities.findIndex(
-        (a) => a.id === item.id
-    );
-
-    rooms.value[roomIndex].amenities[amenityIndex].isDamaged = false;
-    rooms.value[roomIndex].damageCount--;
+const removeDamageReportItem = async (item) => {
+    try {
+        const response = await removeDamageReport(item.damage_report_id);
+        
+        // Get the response data for better feedback
+        const responseData = response.data;
+        const itemStatus = responseData.item_status || 'available';
+        const itemName = responseData.item_name || 'Item';
+        
+        // Provide specific feedback based on item status
+        let statusMessage = '';
+        if (itemStatus === 'in_stock') {
+            statusMessage = ` - ${itemName} returned to stock`;
+        } else if (itemStatus === 'cleaning') {
+            statusMessage = ` - ${itemName} sent to cleaning`;
+        } else {
+            statusMessage = ` - ${itemName} marked as available`;
+        }
+        
+        toast.add({
+            severity: "success",
+            summary: "Damage Resolved",
+            detail: `Damage report resolved successfully${statusMessage}`,
+            life: 4000,
+        });
+        
+        // Refresh the amenities for this room
+        await selectRoom(selectedRoom.value);
+        
+        // Refresh the rooms list to update damage count
+        await loadRooms();
+    } catch (error) {
+        console.error("Error removing damage report:", error);
+        toast.add({
+            severity: "error",
+            summary: "Error",
+            detail: error.response?.data?.error || "Failed to resolve damage report",
+            life: 3000,
+        });
+    }
 };
 
 const cancelDamageReport = () => {
     showDamageDialog.value = false;
-    damageReport.value = { type: null, severity: null, notes: "" };
+    damageReport.value = { damage_description: "", notes: "" };
+    selectedItem.value = null;
 };
+
+// Test function to check API connectivity
+const testAPI = async () => {
+    try {
+        const response = await fetch('http://127.0.0.1:5000/damage-reports/test');
+        const data = await response.json();
+        console.log("API test result:", data);
+    } catch (error) {
+        console.error("API test failed:", error);
+    }
+};
+
+// Load rooms on component mount
+onMounted(() => {
+    testAPI();
+    loadRooms();
+});
 
 const getStatusSeverity = (status) => {
     switch (status.toLowerCase()) {
@@ -220,14 +215,15 @@ const selectedRoomType = ref("");
 // Update filteredRooms computed property
 const filteredRooms = computed(() => {
     return rooms.value.filter((room) => {
-        const matchesSearch = room.number
+        const matchesSearch = room.room_number
+            .toString()
             .toLowerCase()
             .includes(searchQuery.value.toLowerCase());
         const matchesStatus =
             selectedStatuses.value.length === 0 ||
             selectedStatuses.value.includes(room.status);
         const matchesType =
-            !selectedRoomType.value || room.type === selectedRoomType.value;
+            !selectedRoomType.value || room.room_type_name === selectedRoomType.value;
 
         return matchesSearch && matchesStatus && matchesType;
     });
@@ -240,25 +236,35 @@ const clearFilters = () => {
     selectedRoomType.value = "";
 };
 
-const getConditionSeverity = (condition) => {
-    switch (condition.toLowerCase()) {
-        case "excellent":
-            return "success";
-        case "good":
-            return "info";
-        case "damaged":
-            return "danger";
-        default:
-            return "warning";
-    }
+const getConditionSeverity = (isDamaged) => {
+    return isDamaged ? "danger" : "success";
 };
 
-const formatDate = (dateString) =>
-    new Date(dateString).toLocaleDateString("en-US", {
+const formatDate = (dateString) => {
+    if (!dateString) return "No date";
+    return new Date(dateString).toLocaleDateString("en-US", {
         year: "numeric",
         month: "short",
         day: "numeric",
     });
+};
+
+const getItemResolutionStatus = (itemName) => {
+    if (!itemName) return "Will be marked as available";
+    
+    const itemNameLower = itemName.toLowerCase();
+    
+    if (itemNameLower.includes('foam') || itemNameLower.includes('mattress') || itemNameLower.includes('pillow')) {
+        return "Will return to stock";
+    } else if (itemNameLower.includes('bath') || itemNameLower.includes('bed') || 
+               itemNameLower.includes('linen') || itemNameLower.includes('towel') || 
+               itemNameLower.includes('sheet') || itemNameLower.includes('blanket') || 
+               itemNameLower.includes('pillowcase')) {
+        return "Will be sent to cleaning";
+    } else {
+        return "Will be marked as available";
+    }
+};
 </script>
 
 <template>
@@ -269,12 +275,19 @@ const formatDate = (dateString) =>
                 <div class="room-grid">
                     <h2 class="text-2xl font-bold mb-6">Rooms Status</h2>
                     <div
+                        v-if="loading"
+                        class="flex justify-center items-center h-64"
+                    >
+                        <ProgressSpinner />
+                    </div>
+                    <div
+                        v-else
                         class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
                     >
                         <div
                             v-for="room in filteredRooms"
-                            :key="room.number"
-                            class="relative w-full p-6 rounded-lg shadow-md border cursor-pointer hover:shadow-lg transition-shadow min-h-[120px]"
+                            :key="room.id"
+                            class="relative w-full p-4 rounded-lg shadow-md border cursor-pointer hover:shadow-lg transition-shadow min-h-[140px]"
                             :class="{
                                 'bg-green-500 text-white hover:bg-green-600':
                                     room.status === 'Available',
@@ -294,19 +307,21 @@ const formatDate = (dateString) =>
                             }"
                             @click="selectRoom(room)"
                         >
-                            <div class="flex justify-between items-center">
-                                <h3 class="text-lg text-white font-semibold">
-                                    Room {{ room.number }}
+                            <div class="flex flex-col h-full text-center justify-center">
+                                <div class="flex justify-between items-start mb-1">
+                                    <h3 class="text-xl text-white font-bold leading-tight flex-1 text-center">
+                                        Room {{ room.room_number }}
+                                    </h3>
                                     <Tag
-                                        v-if="room.damageCount > 0"
+                                        v-if="room.damage_count > 0 && room.amenity_count > 0"
                                         severity="danger"
-                                        :value="room.damageCount"
-                                        class="ml-2 text-white"
+                                        :value="room.damage_count"
+                                        class="absolute top-2 right-2 text-white"
                                     />
-                                </h3>
-                            </div>
-                            <div class="mt-2 text-sm">
-                                Last Checked: {{ formatDate(room.lastChecked) }}
+                                </div>
+                                <div class="text-sm text-white/90">
+                                    Amenities: {{ room.amenity_count || 0 }}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -390,64 +405,93 @@ const formatDate = (dateString) =>
         <!-- Amenities Dialog -->
         <Dialog
             v-model:visible="showAmenitiesDialog"
-            header="Room Amenities"
-            :style="{ width: '800px' }"
+            :header="`Room ${selectedRoom.room_number} Amenities`"
+            :style="{ width: '900px' }"
             :dismissable-mask="true"
             :modal="true"
+            maximizable
         >
             <div class="amenities-dialog-content">
-                <DataTable
-                    :value="selectedRoom.amenities"
-                    class="p-datatable-sm"
-                >
-                    <Column field="name" header="Item"></Column>
-                    <Column field="category" header="Category"></Column>
-                    <Column header="Condition">
-                        <template #body="{ data }">
-                            <Tag
-                                :value="data.condition"
-                                :severity="getConditionSeverity(data.condition)"
-                            />
-                        </template>
-                    </Column>
-                    <Column header="Actions">
-                        <template #body="{ data }">
-                            <Button
-                                icon="pi pi-exclamation-triangle"
-                                class="p-button-sm p-button-danger"
-                                @click="openDamageReport(data)"
-                                :disabled="data.isDamaged"
-                            />
-                        </template>
-                    </Column>
-                </DataTable>
+                <div v-if="amenitiesLoading" class="flex justify-center p-4">
+                    <ProgressSpinner />
+                </div>
+                <div v-else-if="!selectedRoom.amenities || selectedRoom.amenities.length === 0" class="text-center p-8">
+                    <i class="pi pi-info-circle text-4xl text-gray-400 mb-4"></i>
+                    <p class="text-lg text-gray-600 mb-2">No Amenities Found</p>
+                    <p class="text-sm text-gray-500">This room currently has no amenities assigned.</p>
+                </div>
+                <div v-else>
+                    <DataTable
+                        :value="selectedRoom.amenities"
+                        class="p-datatable-sm"
+                    >
+                        <Column field="item_name" header="Item Name"></Column>
+                        <Column field="serial_number" header="Serial Number"></Column>
+                        <Column field="brand" header="Brand"></Column>
+                        <Column header="Status">
+                            <template #body="{ data }">
+                                <Tag
+                                    :value="data.is_damaged ? 'Damaged' : 'Good'"
+                                    :severity="getConditionSeverity(data.is_damaged)"
+                                />
+                            </template>
+                        </Column>
+                        <Column header="Actions">
+                            <template #body="{ data }">
+                                <Button
+                                    icon="pi pi-exclamation-triangle"
+                                    class="p-button-sm p-button-danger"
+                                    @click="openDamageReport(data)"
+                                    :disabled="data.is_damaged"
+                                    title="Report Damage"
+                                />
+                            </template>
+                        </Column>
+                    </DataTable>
 
-                <!-- Damage Summary -->
-                <div class="mt-6" v-if="damagedItems.length > 0">
-                    <h3 class="text-lg font-semibold mb-4">
-                        Damage Report Summary
-                    </h3>
-                    <ul class="damage-list">
-                        <li
-                            v-for="(item, index) in damagedItems"
-                            :key="index"
-                            class="flex justify-between items-center p-2 bg-red-50 rounded mb-2"
-                        >
-                            <div>
-                                <span class="font-medium">{{ item.name }}</span>
-                                <span class="text-sm ml-2"
-                                    >{{ item.damage.type.name }} ({{
-                                        item.damage.severity.label
-                                    }})</span
-                                >
+                    <!-- Damage Summary -->
+                    <div class="mt-6" v-if="damagedItems.length > 0">
+                        <h3 class="text-lg font-semibold mb-4">
+                            Damage Reports ({{ damagedItems.length }})
+                        </h3>
+                        <div class="space-y-3">
+                            <div
+                                v-for="item in damagedItems"
+                                :key="item.serial_id"
+                                class="p-4 bg-red-50 border border-red-200 rounded-lg"
+                            >
+                                <div class="flex justify-between items-start">
+                                    <div class="flex-1">
+                                        <div class="font-medium text-gray-900">
+                                            {{ item.item_name }}
+                                        </div>
+                                        <div class="text-sm text-gray-600 mt-1">
+                                            Serial: {{ item.serial_number }}
+                                        </div>
+                                        <div class="text-sm text-red-700 mt-2">
+                                            <strong>Damage:</strong> {{ item.damage_description }}
+                                        </div>
+                                        <div v-if="item.damage_notes" class="text-sm text-gray-600 mt-1">
+                                            <strong>Notes:</strong> {{ item.damage_notes }}
+                                        </div>
+                                        <div class="text-xs text-gray-500 mt-2">
+                                            Reported: {{ formatDate(item.reported_at) }}
+                                        </div>
+                                        <div class="text-xs text-blue-600 mt-1 font-medium">
+                                            {{ getItemResolutionStatus(item.item_name) }}
+                                        </div>
+                                    </div>
+                                    <Button
+                                        icon="pi pi-check"
+                                        label="Resolve"
+                                        class="p-button-success p-button-sm"
+                                        @click="removeDamageReportItem(item)"
+                                        :title="`Resolve Damage Report - ${getItemResolutionStatus(item.item_name)}`"
+                                    />
+                                </div>
                             </div>
-                            <Button
-                                icon="pi pi-trash"
-                                class="p-button-text p-button-danger"
-                                @click="removeDamageReport(item)"
-                            />
-                        </li>
-                    </ul>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -462,73 +506,64 @@ const formatDate = (dateString) =>
             header="Report Damage"
             :dismissable-mask="true"
             :modal="true"
-            class="rounded-lg shadow-lg"
+            :style="{ width: '500px' }"
         >
-            <div class="p-6 space-y-6">
-                <div class="space-y-2">
-                    <label class="block text-sm font-medium text-gray-700"
-                        >Item Name</label
-                    >
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Item Name</label>
                     <InputText
-                        v-model="selectedItem.name"
+                        v-model="selectedItem.item_name"
                         readonly
-                        class="w-full p-2 border border-gray-300 rounded-lg bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        class="w-full bg-gray-100"
                     />
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="space-y-2">
-                        <label class="block text-sm font-medium text-gray-700"
-                            >Damage Type</label
-                        >
-                        <Dropdown
-                            v-model="damageReport.type"
-                            :options="damageTypes"
-                            optionLabel="name"
-                            placeholder="Select damage type"
-                            class="w-full border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-primary-500"
-                        />
-                    </div>
-
-                    <div class="space-y-2">
-                        <label class="block text-sm font-medium text-gray-700"
-                            >Severity</label
-                        >
-                        <SelectButton
-                            v-model="damageReport.severity"
-                            :options="severityLevels"
-                            optionLabel="label"
-                            class="w-full border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-primary-500"
-                        />
-                    </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Serial Number</label>
+                    <InputText
+                        v-model="selectedItem.serial_number"
+                        readonly
+                        class="w-full bg-gray-100"
+                    />
                 </div>
 
-                <div class="space-y-2">
-                    <label class="block text-sm font-medium text-gray-700"
-                        >Notes</label
-                    >
+                <div>
+                    <label class="block text-sm font-medium mb-2">Damage Description *</label>
+                    <Textarea
+                        v-model="damageReport.damage_description"
+                        rows="3"
+                        placeholder="Describe the damage..."
+                        class="w-full"
+                    />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium mb-2">Additional Notes</label>
                     <Textarea
                         v-model="damageReport.notes"
                         rows="3"
-                        class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        placeholder="Any additional notes..."
+                        class="w-full"
                     />
                 </div>
             </div>
 
             <template #footer>
-                <div class="flex justify-end gap-4 p-4 border-t">
+                <div class="flex justify-end gap-2">
                     <Button
                         label="Cancel"
-                        class="p-button-text bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg transition"
+                        severity="secondary"
                         @click="cancelDamageReport"
                     />
                     <Button
                         label="Submit Report"
-                        class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition shadow-md"
+                        severity="danger"
                         @click="submitDamageReport"
                     />
                 </div>
             </template>
         </Dialog>
+        
+        <Toast />
     </div>
 </template>

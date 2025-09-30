@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, watch, onBeforeUnmount  } from "vue";
-import { fetchPOSProducts, posCheckout, fetchBills, fetchPOSPreview } from "@/api/auth";
+import { fetchPOSProducts, posCheckout, fetchBills, fetchPOSPreview, fetchAmenityRentals } from "@/api/auth";
 import { useToast } from "primevue/usetoast";
 
 const toast = useToast();
@@ -13,6 +13,10 @@ const history = ref([]);
 const historyDialogVisible = ref(false);
 const selectedHistory = ref(null);
 const historyQuery = ref("");
+const amenityRentals = ref([]);
+const amenityRentalDialogVisible = ref(false);
+const selectedAmenityRental = ref(null);
+const amenityRentalQuery = ref("");
 const billDialogVisible = ref(false);
 const confirmingCheckout = ref(false);
 const lastBillId = ref(null);
@@ -205,9 +209,19 @@ async function loadHistory() {
   }
 }
 
+async function loadAmenityRentals() {
+  try {
+    const res = await fetchAmenityRentals();
+    amenityRentals.value = res.data || [];
+  } catch {
+    toast.add({ severity: "error", summary: "Amenity Rentals", detail: "Failed to load amenity rental history.", life: 3000 });
+  }
+}
+
 onMounted(() => {
   loadProducts();
   loadHistory();
+  loadAmenityRentals();
   schedulePreview();
 });
 
@@ -378,6 +392,33 @@ const displayedHistory = computed(() => {
 
 const safeSelectedItems = computed(() => selectedHistory.value?.items || []);
 
+const displayedAmenityRentals = computed(() => {
+  const q = amenityRentalQuery.value.trim().toLowerCase();
+  if (!q) return amenityRentals.value;
+
+  return amenityRentals.value.filter(rental => {
+    const amenitiesRented = String(rental.amenities_rented || "").toLowerCase();
+    const guestName = String(rental.guest_name || "").toLowerCase();
+    const roomNumber = String(rental.room_number || "").toLowerCase();
+
+    const dateStr = new Date(rental.latest_date).toLocaleString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true
+    }).toLowerCase();
+
+    return (
+      amenitiesRented.includes(q) ||
+      guestName.includes(q) ||
+      roomNumber.includes(q) ||
+      dateStr.includes(q)
+    );
+  });
+});
+
 
 /* ---------- Bill dialog lines (split by price when available) ---------- */
 const billLines = computed(() => {
@@ -427,6 +468,17 @@ function onHistoryRowClick(event) {
 function viewHistoryDetails(bill) {
   selectedHistory.value = bill;
   historyDialogVisible.value = true;
+}
+
+function viewAmenityRentalDetails(rental) {
+  selectedAmenityRental.value = rental;
+  amenityRentalDialogVisible.value = true;
+}
+
+function onAmenityRentalRowClick(event) {
+  if (event.data) {
+    viewAmenityRentalDetails(event.data);
+  }
 }
 </script>
 
@@ -597,6 +649,89 @@ function viewHistoryDetails(bill) {
           </Column>
         </DataTable>
       </div>
+
+      <!-- Amenity Rental History -->
+      <div class="border rounded-lg shadow-md p-4">
+        <h2 class="text-xl font-bold mb-3">Amenity Rental History</h2>
+
+        <div class="mb-3">
+          <InputText
+            v-model="amenityRentalQuery"
+            placeholder="Search by guest, room, amenities or date/time"
+            class="w-full"
+          />
+        </div>
+
+        <DataTable
+          :value="displayedAmenityRentals"
+          class="p-datatable-sm shadow-md"
+          responsiveLayout="scroll"
+          style="max-height: 400px; overflow-y: auto"
+          :paginator="true"
+          :rows="5"
+          :showGridlines="true"
+          @row-click="onAmenityRentalRowClick"
+          dataKey="id"
+        >
+          <Column field="guest_name" header="Guest" style="min-width: 120px">
+            <template #body="slotProps">
+              <span class="font-medium">{{ slotProps.data.guest_name }}</span>
+            </template>
+          </Column>
+
+          <Column field="room_number" header="Room" style="min-width: 80px">
+            <template #body="slotProps">
+              {{ slotProps.data.room_number }}
+            </template>
+          </Column>
+
+          <Column field="amenities_rented" header="Amenities (Qty)" style="min-width: 200px">
+            <template #body="slotProps">
+              <div class="text-sm">
+                {{ slotProps.data.amenities_rented }}
+              </div>
+            </template>
+          </Column>
+
+          <Column field="total_items" header="Items" style="min-width: 60px">
+            <template #body="slotProps">
+              {{ slotProps.data.total_items }}
+            </template>
+          </Column>
+
+          <Column field="latest_date" header="Date" style="min-width: 140px">
+            <template #body="slotProps">
+              {{
+                new Date(slotProps.data.latest_date).toLocaleString("en-US", {
+                  year: "2-digit",
+                  month: "short",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                  hour12: true
+                })
+              }}
+            </template>
+          </Column>
+
+          <Column field="total_amount" header="Total" style="min-width: 100px" headerClass="text-right" bodyClass="text-right">
+            <template #body="slotProps">₱{{ Number(slotProps.data.total_amount).toFixed(2) }}</template>
+          </Column>
+
+          <Column header="Details" style="min-width: 80px" headerClass="text-center" bodyClass="text-center">
+            <template #body="slotProps">
+              <Button
+                icon="pi pi-info-circle"
+                class="p-button-info"
+                outlined
+                rounded
+                size="small"
+                @click.stop="viewAmenityRentalDetails(slotProps.data)"
+              />
+            </template>
+          </Column>
+        </DataTable>
+      </div>
     </div>
 
     <!-- Transaction Details dialog -->
@@ -652,6 +787,52 @@ function viewHistoryDetails(bill) {
 
       <div class="flex justify-end mt-4">
         <Button label="Close" class="p-button-primary" @click="historyDialogVisible = false" />
+      </div>
+    </Dialog>
+
+    <!-- Amenity Rental Details dialog -->
+    <Dialog v-model:visible="amenityRentalDialogVisible" header="Amenity Rental Details" :dismissable-mask="true" :modal="true" class="w-1/3">
+      <div v-if="selectedAmenityRental">
+        <div class="mb-1">
+          <strong>Guest Name:</strong> <span class="font-medium">{{ selectedAmenityRental.guest_name }}</span>
+        </div>
+        <div class="mb-1">
+          <strong>Room Number:</strong> {{ selectedAmenityRental.room_number }}
+        </div>
+        <div class="mb-2">
+          <strong>Amenities Rented:</strong>
+          <div class="mt-1 p-2 bg-gray-50 rounded text-sm">
+            {{ selectedAmenityRental.amenities_rented }}
+          </div>
+        </div>
+        <div class="mb-1">
+          <strong>Total Items:</strong> {{ selectedAmenityRental.total_items }}
+        </div>
+        <div class="mb-2">
+          <strong>Created Date:</strong>
+          {{
+            new Date(selectedAmenityRental.created_date).toLocaleString("en-US", {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+              hour12: true
+            })
+          }}
+        </div>
+
+        <hr class="my-4" />
+        <div class="flex justify-between font-bold text-lg">
+          <span>Total Amount</span>
+          <span>₱{{ Number(selectedAmenityRental.total_amount).toFixed(2) }}</span>
+        </div>
+      </div>
+
+      <div v-else><p>No amenity rental selected.</p></div>
+
+      <div class="flex justify-end mt-4">
+        <Button label="Close" class="p-button-primary" @click="amenityRentalDialogVisible = false" />
       </div>
     </Dialog>
 
