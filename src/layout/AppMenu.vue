@@ -126,17 +126,7 @@ const model = ref([
                 to: "/POS/POS",
             },
 
-            {
-                label: "Orders ",
-                icon: "pi pi-fw pi-book",
-                to: "/FrontDeskMenu",
-            },
 
-            {
-                label: "Extra Amenities",
-                icon: "pi pi-fw pi-shopping-cart",
-                to: "/POS/Extra",
-            },
             {
                 label: "POS Invoices",
                 icon: "pi pi-fw pi-file",
@@ -192,29 +182,14 @@ const model = ref([
             },
 
             {
-                label: "Damaged Items",
+                label: "Damaged Report",
                 icon: "pi pi-fw pi-minus-circle",
-                to: "/Inventory/GenerateReport/DamagedItems",
+                to: "/Rooms/DamageReport",
             },
         ],
     },
 
-    {
-        label: "Kitchen Staff Module",
-        items: [
-            {
-                label: "Kitchen Staff Module",
-                icon: "pi pi-fw pi-globe",
-                to: "/KitchenModule",
-            },
 
-            {
-                label: "Menu Management",
-                icon: "pi pi-fw pi-cog",
-                to: "/MenuList",
-            },
-        ],
-    },
 
     {},
 ]);

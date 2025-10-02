@@ -487,30 +487,51 @@ function onAmenityRentalRowClick(event) {
   <div class="p-4 card">
     <Toast />
 
-    <h1 class="text-2xl font-bold mb-4">POS</h1>
+    <h1 class="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">POS</h1>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <!-- Products -->
       <div class="border rounded-lg shadow-md p-4">
+        <h2 class="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">Products</h2>
         <InputText
           v-model="productSearchQuery"
           placeholder="Search for products..."
           class="w-full mb-4"
         />
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto" style="max-height: 400px">
+        <!-- Empty State for Products -->
+        <div v-if="filteredProducts.length === 0" class="text-center py-16">
+          <div class="flex flex-col items-center">
+            <i class="pi pi-shopping-bag text-6xl text-gray-400 dark:text-gray-500 mb-4"></i>
+            <h3 class="text-xl font-medium text-gray-700 dark:text-gray-300 mb-2">
+              {{ productSearchQuery ? 'No Products Found' : 'No Products Available' }}
+            </h3>
+            <p class="text-gray-500 dark:text-gray-400 mb-4">
+              {{ productSearchQuery ? 'No products match your search criteria. Try different keywords.' : 'There are currently no products available in the system.' }}
+            </p>
+            <Button 
+              v-if="productSearchQuery"
+              icon="pi pi-times" 
+              label="Clear Search" 
+              @click="productSearchQuery = ''"
+              outlined
+            />
+          </div>
+        </div>
+
+        <div v-else class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 overflow-y-auto" style="max-height: 400px">
           <div
             v-for="product in filteredProducts"
             :key="product.id"
-            class="p-4 border rounded-lg shadow-md"
+            class="p-2 border border-gray-200 dark:border-gray-600 rounded-lg shadow-sm bg-white dark:bg-gray-800 hover:shadow-md transition-shadow"
           >
-            <h3 class="text-lg font-medium">{{ product.name }}</h3>
-            <p class="text-sm text-white-600">Brand: <span class="font-medium">{{ product.brand || product.product_brand || "—" }}</span></p>
-            <p class="text-sm text-white-600">Price: ₱{{ Number(product.price).toFixed(2) }}</p>
-            <p class="text-sm text-white-600">Stock: {{ product.stock }}</p>
+            <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1 leading-tight">{{ product.name }}</h3>
+            <p class="text-xs text-gray-600 dark:text-gray-300 mb-1">{{ product.brand || product.product_brand || "—" }}</p>
+            <p class="text-xs font-medium text-green-600 dark:text-green-400 mb-1">₱{{ Number(product.price).toFixed(2) }}</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Stock: {{ product.stock }}</p>
             <Button
-              label="Add to Cart"
+              label="Add"
               icon="pi pi-plus"
-              class="p-button-primary mt-2 w-full"
+              class="p-button-primary w-full py-4 px-4 text-sm font-bold rounded-lg"
               :disabled="product.stock <= 0"
               @click="addToCart(product)"
             />
@@ -519,10 +540,23 @@ function onAmenityRentalRowClick(event) {
       </div>
 
       <!-- Cart -->
-      <div class="border rounded-lg shadow-md p-4">
-        <h2 class="text-xl font-bold mb-4">Cart</h2>
+      <div class="border border-gray-200 dark:border-gray-600 rounded-lg shadow-md p-4 bg-white dark:bg-gray-800">
+        <h2 class="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">Cart</h2>
 
-        <div class="overflow-y-auto" style="max-height: 400px">
+        <!-- Empty State for Cart -->
+        <div v-if="cart.length === 0" class="text-center py-16">
+          <div class="flex flex-col items-center">
+            <i class="pi pi-shopping-cart text-6xl text-gray-400 dark:text-gray-500 mb-4"></i>
+            <h3 class="text-xl font-medium text-gray-700 dark:text-gray-300 mb-2">Your Cart is Empty</h3>
+            <p class="text-gray-500 dark:text-gray-400 mb-4">Add some products to your cart to get started with your transaction.</p>
+            <div class="text-sm text-gray-400 dark:text-gray-500">
+              <i class="pi pi-info-circle mr-1"></i>
+              Browse products on the left to add items
+            </div>
+          </div>
+        </div>
+
+        <div v-else class="overflow-y-auto" style="max-height: 400px">
           <DataTable
             :value="cartBreakdownRows"
             class="p-datatable-sm shadow-md"
@@ -576,7 +610,7 @@ function onAmenityRentalRowClick(event) {
           </DataTable>
         </div>
 
-        <div class="text-right font-bold text-lg mt-4">
+        <div class="text-right font-bold text-lg mt-4 text-gray-900 dark:text-gray-100">
           Total: ₱{{ uiTotal.toFixed(2) }}
         </div>
         <Button
@@ -589,8 +623,8 @@ function onAmenityRentalRowClick(event) {
       </div>
 
       <!-- Transaction History -->
-      <div class="border rounded-lg shadow-md p-4">
-        <h2 class="text-xl font-bold mb-3">Transaction History</h2>
+      <div class="border border-gray-200 dark:border-gray-600 rounded-lg shadow-md p-4 bg-white dark:bg-gray-800">
+        <h2 class="text-xl font-bold mb-3 text-gray-900 dark:text-gray-100">Transaction History</h2>
 
         <div class="mb-3">
           <InputText
@@ -600,7 +634,27 @@ function onAmenityRentalRowClick(event) {
 />
         </div>
 
+        <!-- Empty State for Transaction History -->
+        <div v-if="displayedHistory.length === 0" class="text-center py-12">
+          <div class="flex flex-col items-center">
+            <i class="pi pi-receipt text-5xl text-gray-400 dark:text-gray-500 mb-3"></i>
+            <h3 class="text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">No Transaction History</h3>
+            <p class="text-gray-500 dark:text-gray-400 text-sm mb-3">
+              {{ historyQuery ? 'No transactions match your search criteria.' : 'No transactions have been made yet.' }}
+            </p>
+            <Button 
+              v-if="historyQuery"
+              icon="pi pi-times" 
+              label="Clear Search" 
+              @click="historyQuery = ''"
+              outlined
+              size="small"
+            />
+          </div>
+        </div>
+
         <DataTable
+          v-else
           :value="displayedHistory"
           class="p-datatable-sm shadow-md"
           responsiveLayout="scroll"
@@ -651,8 +705,8 @@ function onAmenityRentalRowClick(event) {
       </div>
 
       <!-- Amenity Rental History -->
-      <div class="border rounded-lg shadow-md p-4">
-        <h2 class="text-xl font-bold mb-3">Amenity Rental History</h2>
+      <div class="border border-gray-200 dark:border-gray-600 rounded-lg shadow-md p-4 bg-white dark:bg-gray-800">
+        <h2 class="text-xl font-bold mb-3 text-gray-900 dark:text-gray-100">Amenity Rental History</h2>
 
         <div class="mb-3">
           <InputText
@@ -662,7 +716,27 @@ function onAmenityRentalRowClick(event) {
           />
         </div>
 
+        <!-- Empty State for Amenity Rental History -->
+        <div v-if="displayedAmenityRentals.length === 0" class="text-center py-12">
+          <div class="flex flex-col items-center">
+            <i class="pi pi-box text-5xl text-gray-400 dark:text-gray-500 mb-3"></i>
+            <h3 class="text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">No Amenity Rentals</h3>
+            <p class="text-gray-500 dark:text-gray-400 text-sm mb-3">
+              {{ amenityRentalQuery ? 'No amenity rentals match your search criteria.' : 'No amenity rentals have been recorded yet.' }}
+            </p>
+            <Button 
+              v-if="amenityRentalQuery"
+              icon="pi pi-times" 
+              label="Clear Search" 
+              @click="amenityRentalQuery = ''"
+              outlined
+              size="small"
+            />
+          </div>
+        </div>
+
         <DataTable
+          v-else
           :value="displayedAmenityRentals"
           class="p-datatable-sm shadow-md"
           responsiveLayout="scroll"
@@ -736,7 +810,7 @@ function onAmenityRentalRowClick(event) {
 
     <!-- Transaction Details dialog -->
     <Dialog v-model:visible="historyDialogVisible" header="Transaction Details" :dismissable-mask="true" :modal="true" class="w-1/3">
-      <div v-if="selectedHistory">
+      <div v-if="selectedHistory" class="text-gray-800 dark:text-gray-200">
         <div class="mb-1">
           <strong>Invoice #:</strong> <span class="font-medium">{{ selectedHistory.invoice_no }}</span>
         </div>
@@ -776,14 +850,14 @@ function onAmenityRentalRowClick(event) {
 
         </DataTable>
 
-        <hr class="my-4" />
-        <div class="flex justify-between font-bold text-lg">
+        <hr class="my-4 border-gray-300 dark:border-gray-600" />
+        <div class="flex justify-between font-bold text-lg text-gray-900 dark:text-gray-100">
           <span>Total</span>
           <span>₱{{ Number(selectedHistory.total).toFixed(2) }}</span>
         </div>
       </div>
 
-      <div v-else><p>No transaction selected.</p></div>
+      <div v-else class="text-gray-600 dark:text-gray-400"><p>No transaction selected.</p></div>
 
       <div class="flex justify-end mt-4">
         <Button label="Close" class="p-button-primary" @click="historyDialogVisible = false" />
@@ -792,7 +866,7 @@ function onAmenityRentalRowClick(event) {
 
     <!-- Amenity Rental Details dialog -->
     <Dialog v-model:visible="amenityRentalDialogVisible" header="Amenity Rental Details" :dismissable-mask="true" :modal="true" class="w-1/3">
-      <div v-if="selectedAmenityRental">
+      <div v-if="selectedAmenityRental" class="text-gray-800 dark:text-gray-200">
         <div class="mb-1">
           <strong>Guest Name:</strong> <span class="font-medium">{{ selectedAmenityRental.guest_name }}</span>
         </div>
@@ -801,7 +875,7 @@ function onAmenityRentalRowClick(event) {
         </div>
         <div class="mb-2">
           <strong>Amenities Rented:</strong>
-          <div class="mt-1 p-2 bg-gray-50 rounded text-sm">
+          <div class="mt-1 p-2 bg-gray-50 dark:bg-gray-700 rounded text-sm">
             {{ selectedAmenityRental.amenities_rented }}
           </div>
         </div>
@@ -822,14 +896,14 @@ function onAmenityRentalRowClick(event) {
           }}
         </div>
 
-        <hr class="my-4" />
-        <div class="flex justify-between font-bold text-lg">
+        <hr class="my-4 border-gray-300 dark:border-gray-600" />
+        <div class="flex justify-between font-bold text-lg text-gray-900 dark:text-gray-100">
           <span>Total Amount</span>
           <span>₱{{ Number(selectedAmenityRental.total_amount).toFixed(2) }}</span>
         </div>
       </div>
 
-      <div v-else><p>No amenity rental selected.</p></div>
+      <div v-else class="text-gray-600 dark:text-gray-400"><p>No amenity rental selected.</p></div>
 
       <div class="flex justify-end mt-4">
         <Button label="Close" class="p-button-primary" @click="amenityRentalDialogVisible = false" />
@@ -838,8 +912,8 @@ function onAmenityRentalRowClick(event) {
 
     <!-- Bill Summary (pre-confirm) -->
     <Dialog v-model:visible="billDialogVisible" header="Bill Summary" :modal="true" class="w-1/2">
-      <div v-if="confirmingCheckout && cart.length > 0">
-        <h3 class="text-lg font-bold mb-2">Bill Details</h3>
+      <div v-if="confirmingCheckout && cart.length > 0" class="text-gray-800 dark:text-gray-200">
+        <h3 class="text-lg font-bold mb-2 text-gray-900 dark:text-gray-100">Bill Details</h3>
 
         <DataTable
           :value="billLines"
@@ -860,8 +934,8 @@ function onAmenityRentalRowClick(event) {
           </Column>
         </DataTable>
 
-        <hr class="my-4" />
-        <div class="flex justify-between font-bold text-lg">
+        <hr class="my-4 border-gray-300 dark:border-gray-600" />
+        <div class="flex justify-between font-bold text-lg text-gray-900 dark:text-gray-100">
           <span>Total</span>
           <span>₱{{ uiTotal.toFixed(2) }}</span>
         </div>
@@ -870,7 +944,7 @@ function onAmenityRentalRowClick(event) {
           <Button label="Cancel" class="p-button-secondary" @click="cancelCheckout" />
         </div>
       </div>
-      <div v-else><p>No checkout data available.</p></div>
+      <div v-else class="text-gray-600 dark:text-gray-400"><p>No checkout data available.</p></div>
     </Dialog>
   </div>
 </template>

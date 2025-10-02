@@ -3200,7 +3200,30 @@ if (idx !== -1) {
             <!-- Room Grid Section -->
             <div class="flex-1 card p-4">
                 <h2 class="text-xl font-bold mb-5">Room List</h2>
-                <div class="h-[70vh] overflow-y-auto">
+                
+                <!-- Empty State -->
+                <div v-if="sortedRooms.length === 0" 
+                     class="text-center py-12">
+                    <div class="flex flex-col items-center gap-4">
+                        <i class="pi pi-home text-6xl text-gray-300 dark:text-gray-600"></i>
+                        <div class="space-y-2">
+                            <h3 class="text-xl font-semibold text-gray-600 dark:text-gray-400">No Rooms Found</h3>
+                            <p class="text-gray-500 dark:text-gray-500 max-w-md">
+                                No rooms match your current filters. 
+                                <br>Try adjusting your search criteria or clearing the filters.
+                            </p>
+                        </div>
+                        <Button
+                            icon="pi pi-filter-slash"
+                            label="Clear Filters"
+                            class="p-button-outlined"
+                            @click="clearFilters"
+                        />
+                    </div>
+                </div>
+
+                <!-- Room Grid (only show when there are rooms) -->
+                <div v-else class="h-[70vh] overflow-y-auto">
                     <!-- Scrollable container -->
                     <div
                         class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 justify-center pb-4"

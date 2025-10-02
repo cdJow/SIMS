@@ -163,7 +163,7 @@ function formatCurrency(value) {
 
 <template>
     <div class="card">
-        <div class="font-semibold text-xl mb-4">Check-Out List</div>
+        <div class="font-semibold text-xl mb-4 text-gray-900 dark:text-gray-100">Check-Out List</div>
 
         <!-- Search -->
         <div class="flex gap-2 mb-3 items-center">
@@ -198,7 +198,31 @@ function formatCurrency(value) {
             />
         </div>
         
+        <!-- Empty State -->
+        <div v-if="!loading && (!filteredReservations || filteredReservations.length === 0)" 
+             class="text-center py-12 mt-6">
+            <div class="flex flex-col items-center gap-4">
+                <i class="pi pi-sign-out text-6xl text-gray-300 dark:text-gray-600"></i>
+                <div class="space-y-2">
+                    <h3 class="text-xl font-semibold text-gray-600 dark:text-gray-400">No Check-outs Today</h3>
+                    <p class="text-gray-500 dark:text-gray-500 max-w-md">
+                        There are currently no guests scheduled to check out. 
+                        <br>Check back later or adjust your date filter to view other periods.
+                    </p>
+                </div>
+                <Button
+                    icon="pi pi-refresh"
+                    label="Refresh"
+                    class="p-button-outlined"
+                    @click="loadCheckOuts"
+                    :loading="loading"
+                />
+            </div>
+        </div>
+
+        <!-- Data Table (only show when there's data) -->
         <DataTable
+            v-if="!loading && filteredReservations && filteredReservations.length > 0"
             :value="filteredReservations"
             scrollable
             scrollHeight="600px"
@@ -252,26 +276,26 @@ function formatCurrency(value) {
 
         <!-- Popover Overlay -->
         <Popover ref="op">
-            <div class="p-4" v-if="selectedReservation">
+            <div class="p-4 bg-white dark:bg-gray-800" v-if="selectedReservation">
                 <!-- Main Horizontal Container -->
                 <div class="flex flex-row gap-4">
                     <!-- Left Column -->
                     <div class="flex-1 flex flex-col gap-3 min-w-[200px]">
                         <!-- Guest Name -->
-                        <div class="font-bold text-lg border-b pb-2">
+                        <div class="font-bold text-lg border-b border-gray-200 dark:border-gray-600 pb-2 text-gray-900 dark:text-gray-100">
                             {{ selectedReservation.guestName }}
                         </div>
 
                         <!-- Room Details -->
                         <div class="flex flex-col gap-2">
                             <div>
-                                <label class="font-medium">Room Type:</label>
-                                <div class="mt-1">
+                                <label class="font-medium text-gray-700 dark:text-gray-300">Room Type:</label>
+                                <div class="mt-1 text-gray-900 dark:text-gray-100">
                                     {{ selectedReservation.roomType }}
                                 </div>
                             </div>
                             <div>
-                                <label class="font-medium"
+                                <label class="font-medium text-gray-700 dark:text-gray-300"
                                     >Selected Hours:</label
                                 >
                                 <Tag
@@ -286,10 +310,10 @@ function formatCurrency(value) {
                     <!-- Middle Column -->
                     <div class="flex-1 flex flex-col gap-3 min-w-[250px]">
                         <div>
-                            <label> Rate</label>
+                            <label class="text-gray-700 dark:text-gray-300"> Rate</label>
                             <div class="flex items-center gap-1">
                                 <i class="pi pi-money-bill text-blue-500"></i>
-                                <span>{{
+                                <span class="text-gray-900 dark:text-gray-100">{{
                                     formatCurrency(
                                         selectedReservation.selectedRate,
                                     )
@@ -300,24 +324,24 @@ function formatCurrency(value) {
 
 
                         <!-- Discount Information -->
-                        <div v-if="selectedReservation.discount.name" class="bg-green-50 p-3 rounded">
-                            <div class="flex items-center gap-2 text-green-700 mb-2">
+                        <div v-if="selectedReservation.discount.name" class="bg-green-50 dark:bg-green-900/30 p-3 rounded">
+                            <div class="flex items-center gap-2 text-green-700 dark:text-green-300 mb-2">
                                 <i class="pi pi-percentage"></i>
                                 <span class="text-sm font-medium">Discount Applied</span>
                             </div>
                             <div class="text-sm">
-                                <div>{{ selectedReservation.discount.name }}</div>
-                                <div class="text-green-600 font-medium">{{ selectedReservation.discount.percent }}% off</div>
+                                <div class="text-gray-800 dark:text-gray-200">{{ selectedReservation.discount.name }}</div>
+                                <div class="text-green-600 dark:text-green-400 font-medium">{{ selectedReservation.discount.percent }}% off</div>
                             </div>
                         </div>
 
                         <!-- Payment Summary -->
-                        <div class="bg-blue-50 p-3 rounded">
-                            <div class="flex items-center gap-2 text-blue-700 mb-2">
+                        <div class="bg-blue-50 dark:bg-blue-900/30 p-3 rounded">
+                            <div class="flex items-center gap-2 text-blue-700 dark:text-blue-300 mb-2">
                                 <i class="pi pi-credit-card"></i>
                                 <span class="text-sm font-medium">Payment Summary</span>
                             </div>
-                            <div class="space-y-1 text-sm">
+                            <div class="space-y-1 text-sm text-gray-800 dark:text-gray-200">
                                 <div class="flex justify-between">
                                     <span>Room Rate:</span>
                                     <span>{{ formatCurrency(selectedReservation.paymentData.roomRate) }}</span>
@@ -359,13 +383,13 @@ function formatCurrency(value) {
                         <!-- Contact & Amenities -->
                         <div class="flex flex-col gap-2">
                             <div>
-                                <label class="font-medium">Contact Info:</label>
+                                <label class="font-medium text-gray-700 dark:text-gray-300">Contact Info:</label>
                                 <div class="mt-1 flex flex-col gap-1">
-                                    <div class="flex items-center gap-2">
+                                    <div class="flex items-center gap-2 text-gray-800 dark:text-gray-200">
                                         <i class="pi pi-phone text-blue-500"></i>
                                         {{ selectedReservation.contactInfo.cellphone }}
                                     </div>
-                                    <div class="flex items-center gap-2">
+                                    <div class="flex items-center gap-2 text-gray-800 dark:text-gray-200">
                                         <i class="pi pi-envelope text-blue-500"></i>
                                         {{ selectedReservation.contactInfo.email }}
                                     </div>
@@ -373,7 +397,7 @@ function formatCurrency(value) {
                             </div>
                             <div>
                                 <i class="pi pi-box text-blue-500 mr-2"></i>
-                                <label class="font-medium">Rented Amenities:</label>
+                                <label class="font-medium text-gray-700 dark:text-gray-300">Rented Amenities:</label>
                                 <div class="mt-1">
                                     <div v-if="selectedReservation.rentalAmenities.length > 0" 
                                          class="overflow-y-auto" 
@@ -381,15 +405,15 @@ function formatCurrency(value) {
                                         <div
                                             v-for="(amenity, index) in selectedReservation.rentalAmenities"
                                             :key="index"
-                                            class="flex items-center justify-between gap-2 py-1 border-b last:border-b-0 border-gray-100"
+                                            class="flex items-center justify-between gap-2 py-1 border-b last:border-b-0 border-gray-100 dark:border-gray-600"
                                         >
                                             <div class="flex items-center gap-2">
-                                                <span>{{ amenity.split(' - ')[0] }}</span>
+                                                <span class="text-gray-800 dark:text-gray-200">{{ amenity.split(' - ')[0] }}</span>
                                             </div>
-                                            <span class="text-green-600 font-medium">₱{{ parseFloat(amenity.split(' - ')[1]).toFixed(2) }}</span>
+                                            <span class="text-green-600 dark:text-green-400 font-medium">₱{{ parseFloat(amenity.split(' - ')[1]).toFixed(2) }}</span>
                                         </div>
                                     </div>
-                                    <div v-else class="text-gray-500 italic">
+                                    <div v-else class="text-gray-500 dark:text-gray-400 italic">
                                         No rented amenities
                                     </div>
                                 </div>
@@ -398,7 +422,7 @@ function formatCurrency(value) {
                             <!-- Consumables (Extras Bill) -->
                             <div>
                                 <i class="pi pi-shopping-cart text-blue-500 mr-2"></i>
-                                <label class="font-medium">Consumables:</label>
+                                <label class="font-medium text-gray-700 dark:text-gray-300">Consumables:</label>
                                 <div class="mt-1">
                                     <div v-if="selectedReservation.consumableProducts.length > 0"
                                          class="overflow-y-auto"
@@ -406,16 +430,16 @@ function formatCurrency(value) {
                                         <div
                                             v-for="(product, index) in selectedReservation.consumableProducts"
                                             :key="index"
-                                            class="flex items-center justify-between gap-2 py-1 border-b last:border-b-0 border-gray-100"
+                                            class="flex items-center justify-between gap-2 py-1 border-b last:border-b-0 border-gray-100 dark:border-gray-600"
                                         >
                                             <div class="flex items-center gap-2">
-                                                <span>{{ product.name }}</span>
-                                                <span class="text-gray-500">{{ product.quantity }}</span>
+                                                <span class="text-gray-800 dark:text-gray-200">{{ product.name }}</span>
+                                                <span class="text-gray-500 dark:text-gray-400">{{ product.quantity }}</span>
                                             </div>
                                            
                                         </div>
                                     </div>
-                                    <div v-else class="text-gray-500 italic">
+                                    <div v-else class="text-gray-500 dark:text-gray-400 italic">
                                         No consumables
                                     </div>
                                 </div>
@@ -425,9 +449,9 @@ function formatCurrency(value) {
                 </div>
 
                 <!-- Notes (Full Width) -->
-                <div class="mt-4 pt-3 border-t">
-                    <label class="font-medium">Notes:</label>
-                    <div class="p-2 bg-gray-100 rounded mt-1">
+                <div class="mt-4 pt-3 border-t border-gray-200 dark:border-gray-600">
+                    <label class="font-medium text-gray-700 dark:text-gray-300">Notes:</label>
+                    <div class="p-2 bg-gray-100 dark:bg-gray-700 rounded mt-1 text-gray-800 dark:text-gray-200">
                         {{ selectedReservation.notes || "No special notes" }}
                     </div>
                 </div>

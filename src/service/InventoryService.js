@@ -1,275 +1,206 @@
 export const InventoryService = {
-    // Simulate fetching low-stock items
-    getLowStockItems() {
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                resolve([
-                    {
-                        itemName: "Shampoo (1L)",
-                        category: "Consumable",
-                        currentStock: 20,
-                        reorderLevel: 30,
-                        supplier: "XYZ Supplies",
-                    },
-                    {
-                        itemName: "Bedsheet Set",
-                        category: "Rental",
-                        currentStock: 5,
-                        reorderLevel: 10,
-                        supplier: "ABC Textiles",
-                    },
-                    {
-                        itemName: "Cup Noodles",
-                        category: "Consumable",
-                        currentStock: 15,
-                        reorderLevel: 50,
-                        supplier: "Food Corp",
-                    },
-                    {
-                        itemName: "Coffee Pack",
-                        category: "Consumable",
-                        currentStock: 8,
-                        reorderLevel: 25,
-                        supplier: "Brew Co.",
-                    },
-                    {
-                        itemName: "Water Glass",
-                        category: "Non-Consumable",
-                        currentStock: 3,
-                        reorderLevel: 10,
-                        supplier: "Kitchen Supplies Ltd.",
-                    },
-                ]);
-            }); // Simulated network delay
-        });
+    // Get auth token helper
+    getAuthToken() {
+        return localStorage.getItem('authToken') || '';
     },
 
-    // Simulate fetching stock movement data with handled by information
-    getStockMovements() {
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                resolve([
-                    {
-                        dateTime: "2024-06-01T10:00:00",
-                        itemName: "Shampoo (1L)",
-                        actionType: "Stock In",
-                        qtyChanged: +50,
-                        balance: 150,
-                        remarks: "Restocked from supplier",
-                        handledBy: "Admin",
-                    },
-                    {
-                        dateTime: "2024-06-02T12:30:00",
-                        itemName: "Bedsheet Set",
-                        actionType: "Stock Out",
-                        qtyChanged: -10,
-                        balance: 40,
-                        remarks: "Assigned to rooms",
-                        handledBy: "Front Desk",
-                    },
-                    {
-                        dateTime: "2024-06-03T14:00:00",
-                        itemName: "Cup Noodles",
-                        actionType: "Stock Out",
-                        qtyChanged: -20,
-                        balance: 30,
-                        remarks: "Sold",
-                        handledBy: "Store Manager",
-                    },
-                    {
-                        dateTime: "2024-06-04T09:45:00",
-                        itemName: "Coffee Pack",
-                        actionType: "Stock In",
-                        qtyChanged: +30,
-                        balance: 38,
-                        remarks: "Restocked from supplier",
-                        handledBy: "Admin",
-                    },
-                ]);
-            }); // Simulated network delay
-        });
+    // Fetch real low-stock items from backend API
+    async getLowStockItems() {
+        try {
+            console.log('� Fetching low stock report (test mode)');
+
+            const response = await fetch('http://localhost:5000/low-stock-report-test', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            console.log('📡 Response status:', response.status);
+
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status} - ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            console.log('🔍 Low Stock API Response:', result);
+            
+            // Return the data array from the API response
+            return result.data || [];
+        } catch (error) {
+            console.error('❌ Error fetching low stock items:', error);
+            throw error;
+        }
     },
 
-    getStockMovementsSummary() {
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                resolve([
-                    {
-                        itemName: "Shampoo (1L)",
-                        movementType: "Addition",
-                        quantity: 50,
-                        date: "2024-06-01",
-                        remarks: "Restocked from supplier",
-                    },
-                    {
-                        itemName: "Bedsheet Set",
-                        movementType: "Reduction",
-                        quantity: -10,
-                        date: "2024-06-02",
-                        remarks: "Assigned to rooms",
-                    },
-                    {
-                        itemName: "Cup Noodles",
-                        movementType: "Reduction",
-                        quantity: -20,
-                        date: "2024-06-03",
-                        remarks: "Sold to cafeteria",
-                    },
-                    {
-                        itemName: "Coffee Pack",
-                        movementType: "Addition",
-                        quantity: 30,
-                        date: "2024-06-04",
-                        remarks: "Restocked from supplier",
-                    },
-                    {
-                        itemName: "Water Glass",
-                        movementType: "Reduction",
-                        quantity: -2,
-                        date: "2024-06-05",
-                        remarks: "Assigned to kitchen",
-                    },
-                ]);
-            }); // Simulate network delay
-        });
+    // Fetch stock alerts for dashboard
+    async getStockAlerts() {
+        try {
+            const token = this.getAuthToken();
+            if (!token) {
+                throw new Error('No authentication token found. Please log in.');
+            }
+
+            const response = await fetch('http://localhost:5000/stock-alerts', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                if (response.status === 422 || response.status === 401) {
+                    throw new Error('Authentication failed. Please log in again.');
+                }
+                throw new Error(`Server error: ${response.status} - ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            return result.alerts || [];
+        } catch (error) {
+            console.error('❌ Error fetching stock alerts:', error);
+            throw error;
+        }
     },
 
-    getDamagedItems() {
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                resolve([
-                    {
-                        itemName: "Room Chair",
-                        quantityDamaged: 4,
-                        damageType: "Broken Leg",
-                        reportedDate: "2024-12-10",
-                        reason: "Rough Usage",
-                        supplier: "Furniture Co.",
-                    },
-                    {
-                        itemName: "Bedsheet",
-                        quantityDamaged: 3,
-                        damageType: "Torn",
-                        reportedDate: "2024-12-09",
-                        reason: "Improper Washing",
-                        supplier: "ABC Textiles",
-                    },
-                    {
-                        itemName: "Wardrobe",
-                        quantityDamaged: 1,
-                        damageType: "Broken Door",
-                        reportedDate: "2024-12-08",
-                        reason: "Overuse",
-                        supplier: "Furniture Co.",
-                    },
-                    {
-                        itemName: "Water Glass",
-                        quantityDamaged: 6,
-                        damageType: "Cracked",
-                        reportedDate: "2024-12-07",
-                        reason: "Accidental Drop",
-                        supplier: "Kitchen Supplies Ltd.",
-                    },
-                    {
-                        itemName: "Bathroom Mirror",
-                        quantityDamaged: 2,
-                        damageType: "Shattered",
-                        reportedDate: "2024-12-06",
-                        reason: "Improper Installation",
-                        supplier: "Mirror Solutions",
-                    },
-                ]);
-            }); // Simulated delay
-        });
+    // Export low stock report (currently unused - using client-side export)
+    async exportLowStockReport() {
+        try {
+            console.log('📤 Note: Using client-side export instead of server export');
+            
+            // This method is currently not used since we're doing client-side export
+            // But keeping it for future server-side export implementation
+            const token = this.getAuthToken();
+            if (!token) {
+                throw new Error('No authentication token found. Please log in.');
+            }
+
+            const response = await fetch('http://localhost:5000/export-low-stock', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                if (response.status === 422 || response.status === 401) {
+                    throw new Error('Authentication failed. Please log in again.');
+                }
+                throw new Error(`Server error: ${response.status} - ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            return result;
+        } catch (error) {
+            console.error('❌ Error exporting low stock report:', error);
+            throw error;
+        }
     },
 
-    getExpiredItems() {
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                resolve([
-                    {
-                        itemName: "Milk Carton",
-                        batchNumber: "MC20241201",
-                        quantity: 15, // Renamed from currentStock to quantity
-                        expirationDate: "2024-12-01",
-                        supplier: "Dairy Co.",
-                    },
-                    {
-                        itemName: "Yogurt Pack",
-                        batchNumber: "YP20241120",
-                        quantity: 10, // Renamed from currentStock to quantity
-                        expirationDate: "2024-11-20",
-                        supplier: "Dairy Co.",
-                    },
-                    {
-                        itemName: "Cheese Block",
-                        batchNumber: "CB20241215",
-                        quantity: 5, // Renamed from currentStock to quantity
-                        expirationDate: "2024-12-15",
-                        supplier: "Cheese Makers Ltd.",
-                    },
-                ]);
-            }); // Simulated delay
-        });
+    // Fetch real expired items from backend API
+    async getExpiredItems() {
+        try {
+            console.log('🔍 Fetching expired items (test mode)');
+
+            const response = await fetch('http://localhost:5000/test-expired-items', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            console.log('📡 Response status:', response.status);
+
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status} - ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            console.log('🔍 Expired Items API Response:', result);
+            
+            // Return the data array from the API response
+            return result.data || [];
+        } catch (error) {
+            console.error('❌ Error fetching expired items:', error);
+            throw error;
+        }
     },
 
-    // Simulate fetching detailed mock data for inventory items
-    getInventoryDetails() {
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                resolve([
-                    {
-                        itemName: "Shampoo (1L)",
-                        category: "Consumable",
-                        batchNumber: "B12345",
-                        currentStock: 150,
-                        supplier: "XYZ Supplies",
-                        dateReceived: "2024-06-01",
-                        warranty: "N/A",
-                        status: "Available",
-                    },
-                    {
-                        itemName: "Bedsheet Set",
-                        category: "Rental",
-                        batchNumber: "R56789",
-                        currentStock: 40,
-                        supplier: "ABC Textiles",
-                        dateReceived: "2024-05-20",
-                        warranty: "6 Months",
-                        status: "Assigned",
-                    },
-                    {
-                        itemName: "Cup Noodles",
-                        category: "Consumable",
-                        batchNumber: "C90876",
-                        currentStock: 30,
-                        supplier: "Food Corp",
-                        dateReceived: "2024-06-03",
-                        warranty: "N/A",
-                        status: "Available",
-                    },
-                    {
-                        itemName: "Coffee Pack",
-                        category: "Consumable",
-                        batchNumber: "CP33321",
-                        currentStock: 38,
-                        supplier: "Brew Co.",
-                        dateReceived: "2024-06-04",
-                        warranty: "N/A",
-                        status: "Available",
-                    },
-                    {
-                        itemName: "Water Glass",
-                        category: "Non-Consumable",
-                        batchNumber: "W45678",
-                        currentStock: 3,
-                        supplier: "Kitchen Supplies Ltd.",
-                        dateReceived: "2024-05-15",
-                        warranty: "2 Years",
-                        status: "Damaged",
-                    },
-                ]);
-            }); // Simulated network delay
-        });
+    // Fetch real near expire items from backend API
+    async getNearExpireItems() {
+        try {
+            console.log('🔍 Fetching near expire items (test mode)');
+
+            const response = await fetch('http://localhost:5000/test-near-expire-items', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            console.log('📡 Response status:', response.status);
+
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status} - ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            console.log('🔍 Near Expire Items API Response:', result);
+            
+            // Return the data array from the API response
+            return result.data || [];
+        } catch (error) {
+            console.error('❌ Error fetching near expire items:', error);
+            throw error;
+        }
+    },
+
+    // Fetch stock movements summary from backend API
+    async getStockMovementsSummary() {
+        try {
+            console.log('📊 Fetching stock movements summary');
+
+            const token = this.getAuthToken();
+            if (!token) {
+                throw new Error('No authentication token found. Please log in.');
+            }
+
+            const response = await fetch('http://localhost:5000/stock-movements', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            console.log('📡 Response status:', response.status);
+
+            if (!response.ok) {
+                if (response.status === 422 || response.status === 401) {
+                    throw new Error('Authentication failed. Please log in again.');
+                }
+                throw new Error(`Server error: ${response.status} - ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            console.log('📊 Stock Movements API Response:', result);
+            
+            // Transform the data to match the expected format for StockMovement.vue
+            const transformedData = result.map(movement => ({
+                itemName: movement.itemName || 'Unknown Item',
+                movementType: movement.qtyChanged > 0 ? 'Addition' : 'Reduction',
+                quantity: Math.abs(movement.qtyChanged),
+                date: movement.dateTime,
+                remarks: movement.actionType || 'Stock Movement'
+            }));
+            
+            console.log('📊 Transformed stock movements:', transformedData);
+            return transformedData;
+        } catch (error) {
+            console.error('❌ Error fetching stock movements summary:', error);
+            throw error;
+        }
     },
 };

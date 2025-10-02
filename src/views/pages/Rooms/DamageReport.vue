@@ -273,13 +273,42 @@ const getItemResolutionStatus = (itemName) => {
             <!-- Room Grid -->
             <div class="card flex-1">
                 <div class="room-grid">
-                    <h2 class="text-2xl font-bold mb-6">Rooms Status</h2>
+                    <h2 class="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">Rooms Status</h2>
                     <div
                         v-if="loading"
                         class="flex justify-center items-center h-64"
                     >
                         <ProgressSpinner />
                     </div>
+                    
+                    <!-- Empty State -->
+                    <div v-else-if="filteredRooms.length === 0" class="text-center py-16">
+                        <div class="flex flex-col items-center">
+                            <i class="pi pi-home text-6xl text-gray-400 dark:text-gray-500 mb-4"></i>
+                            <h3 class="text-xl font-medium text-gray-700 dark:text-gray-300 mb-2">No Rooms Available</h3>
+                            <p class="text-gray-500 dark:text-gray-400 mb-4">
+                                {{ searchQuery || selectedStatuses.length > 0 || selectedRoomType ? 
+                                   'No rooms match your current filters. Try adjusting your search criteria.' : 
+                                   'There are currently no rooms available in the system.' }}
+                            </p>
+                            <div class="flex gap-2">
+                                <Button 
+                                    v-if="searchQuery || selectedStatuses.length > 0 || selectedRoomType"
+                                    icon="pi pi-filter-slash" 
+                                    label="Clear Filters" 
+                                    @click="clearFilters"
+                                    outlined
+                                />
+                                <Button 
+                                    icon="pi pi-refresh" 
+                                    label="Refresh" 
+                                    @click="loadRooms"
+                                    outlined
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div
                         v-else
                         class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
@@ -287,7 +316,7 @@ const getItemResolutionStatus = (itemName) => {
                         <div
                             v-for="room in filteredRooms"
                             :key="room.id"
-                            class="relative w-full p-4 rounded-lg shadow-md border cursor-pointer hover:shadow-lg transition-shadow min-h-[140px]"
+                            class="relative w-full p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-600 cursor-pointer hover:shadow-lg transition-shadow min-h-[140px]"
                             :class="{
                                 'bg-green-500 text-white hover:bg-green-600':
                                     room.status === 'Available',
@@ -330,7 +359,7 @@ const getItemResolutionStatus = (itemName) => {
 
             <div class="w-full md:w-1/3 lg:w-1/4 xl:w-1/5 space-y-4">
                 <div class="card rounded-lg p-4">
-                    <h3 class="text-base md:text-lg font-bold mb-4">Filters</h3>
+                    <h3 class="text-base md:text-lg font-bold mb-4 text-gray-900 dark:text-gray-100">Filters</h3>
                     <div class="space-y-4">
                         <div class="space-y-2">
                             <Button
@@ -367,7 +396,7 @@ const getItemResolutionStatus = (itemName) => {
 
                         <!-- Status Filters -->
                         <div>
-                            <h4 class="font-bold text-sm md:text-base mb-2">
+                            <h4 class="font-bold text-sm md:text-base mb-2 text-gray-900 dark:text-gray-100">
                                 Status
                             </h4>
                             <div class="flex flex-col gap-2">
@@ -390,7 +419,7 @@ const getItemResolutionStatus = (itemName) => {
                                     />
                                     <label
                                         :for="status"
-                                        class="text-sm md:text-base ml-2"
+                                        class="text-sm md:text-base ml-2 text-gray-700 dark:text-gray-300"
                                     >
                                         {{ status }}
                                     </label>
@@ -416,9 +445,9 @@ const getItemResolutionStatus = (itemName) => {
                     <ProgressSpinner />
                 </div>
                 <div v-else-if="!selectedRoom.amenities || selectedRoom.amenities.length === 0" class="text-center p-8">
-                    <i class="pi pi-info-circle text-4xl text-gray-400 mb-4"></i>
-                    <p class="text-lg text-gray-600 mb-2">No Amenities Found</p>
-                    <p class="text-sm text-gray-500">This room currently has no amenities assigned.</p>
+                    <i class="pi pi-info-circle text-4xl text-gray-400 dark:text-gray-500 mb-4"></i>
+                    <p class="text-lg text-gray-600 dark:text-gray-300 mb-2">No Amenities Found</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">This room currently has no amenities assigned.</p>
                 </div>
                 <div v-else>
                     <DataTable
@@ -451,33 +480,33 @@ const getItemResolutionStatus = (itemName) => {
 
                     <!-- Damage Summary -->
                     <div class="mt-6" v-if="damagedItems.length > 0">
-                        <h3 class="text-lg font-semibold mb-4">
+                        <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">
                             Damage Reports ({{ damagedItems.length }})
                         </h3>
                         <div class="space-y-3">
                             <div
                                 v-for="item in damagedItems"
                                 :key="item.serial_id"
-                                class="p-4 bg-red-50 border border-red-200 rounded-lg"
+                                class="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
                             >
                                 <div class="flex justify-between items-start">
                                     <div class="flex-1">
-                                        <div class="font-medium text-gray-900">
+                                        <div class="font-medium text-gray-900 dark:text-gray-100">
                                             {{ item.item_name }}
                                         </div>
-                                        <div class="text-sm text-gray-600 mt-1">
+                                        <div class="text-sm text-gray-600 dark:text-gray-400 mt-1">
                                             Serial: {{ item.serial_number }}
                                         </div>
-                                        <div class="text-sm text-red-700 mt-2">
+                                        <div class="text-sm text-red-700 dark:text-red-300 mt-2">
                                             <strong>Damage:</strong> {{ item.damage_description }}
                                         </div>
-                                        <div v-if="item.damage_notes" class="text-sm text-gray-600 mt-1">
+                                        <div v-if="item.damage_notes" class="text-sm text-gray-600 dark:text-gray-400 mt-1">
                                             <strong>Notes:</strong> {{ item.damage_notes }}
                                         </div>
-                                        <div class="text-xs text-gray-500 mt-2">
+                                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-2">
                                             Reported: {{ formatDate(item.reported_at) }}
                                         </div>
-                                        <div class="text-xs text-blue-600 mt-1 font-medium">
+                                        <div class="text-xs text-blue-600 dark:text-blue-400 mt-1 font-medium">
                                             {{ getItemResolutionStatus(item.item_name) }}
                                         </div>
                                     </div>
@@ -510,25 +539,25 @@ const getItemResolutionStatus = (itemName) => {
         >
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm font-medium mb-2">Item Name</label>
+                    <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Item Name</label>
                     <InputText
                         v-model="selectedItem.item_name"
                         readonly
-                        class="w-full bg-gray-100"
+                        class="w-full bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                     />
                 </div>
 
                 <div>
-                    <label class="block text-sm font-medium mb-2">Serial Number</label>
+                    <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Serial Number</label>
                     <InputText
                         v-model="selectedItem.serial_number"
                         readonly
-                        class="w-full bg-gray-100"
+                        class="w-full bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                     />
                 </div>
 
                 <div>
-                    <label class="block text-sm font-medium mb-2">Damage Description *</label>
+                    <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Damage Description *</label>
                     <Textarea
                         v-model="damageReport.damage_description"
                         rows="3"
@@ -538,7 +567,7 @@ const getItemResolutionStatus = (itemName) => {
                 </div>
 
                 <div>
-                    <label class="block text-sm font-medium mb-2">Additional Notes</label>
+                    <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Additional Notes</label>
                     <Textarea
                         v-model="damageReport.notes"
                         rows="3"

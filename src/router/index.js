@@ -103,19 +103,7 @@ const router = createRouter({
                         import("@/views/pages/Rooms/DamageReport.vue"),
                 },
 
-                {
-                    path: "/FrontDeskMenu",
-                    name: " Check Out",
 
-                    component: () => import("@/views/pages/FrontDeskMenu.vue"),
-                },
-
-                {
-                    path: "/MenuList",
-                    name: " Menu List",
-
-                    component: () => import("@/views/pages/MenuList.vue"),
-                },
 
                 {
                     path: "/Rooms/CanceledBooking",
@@ -139,11 +127,7 @@ const router = createRouter({
                     component: () => import("@/views/pages/POS/POS.vue"),
                 },
 
-                {
-                    path: "/POS/Extra",
-                    name: " Extra",
-                    component: () => import("@/views/pages/POS/Extra.vue"),
-                },
+                
 
                 {
                     path: "/POS/Invoice",
@@ -391,11 +375,6 @@ const router = createRouter({
             component: () => import("@/views/pages/auth/Login.vue"),
         },
 
-        {
-            path: "/KitchenModule",
-            name: " KitchenModule",
-            component: () => import("@/views/pages/KitchenModule.vue"),
-        },
 
         {
             path: "/auth/signup",

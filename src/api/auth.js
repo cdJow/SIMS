@@ -341,6 +341,15 @@ export function removeDamageReport(damageReportId) {
   return axios.delete(`${API_URL}/damage-reports/${damageReportId}`);
 }
 
+// Room Invoice Admin API
+export function fetchRoomInvoiceAdmin() {
+  return axios.get(`${API_URL}/room-invoice-admin`);
+}
 
- 
+export function deleteRoomInvoice(invoiceId) {
+  return axios.delete(`${API_URL}/room-invoice-admin/${invoiceId}`);
+}
 
+export function fetchInvoiceSummary() {
+  return axios.get(`${API_URL}/room-invoice-admin/summary`);
+}

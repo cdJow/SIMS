@@ -480,7 +480,7 @@ const toggleShowAll = () => {
                         :numScroll="2"
                         :responsiveOptions="responsiveOptions"
                         circular
-                        autoplayInterval="4000"
+                        :autoplayInterval="4000"
                     >
                         <template #item="slotProps">
                             <div

@@ -1,104 +1,106 @@
 <script setup>
 import { useToast } from "primevue/usetoast";
-import { computed, ref } from "vue";
+import { computed, ref, onBeforeMount } from "vue";
+import { fetchRoomInvoiceAdmin } from "@/api/auth";
 
-// Sample billing data (Check-In/Check-Out transactions)
-const billingData = ref([
-    // Extended stay with extra amenities
-    {
-        guestName: "John Doe",
-        roomNumber: "201",
-        checkIn: "2024-03-01T14:00:00",
-        checkOut: "2024-03-03T11:00:00",
-        totalAmount: 299.99,
-        hourlyRate: 6.25,
-        amenities: ["WiFi", "TV", "Mini Bar", "Extra Pillow"],
-        extendedStay: true,
-        newCheckOut: "2024-03-04T11:00:00",
-    },
-
-    // Regular stay with basic amenities
-    {
-        guestName: "Alice Johnson",
-        roomNumber: "305",
-        checkIn: "2024-03-05T12:00:00",
-        checkOut: "2024-03-06T10:00:00",
-        totalAmount: 154.0,
-        hourlyRate: 7.0,
-        amenities: ["WiFi", "TV"],
-        extendedStay: false,
-    },
-
-    // Extended stay with no amenities
-    {
-        guestName: "Bob Smith",
-        roomNumber: "402",
-        checkIn: "2024-03-10T15:00:00",
-        checkOut: "2024-03-12T12:00:00",
-        totalAmount: 379.5,
-        hourlyRate: 5.5,
-        amenities: [],
-        extendedStay: true,
-        newCheckOut: "2024-03-13T12:00:00",
-    },
-
-    // Premium stay with luxury amenities
-    {
-        guestName: "Carol Davis",
-        roomNumber: "105",
-        checkIn: "2024-03-15T14:00:00",
-        checkOut: "2024-03-16T11:00:00",
-        totalAmount: 183.75,
-        hourlyRate: 8.75,
-        amenities: ["WiFi", "TV", "Spa Access", "Mini Bar", "Daily Newspaper"],
-        extendedStay: false,
-    },
-
-    // Extended stay with comfort items
-    {
-        guestName: "David Wilson",
-        roomNumber: "204",
-        checkIn: "2024-03-20T10:00:00",
-        checkOut: "2024-03-21T09:00:00",
-        totalAmount: 282.0,
-        hourlyRate: 6.0,
-        amenities: ["Extra Pillow", "Extra Blanket", "Breakfast"],
-        extendedStay: true,
-        newCheckOut: "2024-03-22T09:00:00",
-    },
-
-    // Long stay with minimal amenities
-    {
-        guestName: "Eva Brown",
-        roomNumber: "303",
-        checkIn: "2024-03-25T13:00:00",
-        checkOut: "2024-03-28T10:00:00",
-        totalAmount: 345.0,
-        hourlyRate: 5.0,
-        amenities: ["WiFi"],
-        extendedStay: false,
-    },
-
-    // Short stay with special requests
-    {
-        guestName: "Frank Miller",
-        roomNumber: "106",
-        checkIn: "2024-04-01T18:00:00",
-        checkOut: "2024-04-02T12:00:00",
-        totalAmount: 108.0,
-        hourlyRate: 6.0,
-        amenities: ["Extra Towels", "Baby Cot", "Late Checkout"],
-        extendedStay: false,
-    },
-]);
+const billingData = ref([]);
+const loading = ref(false);
 const toast = useToast();
 
-const deleteDialogVisible = ref(false);
-const selectedInvoice = ref(null);
+async function loadRoomInvoices() {
+    try {
+        loading.value = true;
+        console.log('Fetching room invoice data...');
+        const response = await fetchRoomInvoiceAdmin();
+        console.log('Raw response:', response);
+        
+        if (!response.data || response.data.error) {
+            console.error('Server error:', response.data?.error);
+            throw new Error(response.data?.error || 'Failed to load room invoices');
+        }
+        
+        billingData.value = response.data.map(booking => ({
+            id: booking.id,
+            BookingCode: booking.room_code,
+            guestName: booking.guest_name,
+            roomNumber: booking.room_number,
+            roomType: booking.room_type_name,
+            selectedHours: booking.selected_hours,
+            selectedRate: booking.selected_rate,
+            checkIn: booking.check_in_datetime,
+            checkOut: booking.check_out_datetime,
+            totalAmount: parseFloat(booking.total_due) || parseFloat(booking.selected_rate) || 0,
+            hourlyRate: parseFloat(booking.selected_rate) || 0,
+            status: booking.status,
+            
+            // Payment data from checkin_payments table
+            paymentData: {
+                roomRate: parseFloat(booking.room_rate) || parseFloat(booking.selected_rate) || 0,
+                extrasTotal: parseFloat(booking.extras_total) || 0,
+                amenitiesTotal: parseFloat(booking.amenities_total) || 0,
+                damageCharges: parseFloat(booking.damage_charges) || 0,
+                extendHours: parseInt(booking.extend_hours) || 0,
+                extendAmount: parseFloat(booking.extend_amount) || 0,
+                depositAmount: parseFloat(booking.deposit_amount) || 0,
+                totalDue: parseFloat(booking.total_due) || 0,
+                balanceDue: Math.max(0, (parseFloat(booking.total_due) || 0) - (parseFloat(booking.deposit_amount) || 0))
+            },
+            
+            contactInfo: {
+                cellphone: booking.cellphone || 'N/A',
+                email: booking.guest_email || 'N/A'
+            },
+            
+            notes: booking.note,
+            rentalAmenities: booking.rental_amenities ? 
+                booking.rental_amenities.split(',').map(item => item.trim()) : [],
+            consumableProducts: booking.consumable_products ? 
+                booking.consumable_products.split('||').map(item => {
+                    const parts = item.trim().split(' - ');
+                    return {
+                        name: parts[0] || '',
+                        quantity: parts[1] || '',
+                        price: parts[2] || '0'
+                    };
+                }) : [],
+            
+            discount: {
+                name: booking.discount_name,
+                percent: booking.discount_percent
+            },
+            
+            // Extended stay detection
+            extendedStay: booking.extend_hours > 0,
+            amenities: booking.rental_amenities ? 
+                booking.rental_amenities.split(',').map(item => item.trim().split(' - ')[0]) : []
+        }));
+    } catch (error) {
+        console.error("Error loading room invoices:", error);
+        if (error.response) {
+            console.error("Server response:", error.response.data);
+            console.error("Status:", error.response.status);
+        }
+        billingData.value = [];
+        toast.add({
+            severity: "error",
+            summary: "Error",
+            detail: "Failed to load room invoices",
+            life: 3000,
+        });
+    } finally {
+        loading.value = false;
+    }
+}
+
+onBeforeMount(() => {
+    loadRoomInvoices();
+});
+
+
 const searchQuery = ref("");
 const dateRange = ref(null);
 const sortField = ref("checkIn");
-const sortOrder = ref(1);
+const sortOrder = ref(-1); // Descending order (latest first)
 
 // Create computed property for filtered data
 const filteredBillingData = computed(() => {
@@ -124,19 +126,14 @@ const filteredBillingData = computed(() => {
         );
     }
 
-    // Sorting logic
+    // Sorting logic - show latest entries first
     return filtered.sort((a, b) => {
-        const fieldA = new Date(a[sortField.value]);
-        const fieldB = new Date(b[sortField.value]);
-        return sortOrder.value * (fieldA - fieldB);
+        // Prioritize check-out date if available, otherwise use check-in date
+        const dateA = new Date(a.checkOut || a.checkIn);
+        const dateB = new Date(b.checkOut || b.checkIn);
+        return dateB - dateA; // Descending order (latest first)
     });
 });
-
-// Delete functionality
-const confirmDelete = (invoice) => {
-    selectedInvoice.value = invoice;
-    deleteDialogVisible.value = true;
-};
 
 const handlePrint = (invoice) => {
     const printContent = `
@@ -182,9 +179,9 @@ const handlePrint = (invoice) => {
                     <div class="detail-item"><strong>Check-In:</strong> ${formatDate(
                         invoice.checkIn
                     )}</div>
-                    <div class="detail-item"><strong>Check-Out:</strong> ${formatDate(
-                        invoice.checkOut
-                    )}</div>
+                    <div class="detail-item"><strong>Check-Out:</strong> ${
+                        invoice.checkOut ? formatDate(invoice.checkOut) : 'Still Checked In'
+                    }</div>
                     ${
                         invoice.extendedStay
                             ? `<div class="detail-item"><strong>Extended Until:</strong> ${formatDate(
@@ -192,10 +189,11 @@ const handlePrint = (invoice) => {
                               )}</div>`
                             : ""
                     }
-                    <div class="detail-item"><strong>Duration:</strong> ${calculateHours(
-                        invoice.checkIn,
-                        invoice.checkOut
-                    )} hours</div>
+                    <div class="detail-item"><strong>Duration:</strong> ${
+                        invoice.checkOut 
+                            ? calculateHours(invoice.checkIn, invoice.checkOut) + ' hours'
+                            : invoice.selectedHours + ' hours (Booked)'
+                    }</div>
                 </div>
 
                 <!-- Amenities Section -->
@@ -222,19 +220,13 @@ const handlePrint = (invoice) => {
                     <tbody>
                         <tr>
                             <td>Room Accommodation</td>
-                            <td>${formatCurrency(
-                                invoice.hourlyRate ||
-                                    invoice.totalAmount /
-                                        calculateHours(
-                                            invoice.checkIn,
-                                            invoice.checkOut
-                                        )
-                            )}/hr</td>
-                            <td>${calculateHours(
-                                invoice.checkIn,
-                                invoice.checkOut
-                            )}</td>
-                            <td>${formatCurrency(invoice.totalAmount)}</td>
+                            <td>${formatCurrency(invoice.hourlyRate || invoice.selectedRate)}/hr</td>
+                            <td>${
+                                invoice.checkOut 
+                                    ? calculateHours(invoice.checkIn, invoice.checkOut)
+                                    : invoice.selectedHours
+                            }</td>
+                            <td>${formatCurrency(invoice.paymentData?.totalDue || invoice.totalAmount)}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -309,26 +301,7 @@ const calculateHours = (checkIn, checkOut) => {
     return Math.round(diff / (1000 * 60 * 60)); // Convert ms to hours
 };
 
-const deleteInvoice = () => {
-    billingData.value = billingData.value.filter(
-        (item) => item !== selectedInvoice.value
-    );
-    deleteDialogVisible.value = false;
-    selectedInvoice.value = null;
 
-    // Show success toast
-    toast.add({
-        severity: "error",
-        summary: "Deleted",
-        detail: "Invoice deleted successfully",
-        life: 3000,
-    });
-};
-
-const cancelDelete = () => {
-    deleteDialogVisible.value = false;
-    selectedInvoice.value = null;
-};
 
 // Utility functions
 const formatCurrency = (value) => {
@@ -388,24 +361,52 @@ const showDetails = (event, room) => {
         </div>
         <!-- Default Billing Table -->
         <div>
-            <h2 class="text-xl font-bold mb-4">Room Invoice</h2>
-            <!-- Billing Table (Check-In/Check-Out) -->
-            <DataTable :value="filteredBillingData" class="p-datatable-striped">
+            <h2 class="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">Room Invoice</h2>
+            
+            <!-- Empty State -->
+            <div v-if="!loading && (!filteredBillingData || filteredBillingData.length === 0)" 
+                 class="text-center py-12">
+                <div class="flex flex-col items-center gap-4">
+                    <i class="pi pi-receipt text-6xl text-gray-300 dark:text-gray-600"></i>
+                    <div class="space-y-2">
+                        <h3 class="text-xl font-semibold text-gray-600 dark:text-gray-400">No Invoices Found</h3>
+                        <p class="text-gray-500 dark:text-gray-500 max-w-md">
+                            There are currently no room invoices to display. 
+                            <br>Invoices will appear here once guests check in or complete their stays.
+                        </p>
+                    </div>
+                    <Button
+                        icon="pi pi-refresh"
+                        label="Refresh"
+                        class="p-button-outlined"
+                        @click="loadRoomInvoices"
+                        :loading="loading"
+                    />
+                </div>
+            </div>
+
+            <!-- Billing Table (Check-In/Check-Out) - only show when there's data -->
+            <DataTable 
+                v-if="!loading && filteredBillingData && filteredBillingData.length > 0"
+                :value="filteredBillingData" 
+                class="p-datatable-striped" 
+                :loading="loading"
+            >
                 <Column field="guestName" header="Guest Name"></Column>
                 <Column field="roomNumber" header="Room"></Column>
                 <Column field="checkIn" header="Check-In Date">
                     <template #body="{ data }">
-                        {{ formatDate(data.checkIn) }}
+                        {{ data.checkIn ? formatDate(data.checkIn) : 'N/A' }}
                     </template>
                 </Column>
                 <Column field="checkOut" header="Check-Out Date">
                     <template #body="{ data }">
-                        {{ formatDate(data.checkOut) }}
+                        {{ data.checkOut ? formatDate(data.checkOut) : 'N/A' }}
                     </template>
                 </Column>
                 <Column field="totalAmount" header="Total Amount">
                     <template #body="{ data }">
-                        {{ formatCurrency(data.totalAmount) }}
+                        {{ formatCurrency(data.paymentData.totalDue || data.totalAmount) }}
                     </template>
                 </Column>
                 <Column header="Actions">
@@ -417,7 +418,7 @@ const showDetails = (event, room) => {
                                 @click="showDetails($event, data)"
                                 outlined
                                 rounded
-                                v-tooltip.top="'View detailes '"
+                                v-tooltip.top="'View details'"
                             />
 
                             <Button
@@ -447,61 +448,180 @@ const showDetails = (event, room) => {
                 :breakpoints="{ '960px': '75vw', '640px': '90vw' }"
                 class="p-4"
             >
-                <div v-if="selectedRoom" class="space-y-3 min-w-[300px]">
-                    <h3 class="text-lg font-bold mb-2 border-b pb-2">
-                        Room {{ selectedRoom.roomNumber }} Details
-                    </h3>
+                <div v-if="selectedRoom" class="p-4 bg-white dark:bg-gray-800">
+                    <!-- Main Horizontal Container -->
+                    <div class="flex flex-row gap-4">
+                        <!-- Left Column -->
+                        <div class="flex-1 flex flex-col gap-3 min-w-[200px]">
+                            <!-- Guest Name -->
+                            <div class="font-bold text-lg border-b border-gray-200 dark:border-gray-600 pb-2 text-gray-900 dark:text-gray-100">
+                                {{ selectedRoom.guestName }}
+                            </div>
 
-                    <div class="flex justify-between">
-                        <span class="font-medium">Guest:</span>
-                        <span>{{ selectedRoom.guestName }}</span>
+                            <!-- Room Details -->
+                            <div class="flex flex-col gap-2">
+                                <div>
+                                    <label class="font-medium text-gray-700 dark:text-gray-300">Room Type:</label>
+                                    <div class="mt-1 text-gray-900 dark:text-gray-100">
+                                        {{ selectedRoom.roomType }}
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="font-medium text-gray-700 dark:text-gray-300">Status:</label>
+                                    <Tag
+                                        :value="selectedRoom.status"
+                                        :severity="selectedRoom.status === 'Checked-In' ? 'success' : selectedRoom.status === 'Checked-Out' ? 'info' : 'secondary'"
+                                        class="mt-1"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="font-medium text-gray-700 dark:text-gray-300">Selected Hours:</label>
+                                    <Tag
+                                        :value="`${selectedRoom.selectedHours}hrs`"
+                                        severity="info"
+                                        class="mt-1"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Middle Column -->
+                        <div class="flex-1 flex flex-col gap-3 min-w-[250px]">
+                            <div>
+                                <label class="text-gray-700 dark:text-gray-300">Rate</label>
+                                <div class="flex items-center gap-1">
+                                    <i class="pi pi-money-bill text-blue-500"></i>
+                                    <span class="text-gray-900 dark:text-gray-100">{{ formatCurrency(selectedRoom.selectedRate) }}</span>
+                                </div>
+                            </div>
+
+                            <!-- Discount Information -->
+                            <div v-if="selectedRoom.discount.name" class="bg-green-50 dark:bg-green-900/30 p-3 rounded">
+                                <div class="flex items-center gap-2 text-green-700 dark:text-green-300 mb-2">
+                                    <i class="pi pi-percentage"></i>
+                                    <span class="text-sm font-medium">Discount Applied</span>
+                                </div>
+                                <div class="text-sm">
+                                    <div class="text-gray-800 dark:text-gray-200">{{ selectedRoom.discount.name }}</div>
+                                    <div class="text-green-600 dark:text-green-400 font-medium">{{ selectedRoom.discount.percent }}% off</div>
+                                </div>
+                            </div>
+
+                            <!-- Payment Summary -->
+                            <div class="bg-blue-50 dark:bg-blue-900/30 p-3 rounded">
+                                <div class="flex items-center gap-2 text-blue-700 dark:text-blue-300 mb-2">
+                                    <i class="pi pi-credit-card"></i>
+                                    <span class="text-sm font-medium">Payment Summary</span>
+                                </div>
+                                <div class="space-y-1 text-sm text-gray-800 dark:text-gray-200">
+                                    <div class="flex justify-between">
+                                        <span>Room Rate:</span>
+                                        <span>{{ formatCurrency(selectedRoom.paymentData.roomRate) }}</span>
+                                    </div>
+                                    <div v-if="selectedRoom.paymentData.extendAmount > 0" class="flex justify-between">
+                                        <span>Extend Charges <span v-if="selectedRoom.paymentData.extendHours > 0" class="bg-orange-200 text-orange-800 px-2 py-1 rounded-full text-xs font-medium ml-2">{{ selectedRoom.paymentData.extendHours }}h</span>:</span>
+                                        <span>{{ formatCurrency(selectedRoom.paymentData.extendAmount) }}</span>
+                                    </div>
+                                    <div v-if="selectedRoom.paymentData.extrasTotal > 0" class="flex justify-between">
+                                        <span>Consumables:</span>
+                                        <span>{{ formatCurrency(selectedRoom.paymentData.extrasTotal) }}</span>
+                                    </div>
+                                    <div v-if="selectedRoom.paymentData.amenitiesTotal > 0" class="flex justify-between">
+                                        <span>Amenities:</span>
+                                        <span>{{ formatCurrency(selectedRoom.paymentData.amenitiesTotal) }}</span>
+                                    </div>
+                                    <div v-if="selectedRoom.paymentData.damageCharges > 0" class="flex justify-between text-red-600">
+                                        <span>Damage Charges:</span>
+                                        <span>{{ formatCurrency(selectedRoom.paymentData.damageCharges) }}</span>
+                                    </div>
+                                    <div class="border-t pt-1 font-medium flex justify-between">
+                                        <span>Total Due:</span>
+                                        <span>{{ formatCurrency(selectedRoom.paymentData.totalDue) }}</span>
+                                    </div>
+                                    <div class="flex justify-between text-green-600 font-medium">
+                                        <span>Payment Status:</span>
+                                        <span>✓ Fully Paid</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Column -->
+                        <div class="flex-1 flex flex-col gap-3 min-w-[200px]">
+                            <!-- Contact & Amenities -->
+                            <div class="flex flex-col gap-2">
+                                <div>
+                                    <label class="font-medium text-gray-700 dark:text-gray-300">Contact Info:</label>
+                                    <div class="mt-1 flex flex-col gap-1">
+                                        <div class="flex items-center gap-2 text-gray-800 dark:text-gray-200">
+                                            <i class="pi pi-phone text-blue-500"></i>
+                                            {{ selectedRoom.contactInfo.cellphone }}
+                                        </div>
+                                        <div class="flex items-center gap-2 text-gray-800 dark:text-gray-200">
+                                            <i class="pi pi-envelope text-blue-500"></i>
+                                            {{ selectedRoom.contactInfo.email }}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <i class="pi pi-box text-blue-500 mr-2"></i>
+                                    <label class="font-medium text-gray-700 dark:text-gray-300">Rented Amenities:</label>
+                                    <div class="mt-1">
+                                        <div v-if="selectedRoom.rentalAmenities.length > 0" 
+                                             class="overflow-y-auto" 
+                                             style="max-height: 50px;">
+                                            <div
+                                                v-for="(amenity, index) in selectedRoom.rentalAmenities"
+                                                :key="index"
+                                                class="flex items-center justify-between gap-2 py-1 border-b last:border-b-0 border-gray-100 dark:border-gray-600"
+                                            >
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-gray-800 dark:text-gray-200">{{ amenity.split(' - ')[0] }}</span>
+                                                </div>
+                                                <span class="text-green-600 dark:text-green-400 font-medium">₱{{ parseFloat(amenity.split(' - ')[1] || '0').toFixed(2) }}</span>
+                                            </div>
+                                        </div>
+                                        <div v-else class="text-gray-500 dark:text-gray-400 italic">
+                                            No rented amenities
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Consumables (Extras Bill) -->
+                                <div>
+                                    <i class="pi pi-shopping-cart text-blue-500 mr-2"></i>
+                                    <label class="font-medium text-gray-700 dark:text-gray-300">Consumables:</label>
+                                    <div class="mt-1">
+                                        <div v-if="selectedRoom.consumableProducts.length > 0"
+                                             class="overflow-y-auto"
+                                             style="max-height: 100px;">
+                                            <div
+                                                v-for="(product, index) in selectedRoom.consumableProducts"
+                                                :key="index"
+                                                class="flex items-center justify-between gap-2 py-1 border-b last:border-b-0 border-gray-100 dark:border-gray-600"
+                                            >
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-gray-800 dark:text-gray-200">{{ product.name }}</span>
+                                                    <span class="text-gray-500 dark:text-gray-400">{{ product.quantity }}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div v-else class="text-gray-500 dark:text-gray-400 italic">
+                                            No consumables
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    <div class="flex justify-between">
-                        <span class="font-medium">Stay Extended:</span>
-                        <span>{{
-                            selectedRoom.extendedStay ? "Yes" : "N/A"
-                        }}</span>
-                    </div>
-
-                    <div
-                        class="flex justify-between"
-                        v-if="selectedRoom.extendedStay"
-                    >
-                        <span class="font-medium">Extended Until:</span>
-                        <span>{{ formatDate(selectedRoom.newCheckOut) }}</span>
-                    </div>
-
-                    <div class="flex justify-between">
-                        <span class="font-medium">Amenities:</span>
-                        <span class="text-right">
-                            {{
-                                selectedRoom.amenities?.length
-                                    ? selectedRoom.amenities.join(", ")
-                                    : "N/A"
-                            }}
-                        </span>
-                    </div>
-
-                    <div class="flex justify-between">
-                        <span class="font-medium">Hours Booked:</span>
-                        <span>{{ selectedRoom.selectedHours }} hrs</span>
-                    </div>
-
-                    <div class="flex justify-between">
-                        <span class="font-medium">Rate:</span>
-                        <span
-                            >{{
-                                formatCurrency(selectedRoom.hourlyRate)
-                            }}/hr</span
-                        >
-                    </div>
-
-                    <div class="flex justify-between font-bold border-t pt-2">
-                        <span>Total:</span>
-                        <span>{{
-                            formatCurrency(selectedRoom.totalAmount)
-                        }}</span>
+                    <!-- Notes (Full Width) -->
+                    <div class="mt-4 pt-3 border-t border-gray-200 dark:border-gray-600">
+                        <label class="font-medium text-gray-700 dark:text-gray-300">Notes:</label>
+                        <div class="p-2 bg-gray-100 dark:bg-gray-700 rounded mt-1 text-gray-800 dark:text-gray-200">
+                            {{ selectedRoom.notes || "No special notes" }}
+                        </div>
                     </div>
                 </div>
             </Popover>

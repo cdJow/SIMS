@@ -1,8 +1,9 @@
 <script setup>
 import { Button, Dialog, InputText, Tag } from "primevue";
 import MultiSelect from "primevue/multiselect";
+import Select from "primevue/select";
 import { useToast } from "primevue/usetoast";
-import { computed, nextTick,  onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch, shallowRef } from "vue";
 import {
     getUsers, addUser, updateUser, deleteUser,
     resetUserPassword, uploadUserImage, getUserLogs, adminResetUserPassword
@@ -10,11 +11,55 @@ import {
 import { getCurrentUser } from "@/api/auth";
 import { useCurrentUser } from "@/service/CurrentUser";
 
+// Debounce utility
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
 const { setUser } = useCurrentUser();
 
 const toast = useToast();
-const ALLOWED_ROLES = ["Front Desk", "Manager", "System Admin", "Inventory", "Kitchen Staff"];
+const ALLOWED_ROLES = ["Front Desk", "Manager", "System Admin", "Inventory"];
 
+// Account list state with pagination
+const accounts = shallowRef([]);
+const loading = ref(false);
+const searchQuery = ref("");
+const currentPage = ref(1);
+const itemsPerPage = ref(12);
+const totalAccounts = ref(0);
+
+// Computed properties for performance
+const filteredAccounts = computed(() => {
+  if (!searchQuery.value.trim()) {
+    return accounts.value;
+  }
+  
+  const query = searchQuery.value.toLowerCase();
+  return accounts.value.filter(account => 
+    account.name.toLowerCase().includes(query) ||
+    account.email.toLowerCase().includes(query) ||
+    account.role.label.toLowerCase().includes(query)
+  );
+});
+
+const paginatedAccounts = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value;
+  const end = start + itemsPerPage.value;
+  return filteredAccounts.value.slice(start, end);
+});
+
+const totalPages = computed(() => {
+  return Math.ceil(filteredAccounts.value.length / itemsPerPage.value);
+});
 
 const showPassword = ref(false);
 
@@ -40,6 +85,35 @@ function validateEditNameInput() {
     }
 }
 
+// Debounced search to improve performance
+const debouncedSearch = debounce(() => {
+  currentPage.value = 1; // Reset to first page when searching
+}, 300);
+
+// Watch search query with debouncing
+watch(searchQuery, () => {
+  debouncedSearch();
+});
+
+// Pagination functions
+function nextPage() {
+  if (currentPage.value < totalPages.value) {
+    currentPage.value++;
+  }
+}
+
+function prevPage() {
+  if (currentPage.value > 1) {
+    currentPage.value--;
+  }
+}
+
+function goToPage(page) {
+  if (page >= 1 && page <= totalPages.value) {
+    currentPage.value = page;
+  }
+}
+
 
 
 
@@ -49,7 +123,6 @@ const roles = [
     { label: "Manager", value: "Manager" },
     { label: "System Admin", value: "System Admin" },
     { label: "Inventory", value: "Inventory" },
-    { label: "Kitchen Staff", value: "Kitchen Staff" },
 ];
 
 
@@ -59,30 +132,43 @@ const statuses = [
     { label: "Disabled", value: "Disabled" },
 ];
 
-// Account list state
-const accounts = ref([]);
-const loading = ref(false);
+// Fetch all users on mount with caching
+let accountsCache = null;
+let cacheTimestamp = null;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
-// Fetch all users on mount
-async function loadAccounts() {
+async function loadAccounts(useCache = true) {
   loading.value = true;
   try {
+    // Check cache first
+    if (useCache && accountsCache && cacheTimestamp && (Date.now() - cacheTimestamp < CACHE_DURATION)) {
+      accounts.value = accountsCache;
+      totalAccounts.value = accountsCache.length;
+      loading.value = false;
+      return;
+    }
+
     const { data } = await getUsers();
 
-    accounts.value = data
+    const processedAccounts = data
       .filter(acc => {
         const extras = Array.isArray(acc.roles) ? acc.roles : [];
-        const all = [acc.role, ...extras].filter(Boolean); // primary + extras
+        const all = [acc.role, ...extras].filter(Boolean);
         return all.some(r => ALLOWED_ROLES.includes(r));
       })
       .map(acc => ({
         ...acc,
-        // keep additional roles only in a dedicated field for the UI
         extraRoles: Array.isArray(acc.roles) ? acc.roles : [],
-        // primary role comes from acc.role (single string)
         role: roles.find(r => r.value === acc.role) || roles[0],
         status: statuses.find(s => s.value === acc.status) || statuses[0],
       }));
+
+    // Cache the results
+    accountsCache = processedAccounts;
+    cacheTimestamp = Date.now();
+    
+    accounts.value = processedAccounts;
+    totalAccounts.value = processedAccounts.length;
   } catch (err) {
     toast.add({ severity: "error", summary: "Error", detail: "Failed to fetch users", life: 3000 });
   }
@@ -128,22 +214,24 @@ function onImageUpload(e) {
 
 // Add user
 async function addAccount() {
-       validateNameInput();
+    validateNameInput();
     validateEmailInput();
-      if (emailError.value) return;
+    if (emailError.value) return;
+    
     try {
         // Only send fields needed for initial user creation
         let payload = {
-    name: accountForm.value.name,
-    email: accountForm.value.email,
-    password: accountForm.value.password,
-    role: accountForm.value.role.value,  // This is now the real new role name!
-    status: "Active"
-};
+            name: accountForm.value.name,
+            email: accountForm.value.email,
+            password: accountForm.value.password,
+            role: accountForm.value.role.value,
+            status: "Active"
+        };
+        
         // POST to backend (user created, returns ID)
         const { data } = await addUser(payload);
 
-        // Only now, upload the image if provided (like room control)
+        // Only now, upload the image if provided
         if (accountForm.value.image && data.id) {
             let formData = new FormData();
             formData.append("image", accountForm.value.image);
@@ -152,7 +240,10 @@ async function addAccount() {
 
         toast.add({ severity: "success", summary: "Success", detail: "Account Created", life: 3000 });
         isAddDialogVisible.value = false;
-        await loadAccounts();
+        
+        // Clear cache and reload
+        accountsCache = null;
+        await loadAccounts(false);
     } catch (err) {
         toast.add({
             severity: "error",
@@ -168,7 +259,12 @@ function openResetPasswordDialog(account) {
   selectedAccount.value = account;
   isResetPasswordDialogVisible.value = true;
   newPassword.value = "";
-  nextTick(() => setTimeout(() => passwordInputRef.value?.$el?.focus(), 50));
+  nextTick(() => setTimeout(() => {
+    // Check if any element already has focus before trying to focus
+    if (!document.activeElement || document.activeElement === document.body) {
+      passwordInputRef.value?.$el?.focus();
+    }
+  }, 50));
 }
 
 async function confirmResetPassword() {
@@ -234,8 +330,8 @@ async function saveAccount() {
       name: accountForm.value.name,
       email: accountForm.value.email,
       status: accountForm.value.status.value,
-      role: accountForm.value.role.value,          // PRIMARY role (now editable)
-      roles: accountForm.value.extraRoles || [],   // ADDITIONAL roles (array)
+      role: accountForm.value.role.value,
+      roles: accountForm.value.extraRoles || [],
     };
 
     await updateUser(editedId, payload);
@@ -261,7 +357,10 @@ async function saveAccount() {
       life: 3000,
     });
     isEditDialogVisible.value = false;
-    await loadAccounts();
+    
+    // Clear cache and reload
+    accountsCache = null;
+    await loadAccounts(false);
   } catch (err) {
     toast.add({
       severity: "error",
@@ -282,7 +381,10 @@ async function confirmDeleteAccount() {
     try {
         await deleteUser(accountToDelete.value.id);
         toast.add({ severity: "success", summary: "Success", detail: "Account Deleted", life: 3000 });
-        await loadAccounts();
+        
+        // Clear cache and reload
+        accountsCache = null;
+        await loadAccounts(false);
     } catch (err) {
         toast.add({ severity: "error", summary: "Error", detail: "Failed to delete user", life: 3000 });
     }
@@ -393,41 +495,69 @@ onMounted(loadAccounts);
 </script>
 <template>
     <div class="card">
-        <div class="font-semibold text-xl mb-4">Accounts Management</div>
+        <div class="font-semibold text-xl mb-4 text-gray-900 dark:text-gray-100">Accounts Management</div>
 
-        <!-- Add New User Button -->
-        <Button
-            label="Add New User"
-            icon="pi pi-plus"
-            class="p-button-primary mb-4"
-            @click="openAddUserDialog"
-        />
-        <div>
+        <!-- Controls Section -->
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+            <!-- Search Bar -->
+            <div class="flex-1 max-w-md">
+                <div class="relative">
+                    <InputText
+                        v-model="searchQuery"
+                        placeholder="Search accounts..."
+                        class="w-full pl-10"
+                    />
+                    <i class=" absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                </div>
+            </div>
+            
+            <!-- Add New User Button -->
+            <Button
+                label="Add New User"
+                icon="pi pi-plus"
+                class="p-button-primary"
+                @click="openAddUserDialog"
+            />
+        </div>
+        
+        <!-- Loading State -->
+        <div v-if="loading" class="text-center py-8">
+            <i class="pi pi-spin pi-spinner text-2xl text-blue-500"></i>
+            <p class="mt-2 text-gray-600 dark:text-gray-300">Loading accounts...</p>
+        </div>
+        
+        <!-- Results Info -->
+        <div v-else class="mb-4 text-sm text-gray-600 dark:text-gray-300">
+            Showing {{ paginatedAccounts.length }} of {{ filteredAccounts.length }} accounts
+            <span v-if="searchQuery">(filtered from {{ totalAccounts }} total)</span>
+        </div>
+        
+        <div v-if="!loading">
             <!-- Responsive Grid -->
             <div
                 class="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2"
             >
                 <div
-                    v-for="(account, index) in accounts"
+                    v-for="(account, index) in paginatedAccounts"
                     :key="account.id"
-                    class="relative shadow-md border border-white rounded-xl p-4"
+                    class="relative shadow-md border border-gray-200 dark:border-gray-600 rounded-xl p-4 bg-white dark:bg-gray-800"
                 >
                     <!-- Profile Image -->
                     <div
-                        class="absolute top-4 right-4 w-24 h-24 bg-white rounded-full border border-slate-200 flex items-center justify-center"
+                        class="absolute top-4 right-4 w-24 h-24 bg-white dark:bg-gray-700 rounded-full border border-slate-200 dark:border-slate-600 flex items-center justify-center"
                     >
                       <img v-if="account.image_url"
      :src="`http://localhost:5000/uploads/users/${account.image_url}`"
      alt="Profile Picture"
      class="w-full h-full object-cover rounded-full"
 />
-                        <i v-else class="pi pi-user text-4xl"></i>
+                        <i v-else class="pi pi-user text-4xl text-gray-400 dark:text-gray-300"></i>
                     </div>
 
                     <!-- Account Info -->
                     <div>
-                        <div class="text-lg font-bold">{{ account.name }}</div>
-                        <div class="text-sm">{{ account.email }}</div>
+                        <div class="text-lg font-bold text-gray-900 dark:text-gray-100">{{ account.name }}</div>
+                        <div class="text-sm text-gray-600 dark:text-gray-300">{{ account.email }}</div>
                         <div class="text-sm mt-2">
                             <Tag :value="account.role.label" severity="info" />
                         </div>
@@ -472,6 +602,39 @@ onMounted(loadAccounts);
                     </div>
                 </div>
             </div>
+            
+            <!-- Pagination Controls -->
+            <div v-if="totalPages > 1" class="flex justify-center items-center mt-8 gap-2">
+                <Button
+                    icon="pi pi-angle-left"
+                    class="p-button-outlined p-button-sm"
+                    @click="prevPage"
+                    :disabled="currentPage === 1"
+                />
+                
+                <span class="mx-4 text-sm text-gray-600 dark:text-gray-300">
+                    Page {{ currentPage }} of {{ totalPages }}
+                </span>
+                
+                <Button
+                    icon="pi pi-angle-right"
+                    class="p-button-outlined p-button-sm"
+                    @click="nextPage"
+                    :disabled="currentPage === totalPages"
+                />
+            </div>
+            
+            <!-- No Results -->
+            <div v-if="filteredAccounts.length === 0 && searchQuery" class="text-center py-8">
+                <i class="pi pi-search text-4xl text-gray-300 dark:text-gray-600 mb-4"></i>
+                <p class="text-gray-500 dark:text-gray-400">No accounts found matching "{{ searchQuery }}"</p>
+                <Button
+                    label="Clear Search"
+                    icon="pi pi-times"
+                    class="p-button-text mt-2"
+                    @click="searchQuery = ''"
+                />
+            </div>
         </div>
     </div>
 
@@ -485,14 +648,14 @@ onMounted(loadAccounts);
     :closable="true"
     :style="{ width: '30vw' }"
 >
-    <div v-if="selectedAccount">
+    <div v-if="selectedAccount" class="text-gray-800 dark:text-gray-200">
         <p class="text-sm mb-4">
             You are resetting the password for
             <strong>{{ selectedAccount.name }}</strong>.
         </p>
         <!-- New Password Only -->
         <div class="mb-4">
-            <label class="block text-sm font-medium mb-2">
+            <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
                 New Password
             </label>
             <InputText
@@ -606,10 +769,10 @@ onMounted(loadAccounts);
         :closable="true"
         :style="{ width: '40vw' }"
     >
-        <div v-if="selectedAccount">
+        <div v-if="selectedAccount" class="text-gray-800 dark:text-gray-200">
             <!-- Account Info -->
-            <h3 class="text-lg font-semibold">{{ selectedAccount.name }}</h3>
-            <p class="text-sm">{{ selectedAccount.email }}</p>
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ selectedAccount.name }}</h3>
+            <p class="text-sm text-gray-600 dark:text-gray-300">{{ selectedAccount.email }}</p>
             <p class="text-sm mt-2">
                 Role:
                 <Tag :value="selectedAccount.role.label" severity="info" />
@@ -649,10 +812,10 @@ onMounted(loadAccounts);
         :closable="true"
         :style="{ width: '36vw' }"
     >
-        <div>
+        <div class="text-gray-800 dark:text-gray-200">
             <!-- Name -->
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Name</label>
+                <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Name</label>
                 <InputText
         v-model="accountForm.name"
         placeholder="Enter name"
@@ -665,7 +828,7 @@ onMounted(loadAccounts);
 
             <!-- Email -->
             <div class="mb-4">
-    <label class="block text-sm font-medium mb-2">Email</label>
+    <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Email</label>
     <InputText
         v-model="accountForm.email"
         class="w-full"
@@ -680,7 +843,7 @@ onMounted(loadAccounts);
 
             <!-- Password -->
             <div class="mb-4">
-    <label class="block text-sm font-medium mb-2">Password</label>
+    <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Password</label>
     <div class="flex gap-2 items-center">
         <InputText
             v-model="accountForm.password"
@@ -706,7 +869,7 @@ onMounted(loadAccounts);
 
             <!-- Image Upload -->
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-2"
+                <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300"
                     >Profile Picture</label
                 >
                 <input
@@ -728,7 +891,7 @@ onMounted(loadAccounts);
 
             <!-- Role -->
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Role</label>
+                <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Role</label>
                 <Select
                     placeholder="Select Role"
                     v-model="accountForm.role"
@@ -767,10 +930,10 @@ onMounted(loadAccounts);
     :closable="true"
     :style="{ width: '30vw' }"
 >
-    <div>
+    <div class="text-gray-800 dark:text-gray-200">
         <!-- Name -->
         <div class="mb-4">
-            <label class="block text-sm font-medium mb-2">Name</label>
+            <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Name</label>
                <InputText
         v-model="accountForm.name"
         placeholder="Enter name"
@@ -783,7 +946,7 @@ onMounted(loadAccounts);
 
         <!-- Email -->
        <div class="mb-4">
-    <label class="block text-sm font-medium mb-2">Email</label>
+    <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Email</label>
     <InputText
         v-model="accountForm.email"
         class="w-full"
@@ -798,7 +961,7 @@ onMounted(loadAccounts);
 
        <!-- Primary Role (read-only) -->
 <div class="mb-4">
-  <label class="block text-sm font-medium mb-2">Primary Role</label>
+  <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Primary Role</label>
   <Select
     v-model="accountForm.role"
     :options="roles"
@@ -810,7 +973,7 @@ onMounted(loadAccounts);
 
 <!-- Additional Roles -->
 <div class="mb-4">
-  <label class="block text-sm font-medium mb-2">Additional Roles</label>
+  <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Additional Roles</label>
   <MultiSelect
     v-model="accountForm.extraRoles"
     :options="roles.filter(r => r.value !== accountForm.role.value)"
@@ -826,7 +989,7 @@ onMounted(loadAccounts);
 
          <!-- Image Upload -->
         <div class="mb-4">
-            <label class="block text-sm font-medium mb-2">Profile Picture</label>
+            <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Profile Picture</label>
             <input
                 type="file"
                 accept="image/*"
@@ -853,7 +1016,7 @@ onMounted(loadAccounts);
 
         <!-- Status -->
         <div class="mb-4">
-            <label class="block text-sm font-medium mb-2">Status</label>
+            <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Status</label>
             <Select
                 v-model="accountForm.status"
                 :options="statuses"
@@ -890,10 +1053,10 @@ onMounted(loadAccounts);
         :closable="true"
         :style="{ width: '30vw' }"
     >
-        <div class="flex flex-col items-center">
+        <div class="flex flex-col items-center text-gray-800 dark:text-gray-200">
             <p class="text-sm text-center mb-4">
                 Are you sure you want to delete
-                <strong class="text-red-500">{{ accountToDelete?.name }}</strong
+                <strong class="text-red-500 dark:text-red-400">{{ accountToDelete?.name }}</strong
                 >? This action cannot be undone.
             </p>
             <div class="flex justify-end gap-2 w-full">
