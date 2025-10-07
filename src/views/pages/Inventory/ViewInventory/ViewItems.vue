@@ -1,56 +1,187 @@
 <script setup>
-import { CustomerService } from "@/service/CustomerService";
 import { ProductService } from "@/service/ProductService";
-import { RoomService } from "@/service/RoomService";
 import { FilterMatchMode, FilterOperator } from "@primevue/core/api";
 
-import { onBeforeMount, ref } from "vue";
+import { onMounted, onBeforeMount, ref, computed } from "vue";
 
-const customers1 = ref(null);
-const customers2 = ref(null);
-const customers3 = ref(null);
-const loading1 = ref(null);
 const expandedRows = ref([]);
 const batchExpandedRows = ref([]);
 const toast = ref(null);
 
-// State variables
+const selectedBatch = ref({});
+const selectedItem = ref(null);
+const isDialogVisible = ref(false);
 
 const products = ref([]); // Products for the DataTable
 const selectedProduct = ref(null); // Selected product from the DataTable
-const selectedItem = ref(null); // Selected item details
-const popoverRef = ref(null); // Reference to the Popover
-
-const availableRooms = ref([]);
 const serialNumbers = ref([]);
-// For damaged item reporting
 
-// Fetch available rooms from RoomService
-onBeforeMount(() => {
-    availableRooms.value = RoomService.getAvailableRooms();
+// Computed property to ensure products is always a valid array with proper structure
+const safeProducts = computed(() => {
+    try {
+        if (!Array.isArray(products.value)) {
+            console.warn("products is not an array, returning empty array");
+            return [];
+        }
+        return products.value.filter(product => product && typeof product.id !== 'undefined');
+    } catch (error) {
+        console.error("Error accessing products:", error);
+        return [];
+    }
 });
 
-// Function to handle product selection
-function onProductSelect(event) {
-    console.log("Selected Product:", event.data);
-    selectedProduct.value = event.data; // Update the selected product
-    if (popoverRef.value) {
-        popoverRef.value.hide(); // Close the popover
-    }
-}
 
-// Function to confirm serial deletion
+
+// Add filter function with proper error handling
+const ConsumableBatchSearch = ref("");
+const NonConsumableBatchSearch = ref("");
+const roomSearchQuery = ref(""); // Search for rooms by room number
+
+// Separate filter functions
+const filterConsumableBatches = (batches) => {
+    try {
+        if (!Array.isArray(batches)) {
+            console.warn("filterConsumableBatches: batches is not an array", batches);
+            return [];
+        }
+        const query = ConsumableBatchSearch.value.toLowerCase().trim();
+        return query
+            ? batches.filter((batch) => {
+                  if (!batch || typeof batch !== 'object') return false;
+                  return Object.values(batch).some((value) =>
+                      String(value || '').toLowerCase().includes(query)
+                  );
+              })
+            : batches;
+    } catch (error) {
+        console.error("Consumable batch filter error:", error);
+        return Array.isArray(batches) ? batches : [];
+    }
+};
+
+
+
+onMounted(async () => {
+    try {
+        console.log("Loading products with batches...");
+        const data = await ProductService.getProductsWithOrders();
+        console.log("Raw API response:", data);
+        
+        // Ensure data is array and properly structured
+        if (Array.isArray(data)) {
+            // Add defensive data structure validation
+            const validatedData = data.map(product => ({
+                ...product,
+                batches: Array.isArray(product.batches) ? product.batches.map(batch => ({
+                    ...batch,
+                    batchId: batch.item_id || batch.batchId || batch.id,
+                    batchNumber: batch.batchNumber || batch.batch_number || '-',
+                    serialNumbers: Array.isArray(batch.serialNumbers) ? batch.serialNumbers : []
+                })) : []
+            }));
+            
+            products.value = validatedData;
+            console.log("Validated products data:", validatedData);
+            console.log("Total products loaded:", validatedData.length);
+        } else {
+            console.warn("API returned non-array data:", data);
+            products.value = [];
+        }
+        
+        initFilters();
+    } catch (error) {
+        console.error("Data loading failed:", error);
+        showErrorToast("Failed to load product data");
+        products.value = []; // Ensure empty array state
+    }
+});
+
+const showErrorToast = (message) => {
+    if (toast.value) {
+        toast.value.add({
+            severity: "error",
+            summary: "Error",
+            detail: message,
+            life: 3000,
+        });
+    }
+};
+
+const filterNonConsumableBatches = (batches) => {
+    try {
+        if (!Array.isArray(batches)) {
+            console.warn("filterNonConsumableBatches: batches is not an array", batches);
+            return [];
+        }
+        const query = NonConsumableBatchSearch.value.toLowerCase().trim();
+        return query
+            ? batches.filter((batch) => {
+                  if (!batch || typeof batch !== 'object') return false;
+                  return Object.values(batch).some((value) =>
+                      String(value || '').toLowerCase().includes(query)
+                  );
+              })
+            : batches;
+    } catch (error) {
+        console.error("Non-consumable batch filter error:", error);
+        return Array.isArray(batches) ? batches : [];
+    }
+};
+// Separate clear functions
+const clearConsumableFilter = () => {
+    ConsumableBatchSearch.value = "";
+};
+
+const clearNonConsumableBatchFilter = () => {
+    NonConsumableBatchSearch.value = "";
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // State management
 const isDialog2Visible = ref(false); // Controls the dialog visibility
-const isDialogVisible = ref(false); // Controls the dialog visibility
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 function getOrderSeverity(order) {
     switch (order.status) {
         case "DELIVERED":
             return "success";
 
+        case "IN_STOCK":
+            return "success";
+
         case "CANCELLED":
+            return "danger";
+
+        case "OUT_OF_STOCK":
+            return "danger";
+
+        case "EXPIRED":
             return "danger";
 
         case "PENDING":
@@ -70,6 +201,10 @@ function clearFilter() {
         name: { value: null, matchMode: FilterMatchMode.STARTS_WITH },
         brand: { value: null, matchMode: FilterMatchMode.STARTS_WITH },
         category: { value: null, matchMode: FilterMatchMode.EQUALS },
+        type: { value: null, matchMode: FilterMatchMode.EQUALS },
+        unit: { value: null, matchMode: FilterMatchMode.EQUALS },
+        minimum_stock: { value: null, matchMode: FilterMatchMode.EQUALS },
+        stock_limit: { value: null, matchMode: FilterMatchMode.EQUALS },
         inventoryStatus: { value: null, matchMode: FilterMatchMode.EQUALS },
     };
 }
@@ -82,7 +217,10 @@ function toggleDataTable(item) {
 
 // Function to open the second dialog
 function toggleDataTable2(item) {
+    selectedBatch.value = item; // Store the selected batch data
     selectedItem.value = item; // Set the selected item
+    // Store the serial numbers for this specific batch
+    serialNumbers.value = Array.isArray(item.serialNumbers) ? item.serialNumbers : [];
     isDialog2Visible.value = true; // Open the dialog
 }
 
@@ -110,11 +248,40 @@ function formatDate(value) {
     }).format(new Date(value));
 }
 
-onBeforeMount(() => {
-    ProductService.getProductsWithOrdersSmall().then((data) => {
-        console.log(data); // Check the data being loaded
-        products.value = data;
-    });
+function formatDateTime(value) {
+    if (!value) return '-';
+    return new Intl.DateTimeFormat("en-US", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true
+    }).format(new Date(value));
+}
+
+onBeforeMount(async () => {
+    try {
+        const data = await ProductService.getProductsWithOrders();
+        
+        if (Array.isArray(data)) {
+            // Ensure each product has required fields and proper structure
+            products.value = data.map(product => ({
+                ...product,
+                id: product.id || Math.random(),
+                batches: Array.isArray(product.batches) ? product.batches.map(batch => ({
+                    ...batch,
+                    batchId: batch.item_id || batch.batchId || batch.id,
+                    serialNumbers: Array.isArray(batch.serialNumbers) ? batch.serialNumbers : []
+                })) : []
+            }));
+        } else {
+            products.value = [];
+        }
+    } catch (error) {
+        console.error("Error loading products:", error);
+        products.value = [];
+    }
     // Other service calls...
 });
 
@@ -126,25 +293,9 @@ const filters = ref({
     inventoryStatus: { value: null, matchMode: FilterMatchMode.EQUALS },
 });
 
-onBeforeMount(() => {
-    ProductService.getProductsWithOrdersSmall().then(
-        (data) => (products.value = data),
-    );
-    CustomerService.getCustomersLarge().then((data) => {
-        customers1.value = data;
-        loading1.value = false;
-        customers1.value.forEach(
-            (customer) => (customer.date = new Date(customer.date)),
-        );
-    });
-    CustomerService.getCustomersLarge().then(
-        (data) => (customers2.value = data),
-    );
-    CustomerService.getCustomersMedium().then(
-        (data) => (customers3.value = data),
-    );
-    initFilters();
-});
+
+
+
 
 function initFilters() {
     filters.value = {
@@ -165,6 +316,22 @@ function initFilters() {
             operator: FilterOperator.AND,
             constraints: [{ value: null, matchMode: FilterMatchMode.EQUALS }],
         },
+        type: {
+            operator: FilterOperator.AND,
+            constraints: [{ value: null, matchMode: FilterMatchMode.EQUALS }],
+        },
+        unit: {
+            operator: FilterOperator.AND,
+            constraints: [{ value: null, matchMode: FilterMatchMode.EQUALS }],
+        },
+        minimum_stock: {
+            operator: FilterOperator.AND,
+            constraints: [{ value: null, matchMode: FilterMatchMode.EQUALS }],
+        },
+        stock_limit: {
+            operator: FilterOperator.AND,
+            constraints: [{ value: null, matchMode: FilterMatchMode.EQUALS }],
+        },
         inventoryStatus: {
             operator: FilterOperator.AND,
             constraints: [{ value: null, matchMode: FilterMatchMode.EQUALS }],
@@ -173,22 +340,117 @@ function initFilters() {
 }
 
 function expandAll() {
-    expandedRows.value = products.value.reduce(
-        (acc, p) => (acc[p.id] = true) && acc,
-        {},
-    );
+    try {
+        const validProducts = safeProducts.value;
+        if (!Array.isArray(validProducts) || validProducts.length === 0) {
+            console.warn("No products available for expansion");
+            expandedRows.value = {};
+            return;
+        }
+        
+        expandedRows.value = validProducts.reduce((acc, p) => {
+            if (p && typeof p.id !== 'undefined') {
+                acc[p.id] = true;
+            }
+            return acc;
+        }, {});
+        
+        console.log("Expanded all rows:", expandedRows.value);
+    } catch (error) {
+        console.error("Error expanding all rows:", error);
+        expandedRows.value = {};
+    }
 }
 
 function collapseAll() {
-    expandedRows.value = null;
+    try {
+        expandedRows.value = {};
+        batchExpandedRows.value = {};
+        console.log("Collapsed all rows");
+    } catch (error) {
+        console.error("Error collapsing rows:", error);
+        expandedRows.value = {};
+        batchExpandedRows.value = {};
+    }
 }
 
+function toggleRowExpansion(event) {
+    try {
+        // Check if the click is on a button or within a button element
+        const target = event.originalEvent?.target;
+        if (target && (target.closest('.p-button') || target.closest('button') || target.tagName === 'BUTTON')) {
+            console.log("Click on button detected, skipping row expansion");
+            return;
+        }
+
+        const rowData = event.data;
+        if (!rowData || typeof rowData.id === 'undefined') {
+            console.warn("Invalid row data for expansion:", rowData);
+            return;
+        }
+        
+        // Debug: Log current state
+        console.log("Current products count:", products.value?.length || 0);
+        console.log("Current safeProducts count:", safeProducts.value?.length || 0);
+        
+        // Toggle expansion state
+        if (expandedRows.value[rowData.id]) {
+            delete expandedRows.value[rowData.id];
+        } else {
+            expandedRows.value[rowData.id] = true;
+        }
+        
+        console.log("Toggled row expansion for:", rowData.id, expandedRows.value[rowData.id] ? 'expanded' : 'collapsed');
+        
+        // Debug: Log state after toggle
+        console.log("Products after toggle:", products.value?.length || 0);
+        console.log("SafeProducts after toggle:", safeProducts.value?.length || 0);
+        
+    } catch (error) {
+        console.error("Error toggling row expansion:", error);
+    }
+}
+
+function toggleBatchRowExpansion(event) {
+    try {
+        // Check if the click is on a button or within a button element
+        const target = event.originalEvent?.target;
+        if (target && (target.closest('.p-button') || target.closest('button') || target.tagName === 'BUTTON')) {
+            console.log("Click on button detected, skipping batch expansion");
+            return;
+        }
+
+        const batchData = event.data;
+        if (!batchData || typeof batchData.batchId === 'undefined') {
+            console.warn("Invalid batch data for expansion:", batchData);
+            return;
+        }
+        
+        // Toggle batch expansion state
+        if (batchExpandedRows.value[batchData.batchId]) {
+            delete batchExpandedRows.value[batchData.batchId];
+        } else {
+            batchExpandedRows.value[batchData.batchId] = true;
+        }
+        
+        console.log("Toggled batch expansion for:", batchData.batchId, batchExpandedRows.value[batchData.batchId] ? 'expanded' : 'collapsed');
+    } catch (error) {
+        console.error("Error toggling batch expansion:", error);
+    }
+}
+
+
+
+
+
+
+
 function formatCurrency(value) {
-    if (value == null || isNaN(value)) return "₱0.00"; // Default if invalid or null
+    if (value == null || value === '' || isNaN(parseFloat(value))) return "₱0.00"; // Default if invalid or null
     return new Intl.NumberFormat("en-PH", {
         style: "currency",
         currency: "PHP",
-    }).format(value);
+    }).format(parseFloat(value));
 }
 
 function getStatusTextColor(status) {
@@ -197,6 +459,8 @@ function getStatusTextColor(status) {
             return "text-yellow-600"; // Yellow for rented
         case "available":
             return "text-green-600"; // Green for available
+        case "in_stock":
+            return "text-green-600"; // Green for in_stock
         case "damaged":
             return "text-red-600"; // Red for damaged
         case "assigned":
@@ -210,14 +474,33 @@ function formatPrice(value) {
     if (value == null || isNaN(value)) return "₱0.00"; // Handle null or invalid value
     return `₱${parseFloat(value).toFixed(2).toLocaleString()}`; // Format to 2 decimal places with commas
 }
+
+
 </script>
+
+<style scoped>
+/* Make rows visually clickable */
+:deep(.cursor-pointer) {
+    cursor: pointer;
+}
+
+:deep(.cursor-pointer:hover) {
+    background-color: #f8f9fa !important;
+}
+
+/* Ensure action buttons don't trigger row click */
+:deep(.cursor-pointer .p-button) {
+    position: relative;
+    z-index: 10;
+}
+</style>
 
 <template>
     <div class="card">
-        <div class="font-semibold text-xl mb-4">Item Control</div>
+        <div class="font-semibold text-xl mb-4">View Items</div>
         <DataTable
             v-model:expandedRows="expandedRows"
-            :value="products"
+            :value="safeProducts"
             dataKey="id"
             v-model:filters="filters"
             filterDisplay="menu"
@@ -225,11 +508,17 @@ function formatPrice(value) {
                 'name',
                 'brand',
                 'category',
+                'type',
+                'unit',
+                'minimum_stock',
+                'stock_limit',
                 'inventoryStatus',
             ]"
             tableStyle="min-width: 60rem"
             paginator
             :rows="10"
+            @row-click="toggleRowExpansion"
+            :rowClass="() => 'cursor-pointer'"
         >
             <template #header>
                 <div class="flex justify-between items-center">
@@ -272,16 +561,60 @@ function formatPrice(value) {
             </template>
 
             <Column expander style="width: 2rem" />
-            <Column field="name" header="Item Name" style="min-width:"></Column>
+            <Column
+                field="name"
+                header="Item Name"
+                style="min-width: "
+            ></Column>
             <Column field="brand" sortable header="Brand"></Column>
-            <Column field="quantity" sortable header="Quantity"></Column>
-            <Column field="description" sortable header="Description"></Column>
             <Column
                 field="category"
                 sortable
                 header="Category"
                 style="width: 10rem"
             ></Column>
+            <Column
+                field="type"
+                sortable
+                header="Type"
+                style="width: 10rem"
+            ></Column>
+            <Column
+                field="unit"
+                sortable
+                header="Unit"
+                style="width: 8rem"
+            ></Column>
+            <Column
+                field="created_at"
+                sortable
+                header="Date Added"
+                style="width: 12rem"
+            >
+                <template #body="slotProps">
+                    <span>{{ formatDateTime(slotProps.data.created_at) }}</span>
+                </template>
+            </Column>
+            <Column
+                field="minimum_stock"
+                sortable
+                header="Minimum Stock"
+                style="width: 9rem"
+            >
+                <template #body="slotProps">
+                    <span>{{ slotProps.data.minimum_stock || 0 }}</span>
+                </template>
+            </Column>
+            <Column
+                field="stock_limit"
+                sortable
+                header="Stock Limit"
+                style="width: 10rem"
+            >
+                <template #body="slotProps">
+                    <span>{{ slotProps.data.stock_limit || 0 }}</span>
+                </template>
+            </Column>
             <Column field="inventoryStatus" sortable header="Status">
                 <template #body="slotProps">
                     <Tag
@@ -291,8 +624,23 @@ function formatPrice(value) {
                 </template>
             </Column>
 
+
+
             <template #expansion="slotProps">
-                <div class="p-4">
+                <!--Consumable Batch Table-->
+                <DataTable
+                    class="p-datatable-sm"
+                    :paginator="true"
+                    :rows="10"
+                    v-model:expandedRows="batchExpandedRows"
+                    :value="
+                        filterConsumableBatches(slotProps.data?.batches || [])
+                    "
+                    dataKey="batchId"
+                    v-if="slotProps.data?.category === 'Consumable'"
+                    @row-click="toggleBatchRowExpansion"
+                    :rowClass="() => 'cursor-pointer'"
+                >
                     <div class="flex items-center gap-2 mb-4">
                         <h5>Batch List for {{ slotProps.data.name }}</h5>
                         <Button
@@ -300,191 +648,240 @@ function formatPrice(value) {
                             icon="pi pi-filter-slash"
                             label="Clear"
                             outlined
-                            @click="clearFilter()"
+                            @click="clearConsumableFilter"
                         />
                         <IconField>
                             <InputIcon>
                                 <i class="pi pi-search" />
                             </InputIcon>
                             <InputText
-                                v-model="filters['global'].value"
-                                placeholder="Keyword Search"
+                                v-model="ConsumableBatchSearch"
+                                placeholder="Search consumable batches..."
+                                class="w-full"
+                            />
+                        </IconField>
+                    </div>
+                    <Column
+                        field="batchNumber"
+                        header="Batch Number"
+                        sortable
+                    ></Column>
+                    <Column
+                        field="quantity"
+                        header="Quantity"
+                        sortable
+                    ></Column>
+                    <Column
+                        field="purchaseDate"
+                        header="Arrival Date"
+                        sortable
+                    >
+                        <template #body="slotProps">
+                            <span>{{
+                                formatDateTime(slotProps.data.purchaseDate)
+                            }}</span>
+                        </template>
+                    </Column>
+                    <Column
+                        field="purchasePrice"
+                        header="Purchase Price"
+                        sortable
+                    >
+                        <template #body="slotProps">
+                            <span>{{
+                                formatPrice(slotProps.data.purchasePrice)
+                            }}</span>
+                        </template>
+                    </Column>
+
+                    <Column field="srp" header="SRP" sortable>
+                        <template #body="slotProps">
+                            <span>{{ 
+                                (slotProps.data.srp && !isNaN(parseFloat(slotProps.data.srp)))
+                                ? `₱${parseFloat(slotProps.data.srp).toFixed(2)}` 
+                                : '-' 
+                            }}</span>
+                        </template>
+                    </Column>
+                    <Column field="unit" header="Unit" sortable></Column>
+                    <Column
+                        field="supplier"
+                        header="Supplier"
+                        sortable
+                    ></Column>
+
+                    <Column field="expDate" header="Exp Date" sortable>
+                        <template #body="slotProps">
+                            <span style="color: red">{{
+                                formatDate(slotProps.data.expDate)
+                            }}</span>
+                        </template>
+                    </Column>
+                    <Column field="status" header="Status" sortable>
+                        <template #body="slotProps">
+                            <Tag
+                                :value="slotProps.data.status"
+                                :severity="getOrderSeverity(slotProps.data)"
+                            />
+                        </template>
+                    </Column>
+
+                </DataTable>
+
+                <!--Non-Consumable Batch Table-->
+                <DataTable
+                    class="p-datatable-sm"
+                    :paginator="true"
+                    :rows="10"
+                    v-model:expandedRows="batchExpandedRows"
+                    :value="
+                        filterNonConsumableBatches(
+                            slotProps.data?.batches || []
+                        )
+                    "
+                    dataKey="batchId"
+                    v-if="slotProps.data?.category === 'Non-Consumable'"
+                    @row-click="toggleBatchRowExpansion"
+                    :rowClass="() => 'cursor-pointer'"
+                >
+                    <div class="flex items-center gap-2 mb-4">
+                        <h5>Batch List for {{ slotProps.data.name }}</h5>
+                        <Button
+                            type="button"
+                            icon="pi pi-filter-slash"
+                            label="Clear"
+                            outlined
+                            @click="clearNonConsumableBatchFilter"
+                        />
+                        <IconField>
+                            <InputIcon>
+                                <i class="pi pi-search" />
+                            </InputIcon>
+                            <InputText
+                                v-model="NonConsumableBatchSearch"
+                                placeholder="Search non-consumable items..."
+                                class="w-full"
                             />
                         </IconField>
                     </div>
 
-                    <!--Consumable Batch Table-->
-                    <DataTable
-                        class="p-datatable-sm"
-                        v-model:expandedRows="batchExpandedRows"
-                        :value="slotProps.data.batches"
-                        dataKey="batchId"
-                        v-if="slotProps.data.category === 'Consumable'"
+                    <Column
+                        field="batchNumber"
+                        header="Serial Number"
+                        sortable
+                    ></Column>
+                    <Column
+                        field="purchaseDate"
+                        header="Arrival Date"
+                        sortable
                     >
-                        <Column
-                            field="batchNumber"
-                            header="Batch Number"
-                            sortable
-                        ></Column>
-                        <Column
-                            field="quantity"
-                            header="Quantity"
-                            sortable
-                        ></Column>
-                        <Column
-                            field="purchaseDate"
-                            header="Purchase Date"
-                            sortable
-                        ></Column>
-                        <Column
-                            field="purchasePrice"
-                            header="Purchase Price"
-                            sortable
-                        >
-                            <template #body="slotProps">
-                                <span>{{
-                                    formatPrice(slotProps.data.purchasePrice)
-                                }}</span>
-                            </template>
-                        </Column>
+                        <template #body="slotProps">
+                            <span>{{
+                                slotProps.data.purchaseDate ? formatDateTime(slotProps.data.purchaseDate) : '-'
+                            }}</span>
+                        </template>
+                    </Column>
+                    <Column
+                        field="purchasePrice"
+                        header="Purchase Price"
+                        sortable
+                    >
+                        <template #body="slotProps">
+                            <span>{{
+                                formatPrice(slotProps.data.purchasePrice)
+                            }}</span>
+                        </template>
+                    </Column>
 
-                        <Column field="srp" header="SRP" sortable>
-                            <template #body="slotProps">
-                                <span
-                                    >₱{{ slotProps.data.srp.toFixed(2) }}</span
-                                >
-                            </template>
-                        </Column>
-                        <Column field="unit" header="Unit" sortable></Column>
-                        <Column
-                            field="supplier"
-                            header="Supplier"
-                            sortable
-                        ></Column>
+                    <Column
+                        field="supplier"
+                        header="Supplier"
+                        sortable
+                    ></Column>
 
-                        <Column field="expDate" header="Exp Date" sortable>
-                            <template #body="slotProps">
-                                <span style="color: red">{{
-                                    formatDate(slotProps.data.expDate)
-                                }}</span>
-                            </template>
-                        </Column>
-                        <Column field="status" header="Status" sortable>
-                            <template #body="slotProps">
-                                <Tag
-                                    :value="slotProps.data.status"
-                                    :severity="getOrderSeverity(slotProps.data)"
+                    <Column
+                        field="rentalprice"
+                        header="Rental Price"
+                        sortable
+                    ></Column>
+
+                    <Column field="warranty" header="Warranty" sortable>
+                        <template #body="slotProps">
+                            <span
+                                >{{ slotProps.data.warrantyValue }}
+                                {{ slotProps.data.warrantyUnit }}</span
+                            >
+                        </template>
+                    </Column>
+                    <Column
+                        field="quantity"
+                        header="Quantity"
+                        sortable
+                    ></Column>
+
+                    <Column field="status" header="Status" sortable>
+                        <template #body="slotProps">
+                            <Tag
+                                :value="slotProps.data.status"
+                                :severity="getOrderSeverity(slotProps.data)"
+                            />
+                        </template>
+                    </Column>
+
+
+                    <column header="Items">
+                        <template #body="slotProps">
+                            <div class="flex flex-wrap gap-2">
+                                <Button
+                                    type="button"
+                                    icon="pi pi-list"
+                                    @click="toggleDataTable2(slotProps.data)"
+                                    rounded
+                                    class="mr-2"
+                                    
                                 />
-                            </template>
-                        </Column>
-                        <Column
-                            field="Actions"
-                            header="Actions"
-                            :exportable="false"
-                            style="min-width: 3rem"
-                            class="gap-2"
-                        >
-                        </Column>
-
-                        <column header="Items">
-                            <template #body="slotProps">
-                                <div class="flex flex-wrap gap-2">
-                                    <Button
-                                        type="button"
-                                        icon="pi pi-list"
-                                        @click="toggleDataTable(slotProps.data)"
-                                        rounded
-                                        class="mr-2"
-                                    />
-                                    <Dialog
-                                        header="Items"
-                                        v-model:visible="isDialogVisible"
-                                        :breakpoints="{ '960px': '75vw' }"
-                                        :style="{ width: '40vw' }"
-                                        :modal="true"
-                                        :dismissable-mask="true"
+                                <Dialog
+                                    v-model:visible="isDialog2Visible"
+                                    :header="`Items per Batch | ${
+                                        selectedBatch?.batchNumber || 'N/A'
+                                    }`"
+                                    :breakpoints="{ '960px': '75vw' }"
+                                    :style="{ width: '60vw' }"
+                                    :modal="true"
+                                    :dismissable-mask="true"
+                                >
+                                    <DataTable
+                                        v-model:selection="selectedProduct"
+                                        :value="serialNumbers"
+                                        selectionMode="single"
                                     >
-                                        <!-- Header Section -->
-                                        <template #header>
-                                            <div
-                                                class="flex items-center gap-2"
-                                            >
-                                                <h6>
-                                                    Items for
-                                                    {{
-                                                        slotProps?.data
-                                                            ?.batchNumber
-                                                    }}
-                                                </h6>
-                                                <Button
-                                                    type="button"
-                                                    icon="pi pi-filter-slash"
-                                                    label="Clear"
-                                                    outlined
-                                                    @click="clearFilter()"
-                                                />
-                                                <IconField>
-                                                    <InputIcon>
-                                                        <i
-                                                            class="pi pi-search"
-                                                        />
-                                                    </InputIcon>
-                                                    <InputText
-                                                        v-model="
-                                                            filters['global']
-                                                                .value
-                                                        "
-                                                        placeholder="Keyword Search"
-                                                    />
-                                                </IconField>
-                                            </div>
-                                        </template>
-
-                                        <!-- Nested Data Table -->
                                         <DataTable
-                                            class="p-datatable-sm"
-                                            :value="
-                                                slotProps?.data?.serialNumbers
-                                            "
+                                            class="p-datatable-xl"
+                                            :value="serialNumbers"
+                                            :totalRecords="serialNumbers.length"
+                                            :rows="5"
+                                            paginator
                                         >
                                             <Column
                                                 field="serialNumber"
                                                 header="Serial Number"
                                                 sortable
-                                            />
-                                            <Column
-                                                field="srp"
-                                                header="Suggested Retail Price (SRP)"
-                                                sortable
-                                            >
-                                                <template #body="slotProps">
-                                                    {{
-                                                        formatCurrency(
-                                                            slotProps.data.srp,
-                                                        )
-                                                    }}
-                                                </template>
-                                            </Column>
-
-                                            <!-- Status Column -->
+                                            ></Column>
                                             <Column
                                                 field="status"
                                                 header="Status"
                                                 sortable
-                                                style="min-width: 8rem"
                                             >
+                                                <!-- Custom Template for Status -->
                                                 <template #body="slotProps">
                                                     <span
-                                                        :class="{
-                                                            'text-green-500':
+                                                        :class="
+                                                            getStatusTextColor(
                                                                 slotProps.data
-                                                                    .status ===
-                                                                'Available',
-                                                            'text-red-500':
-                                                                slotProps.data
-                                                                    .status ===
-                                                                'Sold',
-                                                        }"
+                                                                    .status
+                                                            )
+                                                        "
+                                                        class="font-bold"
                                                     >
                                                         {{
                                                             slotProps.data
@@ -493,245 +890,24 @@ function formatPrice(value) {
                                                     </span>
                                                 </template>
                                             </Column>
+
+                                            <Column
+                                                field="roomNumber"
+                                                header="Assigned Room"
+                                                sortable
+                                            ></Column>
                                         </DataTable>
-
-                                        <!-- Main Data Table -->
-                                        <DataTable
-                                            v-model:selection="selectedProduct"
-                                            :value="products"
-                                            selectionMode="single"
-                                            paginator
-                                            :rows="5"
-                                            :totalRecords="products.length"
-                                            @row-select="onProductSelect"
-                                        >
-                                        </DataTable>
-
-                                        <!-- Footer Section -->
-                                        <template #footer>
-                                            <Button
-                                                label="Close"
-                                                @click="isDialogVisible = false"
-                                            />
-                                        </template>
-                                    </Dialog>
-                                </div>
-                            </template>
-                        </column>
-                    </DataTable>
-
-                    <!--Non-Consumable Batch Table-->
-                    <DataTable
-                        class="p-datatable-sm"
-                        v-model:expandedRows="batchExpandedRows"
-                        :value="slotProps.data.batches"
-                        dataKey="batchId"
-                        v-if="slotProps.data.category === 'Non-Consumable'"
-                    >
-                        <Column
-                            field="batchNumber"
-                            header="Batch Number"
-                            sortable
-                        ></Column>
-
-                        <Column
-                            field="purchaseDate"
-                            header="Purchase Date"
-                            sortable
-                        ></Column>
-                        <Column
-                            field="purchasePrice"
-                            header="Purchase Price"
-                            sortable
-                        >
-                            <template #body="slotProps">
-                                <span>{{
-                                    formatPrice(slotProps.data.purchasePrice)
-                                }}</span>
-                            </template>
-                        </Column>
-                        <Column field="unit" header="Unit" sortable></Column>
-
-                        <Column
-                            field="supplier"
-                            header="Supplier"
-                            sortable
-                        ></Column>
-
-                        <Column
-                            field="rental"
-                            header="Rental"
-                            sortable
-                        ></Column>
-
-                        <Column
-                            field="rentalprice"
-                            header="Rental Price"
-                            sortable
-                        ></Column>
-
-                        <Column field="warranty" header="Warranty" sortable>
-                            <template #body="slotProps">
-                                <span
-                                    >{{ slotProps.data.warrantyValue }}
-                                    {{ slotProps.data.warrantyUnit }}</span
-                                >
-                            </template>
-                        </Column>
-                        <Column
-                            field="quantity"
-                            header="Quantity"
-                            sortable
-                        ></Column>
-
-                        <Column
-                            field="minimumstocks"
-                            header="Minimum Stocks"
-                            sortable
-                        ></Column>
-                        <Column
-                            field="stocklimit"
-                            header="Stock Limit"
-                            sortable
-                        ></Column>
-                        <Column field="status" header="Status" sortable>
-                            <template #body="slotProps">
-                                <Tag
-                                    :value="slotProps.data.status"
-                                    :severity="getOrderSeverity(slotProps.data)"
-                                />
-                            </template>
-                        </Column>
-
-                        <column header="Items">
-                            <template #body="slotProps">
-                                <div class="flex flex-wrap gap-2">
-                                    <Button
-                                        type="button"
-                                        icon="pi pi-list"
-                                        @click="
-                                            toggleDataTable2(slotProps.data)
-                                        "
-                                        rounded
-                                        class="mr-2"
-                                    />
-                                    <Dialog
-                                        v-model:visible="isDialog2Visible"
-                                        :header="`Items for Batch | ${slotProps.data?.batchNumber || 'N/A'}`"
-                                        :breakpoints="{ '960px': '75vw' }"
-                                        :style="{ width: '60vw' }"
-                                        :modal="true"
-                                        :dismissable-mask="true"
-                                    >
-                                        <DataTable
-                                            v-model:selection="selectedProduct"
-                                            :value="serialNumbers"
-                                            selectionMode="single"
-                                        >
-                                            <div
-                                                class="flex items-center gap-2"
-                                            >
-                                                <Button
-                                                    type="button"
-                                                    icon="pi pi-filter-slash"
-                                                    label="Clear"
-                                                    outlined
-                                                    @click="clearFilter()"
-                                                />
-                                                <IconField>
-                                                    <InputIcon>
-                                                        <i
-                                                            class="pi pi-search"
-                                                        />
-                                                    </InputIcon>
-                                                    <InputText
-                                                        v-model="
-                                                            filters['global']
-                                                                .value
-                                                        "
-                                                        placeholder="Keyword Search"
-                                                    />
-                                                </IconField>
-                                            </div>
-
-                                            <DataTable
-                                                class="p-datatable-xl"
-                                                :value="
-                                                    slotProps.data.serialNumbers
-                                                "
-                                                :totalRecords="
-                                                    slotProps.data.serialNumbers
-                                                        .length
-                                                "
-                                                :rows="5"
-                                                paginator
-                                                @row-select="onProductSelect"
-                                            >
-                                                <Column
-                                                    field="serialNumber"
-                                                    header="Serial Number"
-                                                    sortable
-                                                ></Column>
-                                                <Column
-                                                    field="status"
-                                                    header="Status"
-                                                    sortable
-                                                >
-                                                    <!-- Custom Template for Status -->
-                                                    <template #body="slotProps">
-                                                        <span
-                                                            :class="
-                                                                getStatusTextColor(
-                                                                    slotProps
-                                                                        .data
-                                                                        .status,
-                                                                )
-                                                            "
-                                                            class="font-bold"
-                                                        >
-                                                            {{
-                                                                slotProps.data
-                                                                    .status
-                                                            }}
-                                                        </span>
-                                                    </template>
-                                                </Column>
-                                                <Column
-                                                    field="rental"
-                                                    header="Rental"
-                                                    sortable
-                                                ></Column>
-                                                <Column
-                                                    field="rentalPrice"
-                                                    header="Rental Price"
-                                                    sortable
-                                                >
-                                                    <template #body="slotProps">
-                                                        {{
-                                                            formatPrice(
-                                                                slotProps.data
-                                                                    .rentalPrice,
-                                                            )
-                                                        }}
-                                                    </template>
-                                                </Column>
-
-                                                <Column
-                                                    field="roomNumber"
-                                                    header="Assigned Room"
-                                                    sortable
-                                                ></Column>
-                                            </DataTable>
-                                        </DataTable>
-                                    </Dialog>
-                                </div>
-                            </template>
-                        </column>
-                    </DataTable>
-                </div>
+                                    </DataTable>
+                                </Dialog>
+                            </div>
+                        </template>
+                    </column>
+                </DataTable>
             </template>
         </DataTable>
     </div>
+
+
 
     <template>
         <Toast ref="toast" />

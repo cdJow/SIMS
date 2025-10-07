@@ -203,4 +203,60 @@ export const InventoryService = {
             throw error;
         }
     },
+
+    // Fetch category breakdown for chart
+    async getCategoryBreakdown() {
+        try {
+            console.log('📊 Fetching category breakdown for chart');
+
+            const response = await fetch('http://localhost:5000/category-breakdown', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            console.log('📡 Response status:', response.status);
+
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status} - ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            console.log('📊 Category Breakdown API Response:', result);
+            
+            return result;
+        } catch (error) {
+            console.error('❌ Error fetching category breakdown:', error);
+            throw error;
+        }
+    },
+
+    // Fetch revenue breakdown for category chart
+    async getRevenueBreakdown(period = 'month') {
+        try {
+            console.log('📊 Fetching revenue breakdown for period:', period);
+
+            const response = await fetch(`http://localhost:5000/revenue-breakdown?period=${period}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            console.log('📡 Response status:', response.status);
+
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status} - ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            console.log('📊 Revenue Breakdown API Response:', result);
+            
+            return result;
+        } catch (error) {
+            console.error('❌ Error fetching revenue breakdown:', error);
+            throw error;
+        }
+    },
 };

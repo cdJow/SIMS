@@ -220,8 +220,9 @@ onMounted(async () => {
   >
     <Avatar
       :image="user.image_url ? `http://localhost:5000/uploads/users/${user.image_url}` : 'https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png'"
-      class="mr-2 border border-blue-300 shadow-md w-12 h-12 bg-white object-cover"
+      class="mr-2 border-2 border-blue-300 shadow-lg"
       shape="circle"
+      size="large"
     />
     <span class="inline-flex flex-col items-start">
       <span class="font-bold leading-tight text-sm ml-1">{{ user.name }}</span>
@@ -250,10 +251,11 @@ onMounted(async () => {
     <!-- Read-only profile info -->
     <div class="flex items-center gap-3">
       <Avatar
-  :image="settingsForm.image_url ? `http://localhost:5000/uploads/users/${settingsForm.image_url}` : 'https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png'"
-  class="w-20 h-20 border bg-white object-cover"
-  shape="circle"
-/>
+        :image="settingsForm.image_url ? `http://localhost:5000/uploads/users/${settingsForm.image_url}` : 'https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png'"
+        class="border-2 border-gray-300 shadow-lg"
+        shape="circle"
+        size="xlarge"
+      />
       <div class="text-xs text-gray-500">Profile details are read-only.</div>
     </div>
 
@@ -302,3 +304,54 @@ onMounted(async () => {
     <Toast />
 
 </template>
+
+<style scoped>
+/* High-quality avatar styling */
+:deep(.p-avatar img) {
+  object-fit: cover;
+  object-position: center;
+  width: 100%;
+  height: 100%;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  image-rendering: optimize-quality;
+}
+
+/* Ensure avatars maintain proper sizing */
+:deep(.p-avatar.p-avatar-circle) {
+  overflow: hidden;
+}
+
+/* Large avatar in topbar */
+:deep(.p-avatar-lg) {
+  width: 3rem;
+  height: 3rem;
+}
+
+/* Extra large avatar in settings */
+:deep(.p-avatar-xl) {
+  width: 5rem;
+  height: 5rem;
+}
+
+/* Improve image loading */
+:deep(.p-avatar img) {
+  transition: all 0.3s ease;
+  background-color: #f8fafc;
+}
+
+/* Hover effect for topbar avatar */
+.layout-topbar-actions .p-avatar:hover {
+  transform: scale(1.05);
+  transition: transform 0.2s ease;
+}
+
+/* Password field styling */
+:deep(.p-password) {
+  width: 100%;
+}
+
+:deep(.p-password .p-inputtext) {
+  width: 100%;
+}
+</style>

@@ -1,10 +1,12 @@
 <script setup>
 import { ProductService } from "@/service/ProductService";
+import { updateProduct, deleteProductById, updateBatch, deleteBatchById, deleteSerialById, assignItemToRoom, unassignItemFromRoom, createDamageReport, updateSerialNumber } from "@/api/auth";
 import { RoomService } from "@/service/RoomService";
 import { FilterMatchMode, FilterOperator } from "@primevue/core/api";
 import { InputNumber } from "primevue";
+import Select from "primevue/select";
 
-import { onBeforeMount, onMounted, ref } from "vue";
+import { onBeforeMount, onMounted, ref, computed } from "vue";
 
 const expandedRows = ref([]);
 const batchExpandedRows = ref([]);
@@ -29,6 +31,20 @@ const selectedBatch = ref({});
 const products = ref([]); // Products for the DataTable
 const selectedProduct = ref(null); // Selected product from the DataTable
 const selectedItem = ref(null); // Selected item details
+
+// Computed property to ensure products is always a valid array with proper structure
+const safeProducts = computed(() => {
+    try {
+        if (!Array.isArray(products.value)) {
+            console.warn("products is not an array, returning empty array");
+            return [];
+        }
+        return products.value.filter(product => product && typeof product.id !== 'undefined');
+    } catch (error) {
+        console.error("Error accessing products:", error);
+        return [];
+    }
+});
 const popoverRef = ref(null); // Reference to the Popover
 
 const availableRooms = ref([]);
@@ -38,8 +54,8 @@ const serialNumbers = ref([]);
 const damageDialogVisible = ref(false);
 const selectedDamageItem = ref(null);
 const damageDetails = ref({
-    type: "",
-    reason: "",
+    damage_description: "",
+    notes: "",
 });
 const damageTypes = ref([
     { name: "Broken", value: "broken" },
@@ -71,91 +87,177 @@ function confirmDeleteConsumable(item) {
     deleteConsumableDialogVisible.value = true; // Open the confirmation dialog
 }
 
-function deleteConsumable() {
+async function deleteConsumable() {
     if (!consumableToDelete.value) {
         console.error("No consumable item selected for deletion.");
         return;
     }
 
-    // Locate the product and batch containing the serial number
-    const consumableIndex = products.value.findIndex((product) =>
-        product.batches.some((batch) =>
-            batch.serialNumbers.some(
-                (sn) =>
-                    sn.serialNumber === consumableToDelete.value.serialNumber
-            )
-        )
-    );
+    try {
+        // Call the API to delete the serial number from the database
+        await deleteSerialById(consumableToDelete.value.serialNumber);
 
-    if (consumableIndex !== -1) {
-        const product = products.value[consumableIndex];
-        const batch = product.batches.find((batch) =>
-            batch.serialNumbers.some(
-                (sn) =>
-                    sn.serialNumber === consumableToDelete.value.serialNumber
+        // Locate the product and batch containing the serial number
+        const consumableIndex = products.value.findIndex((product) =>
+            product.batches.some((batch) =>
+                batch.serialNumbers.some(
+                    (sn) =>
+                        sn.serialNumber === consumableToDelete.value.serialNumber
+                )
             )
         );
 
-        if (batch) {
-            const serialIndex = batch.serialNumbers.findIndex(
-                (sn) =>
-                    sn.serialNumber === consumableToDelete.value.serialNumber
+        if (consumableIndex !== -1) {
+            const product = products.value[consumableIndex];
+            const batch = product.batches.find((batch) =>
+                batch.serialNumbers.some(
+                    (sn) =>
+                        sn.serialNumber === consumableToDelete.value.serialNumber
+                )
             );
 
-            if (serialIndex !== -1) {
-                // Remove the serial number from the batch
-                batch.serialNumbers.splice(serialIndex, 1);
-                console.log(
-                    "Consumable item deleted successfully:",
-                    consumableToDelete.value
+            if (batch) {
+                const serialIndex = batch.serialNumbers.findIndex(
+                    (sn) =>
+                        sn.serialNumber === consumableToDelete.value.serialNumber
                 );
 
-                // Show success toast
-                toast.value.add({
-                    severity: "success",
-                    summary: "Deleted",
-                    detail: "Consumable item deleted successfully!",
-                    life: 3000,
-                });
+                if (serialIndex !== -1) {
+                    // Remove the serial number from the batch
+                    batch.serialNumbers.splice(serialIndex, 1);
+                    console.log(
+                        "Consumable item deleted successfully:",
+                        consumableToDelete.value
+                    );
 
-                consumableToDelete.value = null; // Reset the selected consumable
-                deleteConsumableDialogVisible.value = false; // Close the dialog
-                return;
+                    // Show success toast
+                    toast.value.add({
+                        severity: "success",
+                        summary: "Deleted",
+                        detail: "Consumable item deleted successfully from database!",
+                        life: 3000,
+                    });
+
+                    consumableToDelete.value = null; // Reset the selected consumable
+                    deleteConsumableDialogVisible.value = false; // Close the dialog
+                    return;
+                }
             }
         }
-    }
 
-    console.error("Consumable item not found for deletion.");
-    consumableToDelete.value = null; // Reset the selected consumable
-    deleteConsumableDialogVisible.value = false; // Close the dialog
+        console.error("Consumable item not found in frontend data.");
+        consumableToDelete.value = null; // Reset the selected consumable
+        deleteConsumableDialogVisible.value = false; // Close the dialog
+
+    } catch (error) {
+        console.error("Error deleting consumable item:", error);
+        
+        // Show error toast
+        toast.value.add({
+            severity: "error",
+            summary: "Error",
+            detail: `Failed to delete consumable item: ${error.response?.data?.error || error.message}`,
+            life: 5000,
+        });
+
+        consumableToDelete.value = null; // Reset the selected consumable
+        deleteConsumableDialogVisible.value = false; // Close the dialog
+    }
 }
 
 // Add filter function with proper error handling
 const ConsumableBatchSearch = ref("");
 const NonConsumableBatchSearch = ref("");
+const roomSearchQuery = ref(""); // Search for rooms by room number
 
 // Separate filter functions
 const filterConsumableBatches = (batches) => {
     try {
-        if (!Array.isArray(batches)) return [];
+        if (!Array.isArray(batches)) {
+            console.warn("filterConsumableBatches: batches is not an array", batches);
+            return [];
+        }
         const query = ConsumableBatchSearch.value.toLowerCase().trim();
         return query
-            ? batches.filter((batch) =>
-                  Object.values(batch).some((value) =>
-                      String(value).toLowerCase().includes(query)
-                  )
-              )
+            ? batches.filter((batch) => {
+                  if (!batch || typeof batch !== 'object') return false;
+                  return Object.values(batch).some((value) =>
+                      String(value || '').toLowerCase().includes(query)
+                  );
+              })
             : batches;
     } catch (error) {
         console.error("Consumable batch filter error:", error);
-        return batches || [];
+        return Array.isArray(batches) ? batches : [];
     }
 };
 
+// Function to refresh products data
+async function refreshProducts() {
+    try {
+        console.log("Refreshing products with batches...");
+        const data = await ProductService.getProductsWithOrders();
+        console.log("Refreshed API response:", data);
+        
+        // Ensure data is array and properly structured
+        if (Array.isArray(data)) {
+            // Add defensive data structure validation
+            const validatedData = data.map(product => ({
+                ...product,
+                batches: Array.isArray(product.batches) ? product.batches.map(batch => ({
+                    ...batch,
+                    batchId: batch.item_id || batch.batchId || batch.id,
+                    batchNumber: batch.batchNumber || batch.batch_number || '-',
+                    serialNumbers: Array.isArray(batch.serialNumbers) ? batch.serialNumbers : []
+                })) : []
+            }));
+            
+            products.value = validatedData;
+            console.log("Refreshed products:", validatedData);
+        } else {
+            console.warn("API returned non-array data:", data);
+            products.value = [];
+        }
+    } catch (error) {
+        console.error("Error refreshing products:", error);
+        if (toast.value) {
+            toast.value.add({
+                severity: "error",
+                summary: "Error",
+                detail: "Failed to refresh products data",
+                life: 3000
+            });
+        }
+    }
+}
+
 onMounted(async () => {
     try {
-        const data = await ProductService.getProductsWithOrdersSmall();
-        products.value = Array.isArray(data) ? data : [];
+        console.log("Loading products with batches...");
+        const data = await ProductService.getProductsWithOrders();
+        console.log("Raw API response:", data);
+        
+        // Ensure data is array and properly structured
+        if (Array.isArray(data)) {
+            // Add defensive data structure validation
+            const validatedData = data.map(product => ({
+                ...product,
+                batches: Array.isArray(product.batches) ? product.batches.map(batch => ({
+                    ...batch,
+                    batchId: batch.item_id || batch.batchId || batch.id,
+                    batchNumber: batch.batchNumber || batch.batch_number || '-',
+                    serialNumbers: Array.isArray(batch.serialNumbers) ? batch.serialNumbers : []
+                })) : []
+            }));
+            
+            products.value = validatedData;
+            console.log("Validated products data:", validatedData);
+            console.log("Total products loaded:", validatedData.length);
+        } else {
+            console.warn("API returned non-array data:", data);
+            products.value = [];
+        }
+        
         initFilters();
     } catch (error) {
         console.error("Data loading failed:", error);
@@ -177,18 +279,22 @@ const showErrorToast = (message) => {
 
 const filterNonConsumableBatches = (batches) => {
     try {
-        if (!Array.isArray(batches)) return [];
+        if (!Array.isArray(batches)) {
+            console.warn("filterNonConsumableBatches: batches is not an array", batches);
+            return [];
+        }
         const query = NonConsumableBatchSearch.value.toLowerCase().trim();
         return query
-            ? batches.filter((batch) =>
-                  Object.values(batch).some((value) =>
-                      String(value).toLowerCase().includes(query)
-                  )
-              )
+            ? batches.filter((batch) => {
+                  if (!batch || typeof batch !== 'object') return false;
+                  return Object.values(batch).some((value) =>
+                      String(value || '').toLowerCase().includes(query)
+                  );
+              })
             : batches;
     } catch (error) {
         console.error("Non-consumable batch filter error:", error);
-        return batches || [];
+        return Array.isArray(batches) ? batches : [];
     }
 };
 // Separate clear functions
@@ -199,11 +305,44 @@ const clearConsumableFilter = () => {
 const clearNonConsumableBatchFilter = () => {
     NonConsumableBatchSearch.value = "";
 };
+
+// Computed property to filter rooms by room number
+const filteredRooms = computed(() => {
+    try {
+        if (!Array.isArray(availableRooms.value)) {
+            return [];
+        }
+        const query = roomSearchQuery.value.toLowerCase().trim();
+        return query
+            ? availableRooms.value.filter(room => 
+                room.roomNumber && room.roomNumber.toString().toLowerCase().includes(query)
+              )
+            : availableRooms.value;
+    } catch (error) {
+        console.error("Room filter error:", error);
+        return Array.isArray(availableRooms.value) ? availableRooms.value : [];
+    }
+});
+
+// Clear room search function
+const clearRoomSearch = () => {
+    roomSearchQuery.value = "";
+};
 const editConsumableDialogVisible = ref(false); // Dialog visibility state
 const editingConsumableData = ref({
     serialNumber: "",
     srp: "",
 }); // Holds the consumable data being edited
+
+// Edit serial dialog for isDialog2Visible
+const editSerialDialogVisible = ref(false);
+const editingSerialData = ref({
+    id: null,
+    serialNumber: "",
+    originalSerialNumber: ""
+});
+const serialNumberExists = ref(false);
+const serialNumberWarning = ref("");
 
 function openEditConsumableDialog(serial) {
     editingConsumableData.value = { ...serial }; // Clone the serial data to avoid direct mutations
@@ -262,58 +401,303 @@ function saveEditConsumable() {
 
     editConsumableDialogVisible.value = false; // Close the dialog
 }
-// Function to open the damage report dialog
-function reportDamage(item) {
-    selectedDamageItem.value = item; // Set the selected item for damage reporting
-    damageDetails.value = { type: "", reason: "" }; // Reset the form data
-    damageDialogVisible.value = true; // Show the damage dialog
+
+// Functions for editing serial number in isDialog2Visible
+// Computed property for button state
+const isUpdateButtonDisabled = computed(() => {
+    return !editingSerialData.value.serialNumber.trim() || 
+           serialNumberExists.value || 
+           editingSerialData.value.serialNumber === editingSerialData.value.originalSerialNumber;
+});
+
+function openEditSerialDialog(serial) {
+    editingSerialData.value = { 
+        id: serial.id || serial.serialId,
+        serialNumber: serial.serialNumber,
+        originalSerialNumber: serial.serialNumber
+    };
+    serialNumberExists.value = false;
+    serialNumberWarning.value = "";
+    editSerialDialogVisible.value = true;
 }
 
-// Function to submit the damage report
-function submitDamageReport() {
-    if (!damageDetails.value.type || !damageDetails.value.reason) {
+async function saveEditedSerialNumber() {
+    if (!editingSerialData.value.serialNumber.trim()) {
         toast.value.add({
             severity: "warn",
             summary: "Validation Error",
-            detail: "Please fill in all fields.",
+            detail: "Serial number is required",
             life: 3000,
         });
         return;
     }
 
-    // Process damage report (You can make an API call to save this or just update locally)
-    console.log(
-        "Damage report for item:",
-        selectedDamageItem.value,
-        damageDetails.value
-    );
-
-    // Update the item's status to "Damaged"
-    selectedDamageItem.value.status = "Damaged";
-
-    // Set rental column to "No" and rental price to "-"
-    selectedDamageItem.value.rental = "No"; // Set rental to "No"
-    selectedDamageItem.value.rentalPrice = "-"; // Set rental price to "-"
-    selectedDamageItem.value.assignedRoom = null; // Remove assigned room
-
-    // Update the data in serialNumbers array (or your data source)
-    const itemIndex = serialNumbers.value.findIndex(
-        (item) => item.serialNumber === selectedDamageItem.value.serialNumber
-    );
-    if (itemIndex !== -1) {
-        serialNumbers.value[itemIndex] = { ...selectedDamageItem.value }; // Update the item data
+    // Check if serial number actually changed
+    if (editingSerialData.value.serialNumber === editingSerialData.value.originalSerialNumber) {
+        toast.value.add({
+            severity: "info",
+            summary: "No Changes",
+            detail: "No changes made to serial number",
+            life: 3000,
+        });
+        cancelEditSerial();
+        return;
     }
 
-    // Close the dialog
-    damageDialogVisible.value = false;
+    try {
+        // Update in database
+        await updateSerialNumber(editingSerialData.value.id, {
+            serialNumber: editingSerialData.value.serialNumber
+        });
 
-    // Optional: Toast notification for success
-    toast.value.add({
-        severity: "success",
-        summary: "Damage Reported",
-        detail: `Damage reported for item ${selectedDamageItem.value.serialNumber}. Rental details have been updated.`,
-        life: 3000,
-    });
+        // Update in frontend - serialNumbers array (for isDialog2Visible)
+        const serialIndex = serialNumbers.value.findIndex(
+            (item) => (item.id || item.serialId) === editingSerialData.value.id
+        );
+        
+        if (serialIndex !== -1) {
+            serialNumbers.value[serialIndex].serialNumber = editingSerialData.value.serialNumber;
+        }
+        
+        // Also update in the main products data structure
+        const targetProduct = products.value.find((product) =>
+            product.batches.some((batch) =>
+                batch.serialNumbers.some(
+                    (sn) => (sn.id || sn.serialId) === editingSerialData.value.id
+                )
+            )
+        );
+
+        if (targetProduct) {
+            const targetBatch = targetProduct.batches.find((batch) =>
+                batch.serialNumbers.some(
+                    (sn) => (sn.id || sn.serialId) === editingSerialData.value.id
+                )
+            );
+
+            if (targetBatch) {
+                const targetSerial = targetBatch.serialNumbers.find(
+                    (sn) => (sn.id || sn.serialId) === editingSerialData.value.id
+                );
+
+                if (targetSerial) {
+                    targetSerial.serialNumber = editingSerialData.value.serialNumber;
+                }
+            }
+        }
+        
+        toast.value.add({
+            severity: "success",
+            summary: "Success",
+            detail: "Serial number updated successfully",
+            life: 3000,
+        });
+        
+        cancelEditSerial();
+        
+    } catch (error) {
+        console.error("Error updating serial number:", error);
+        toast.value.add({
+            severity: "error",
+            summary: "Error",
+            detail: error.response?.data?.error || "Failed to update serial number",
+            life: 3000,
+        });
+    }
+}
+
+function checkSerialNumberExists(newSerialNumber) {
+    if (!newSerialNumber || newSerialNumber === editingSerialData.value.originalSerialNumber) {
+        serialNumberExists.value = false;
+        serialNumberWarning.value = "";
+        return;
+    }
+
+    // Check in serialNumbers array (current batch)
+    const existsInCurrentBatch = serialNumbers.value.some(
+        (item) => item.serialNumber === newSerialNumber && 
+                 (item.id || item.serialId) !== editingSerialData.value.id
+    );
+
+    if (existsInCurrentBatch) {
+        serialNumberExists.value = true;
+        serialNumberWarning.value = "Serial number already exists in this batch";
+        return;
+    }
+
+    // Check in all products/batches
+    let existsInOtherBatch = false;
+    for (const product of products.value) {
+        for (const batch of product.batches || []) {
+            const exists = batch.serialNumbers.some(
+                (sn) => sn.serialNumber === newSerialNumber && 
+                       (sn.id || sn.serialId) !== editingSerialData.value.id
+            );
+            if (exists) {
+                existsInOtherBatch = true;
+                break;
+            }
+        }
+        if (existsInOtherBatch) break;
+    }
+
+    if (existsInOtherBatch) {
+        serialNumberExists.value = true;
+        serialNumberWarning.value = "Serial number already exists in another batch";
+    } else {
+        serialNumberExists.value = false;
+        serialNumberWarning.value = "";
+    }
+}
+
+function cancelEditSerial() {
+    editSerialDialogVisible.value = false;
+    editingSerialData.value = {
+        id: null,
+        serialNumber: "",
+        originalSerialNumber: ""
+    };
+    serialNumberExists.value = false;
+    serialNumberWarning.value = "";
+}
+
+// Function to open the damage report dialog
+function reportDamage(item) {
+    selectedDamageItem.value = item; // Set the selected item for damage reporting
+    damageDetails.value = { damage_description: "", notes: "" }; // Reset the form data
+    damageDialogVisible.value = true; // Show the damage dialog
+}
+
+// Function to submit the damage report
+async function submitDamageReport() {
+    if (!damageDetails.value.damage_description.trim()) {
+        toast.value.add({
+            severity: "warn",
+            summary: "Validation Error",
+            detail: "Please describe the damage",
+            life: 3000,
+        });
+        return;
+    }
+
+    try {
+        // Find the room ID from the selected item's room assignment (optional)
+        let roomId = null;
+        let isAssignedToRoom = false;
+        
+        if (selectedDamageItem.value.roomNumber && 
+            selectedDamageItem.value.roomNumber !== '-' && 
+            selectedDamageItem.value.roomNumber !== 'Not Assigned' &&
+            selectedDamageItem.value.roomNumber.trim() !== '') {
+            // Find room by room number in available rooms
+            const assignedRoom = availableRooms.value.find(room => 
+                room.roomNumber === selectedDamageItem.value.roomNumber
+            );
+            if (assignedRoom) {
+                roomId = assignedRoom.id;
+                isAssignedToRoom = true;
+            }
+        }
+
+        // Find the serial ID from the serial number
+        // We need to get the actual database ID for this serial number
+        let actualSerialId = selectedDamageItem.value.id || selectedDamageItem.value.serialId;
+        
+        // Validate that we have required data
+        if (!actualSerialId) {
+            toast.value.add({
+                severity: "error",
+                summary: "Error",
+                detail: "Unable to find serial ID for this item",
+                life: 3000,
+            });
+            return;
+        }
+        
+        if (!selectedDamageItem.value.serialNumber) {
+            toast.value.add({
+                severity: "error",
+                summary: "Error",
+                detail: "Serial number is missing",
+                life: 3000,
+            });
+            return;
+        }
+        
+        const reportData = {
+            room_id: roomId, // Can be null for unassigned items
+            serial_id: actualSerialId,
+            item_name: selectedDamageItem.value.serialNumber, // Using serialNumber as item identifier
+            damage_description: damageDetails.value.damage_description,
+            notes: damageDetails.value.notes || '' // Ensure notes is never null
+        };
+
+        console.log('Selected damage item:', selectedDamageItem.value);
+        console.log('Submitting damage report:', reportData);
+        console.log('Item assignment status:', isAssignedToRoom ? 'Assigned to room' : 'Not assigned to any room');
+        await createDamageReport(reportData);
+        
+        // Update the item's status to "Damaged" in frontend
+        selectedDamageItem.value.status = "Damaged";
+        
+        // Update in serialNumbers array (for isDialog2Visible)
+        const itemIndex = serialNumbers.value.findIndex(
+            (item) => item.serialNumber === selectedDamageItem.value.serialNumber
+        );
+        if (itemIndex !== -1) {
+            serialNumbers.value[itemIndex].status = "Damaged";
+        }
+
+        // Also update in the main products data structure
+        const targetProduct = products.value.find((product) =>
+            product.batches.some((batch) =>
+                batch.serialNumbers.some(
+                    (sn) => sn.serialNumber === selectedDamageItem.value.serialNumber
+                )
+            )
+        );
+
+        if (targetProduct) {
+            const targetBatch = targetProduct.batches.find((batch) =>
+                batch.serialNumbers.some(
+                    (sn) => sn.serialNumber === selectedDamageItem.value.serialNumber
+                )
+            );
+
+            if (targetBatch) {
+                const targetSerial = targetBatch.serialNumbers.find(
+                    (sn) => sn.serialNumber === selectedDamageItem.value.serialNumber
+                );
+
+                if (targetSerial) {
+                    targetSerial.status = "Damaged";
+                }
+            }
+        }
+
+        const successMessage = isAssignedToRoom 
+            ? `Damage report created for item ${selectedDamageItem.value.serialNumber} in room ${selectedDamageItem.value.roomNumber}`
+            : `Damage report created for unassigned item ${selectedDamageItem.value.serialNumber}`;
+            
+        toast.value.add({
+            severity: "success",
+            summary: "Success",
+            detail: successMessage,
+            life: 4000,
+        });
+        
+        // Close the dialog
+        cancelDamageReport();
+        
+    } catch (error) {
+        console.error("Error creating damage report:", error);
+        toast.value.add({
+            severity: "error",
+            summary: "Error", 
+            detail: error.response?.data?.error || "Failed to create damage report",
+            life: 3000,
+        });
+    }
 }
 
 // Function to cancel damage report
@@ -322,7 +706,7 @@ function cancelDamageReport() {
 }
 
 // Reassign the selected item
-function reassignItem() {
+async function reassignItem() {
     if (!selectedItem.value) {
         console.error("No item selected for reassignment.");
         return;
@@ -333,84 +717,152 @@ function reassignItem() {
         return;
     }
 
-    // Update the selected item's room number and status
-    selectedItem.value.roomNumber = selectedRoom.value.roomNumber;
-    selectedItem.value.status = "Assigned";
+    try {
+        // Update the item in the serialNumbers array (for isDialog2Visible)
+        const itemIndex = serialNumbers.value.findIndex(
+            (item) => item.serialNumber === selectedItem.value.serialNumber
+        );
+        
+        if (itemIndex !== -1) {
+            serialNumbers.value[itemIndex].roomNumber = selectedRoom.value.roomNumber;
+            serialNumbers.value[itemIndex].status = "Assigned";
+        }
 
-    console.log("Item after reassignment:", selectedItem.value);
+        // Also update in the main products data structure
+        const targetProduct = products.value.find((product) =>
+            product.batches.some((batch) =>
+                batch.serialNumbers.some(
+                    (sn) => sn.serialNumber === selectedItem.value.serialNumber
+                )
+            )
+        );
 
-    // Update the data in serialNumbers array
-    const itemIndex = serialNumbers.value.findIndex(
-        (item) => item.serialNumber === selectedItem.value.serialNumber
-    );
-    if (itemIndex !== -1) {
-        serialNumbers.value.splice(itemIndex, 1, { ...selectedItem.value });
+        if (targetProduct) {
+            const targetBatch = targetProduct.batches.find((batch) =>
+                batch.serialNumbers.some(
+                    (sn) => sn.serialNumber === selectedItem.value.serialNumber
+                )
+            );
+
+            if (targetBatch) {
+                const targetSerial = targetBatch.serialNumbers.find(
+                    (sn) => sn.serialNumber === selectedItem.value.serialNumber
+                );
+
+                if (targetSerial) {
+                    targetSerial.roomNumber = selectedRoom.value.roomNumber;
+                    targetSerial.status = "Assigned";
+                }
+            }
+        }
+
+        // Update selectedItem for immediate UI feedback
+        const reassignedRoomNumber = selectedRoom.value.roomNumber;
+        const reassignedRoomId = selectedRoom.value.id || selectedRoom.value.roomId;
+        
+        selectedItem.value.roomNumber = reassignedRoomNumber;
+        selectedItem.value.status = "Assigned";
+
+        console.log("Item successfully reassigned:", selectedItem.value);
+
+        // Persist reassignment to database
+        await assignItemToRoom(selectedItem.value.serialNumber, reassignedRoomId);
+
+        // Close the dialog
+        reassignItemDialogVisible.value = false;
+
+        // Reset the selected room
+        selectedRoom.value = null;
+
+        // Toast notification
+        toast.value.add({
+            severity: "success",
+            summary: "Success",
+            detail: `Item ${selectedItem.value.serialNumber} reassigned to Room ${reassignedRoomNumber}.`,
+            life: 3000,
+        });
+        
+    } catch (error) {
+        console.error("Error reassigning item:", error);
+        toast.value.add({
+            severity: "error",
+            summary: "Error",
+            detail: "Failed to reassign item to room",
+            life: 3000,
+        });
     }
-
-    // Close the dialog
-    assignItemDialogVisible.value = false;
-
-    // Reset the selected room
-    selectedRoom.value = null;
-
-    // Optional: Toast notification
-    toast.value.add({
-        severity: "success",
-        summary: "Success",
-        detail: `Item ${selectedItem.value.serialNumber} reassigned to Room ${selectedItem.value.roomNumber}.`,
-        life: 3000,
-    });
 }
 
-function moveToStockroom() {
+async function moveToStockroom() {
     if (!selectedItem.value) {
         console.error("No item selected for stockroom move.");
         return;
     }
 
-    // Find the product and batch containing the item
-    let targetProduct = products.value.find((product) =>
-        product.batches.some((batch) =>
-            batch.serialNumbers.some(
-                (sn) => sn.serialNumber === selectedItem.value.serialNumber
-            )
-        )
-    );
+    try {
+        // Update in serialNumbers array (for isDialog2Visible)
+        const serialIndex = serialNumbers.value.findIndex(
+            (item) => item.serialNumber === selectedItem.value.serialNumber
+        );
+        
+        if (serialIndex !== -1) {
+            serialNumbers.value[serialIndex].status = "In_stock";
+            serialNumbers.value[serialIndex].roomNumber = "-";
+        }
 
-    if (targetProduct) {
-        let targetBatch = targetProduct.batches.find((batch) =>
-            batch.serialNumbers.some(
-                (sn) => sn.serialNumber === selectedItem.value.serialNumber
+        // Find the product and batch containing the item
+        let targetProduct = products.value.find((product) =>
+            product.batches.some((batch) =>
+                batch.serialNumbers.some(
+                    (sn) => sn.serialNumber === selectedItem.value.serialNumber
+                )
             )
         );
 
-        if (targetBatch) {
-            // Update the item in the original data structure
-            let targetItem = targetBatch.serialNumbers.find(
-                (sn) => sn.serialNumber === selectedItem.value.serialNumber
+        if (targetProduct) {
+            let targetBatch = targetProduct.batches.find((batch) =>
+                batch.serialNumbers.some(
+                    (sn) => sn.serialNumber === selectedItem.value.serialNumber
+                )
             );
 
-            if (targetItem) {
-                targetItem.status = "Available";
-                targetItem.roomNumber = null;
+            if (targetBatch) {
+                // Update the item in the original data structure
+                let targetItem = targetBatch.serialNumbers.find(
+                    (sn) => sn.serialNumber === selectedItem.value.serialNumber
+                );
 
-                // Force UI update
-                products.value = [...products.value];
-
-                // Close dialog and show success
-                assignItemDialogVisible.value = false;
-                toast.value.add({
-                    severity: "success",
-                    summary: "Success",
-                    detail: `Item ${selectedItem.value.serialNumber} moved to stockroom`,
-                    life: 3000,
-                });
-                return;
+                if (targetItem) {
+                    targetItem.status = "In_stock";
+                    targetItem.roomNumber = "-";
+                }
             }
         }
-    }
 
-    console.error("Item not found in products structure");
+        // Persist unassignment to database
+        await unassignItemFromRoom(selectedItem.value.serialNumber);
+
+        // Force UI update
+        products.value = [...products.value];
+
+        // Close dialog and show success
+        reassignItemDialogVisible.value = false;
+        toast.value.add({
+            severity: "success",
+            summary: "Success",
+            detail: `Item ${selectedItem.value.serialNumber} moved to stockroom`,
+            life: 3000,
+        });
+
+    } catch (error) {
+        console.error("Error moving item to stockroom:", error);
+        toast.value.add({
+            severity: "error",
+            summary: "Error",
+            detail: "Failed to move item to stockroom",
+            life: 3000,
+        });
+    }
 }
 
 // Function to open the dialog for reassignment
@@ -430,6 +882,7 @@ function toggleDataTable3(event) {
 // Function to handle room selection
 function selectRoom(room) {
     console.log("Room selected:", room);
+    console.log("Room ID:", room.id, "Type:", typeof room.id);
     selectedRoom.value = room; // Update the selected room
     if (popoverRef.value) {
         popoverRef.value.hide(); // Close the popover after selection
@@ -437,8 +890,35 @@ function selectRoom(room) {
 }
 
 // Fetch available rooms from RoomService
-onBeforeMount(() => {
-    availableRooms.value = RoomService.getAvailableRooms();
+onBeforeMount(async () => {
+    try {
+        console.log("Fetching available rooms...");
+        availableRooms.value = await RoomService.getAvailableRooms();
+        console.log("Available rooms loaded:", availableRooms.value);
+        
+        if (availableRooms.value.length === 0) {
+            console.warn("No rooms were loaded from the API");
+            if (toast.value) {
+                toast.value.add({
+                    severity: "warn",
+                    summary: "Warning",
+                    detail: "No rooms available for assignment",
+                    life: 3000
+                });
+            }
+        }
+    } catch (error) {
+        console.error("Error loading available rooms:", error);
+        availableRooms.value = []; // Fallback to empty array
+        if (toast.value) {
+            toast.value.add({
+                severity: "error",
+                summary: "Error",
+                detail: "Failed to load room data: " + (error.message || "Unknown error"),
+                life: 5000
+            });
+        }
+    }
 });
 
 // Function to handle product selection
@@ -469,17 +949,16 @@ const selectedSerialForDeletion = ref(null); // Serial selected for deletion
 const deleteserialDialog = ref(false); // Dialog state
 
 // Function to confirm serial deletion
-function confirmDeleteSerial(serial, productId, batchId) {
+function confirmDeleteSerial(serial) {
     if (!serial || !serial.serialNumber) {
         console.error("Invalid serial data provided.");
         return;
     }
 
-    // Store the selected serial with its associated product and batch for deletion
+    // Store the selected serial for deletion
     selectedSerialForDeletion.value = {
         serialNumber: serial.serialNumber,
-        productId,
-        batchId,
+        itemData: serial, // Store the complete item data for UI updates
     };
 
     // Open the confirmation dialog
@@ -535,8 +1014,8 @@ function saveEditedSerial(serialData) {
     console.log("Matched Batch:", matchedBatch);
     console.log("Matched Serial:", matchedSerial);
 
-    // Reset assignedRoom if status is set to "Available"
-    if (serialData.status.toLowerCase().trim() === "available") {
+    // Reset assignedRoom if status is set to "Available" or "In_stock"
+    if (serialData.status.toLowerCase().trim() === "available" || serialData.status.toLowerCase().trim() === "in_stock") {
         serialData.roomNumber = "-";
     }
 
@@ -569,7 +1048,7 @@ function saveEditedSerial(serialData) {
 const isDialog2Visible = ref(false); // Controls the dialog visibility
 const isDialogVisible = ref(false); // Controls the dialog visibility
 
-function assignItem() {
+async function assignItem() {
     if (!selectedItem.value) {
         console.error("No item selected for assignment.");
         return;
@@ -580,25 +1059,92 @@ function assignItem() {
         return;
     }
 
-    // Assign the selected room number and update status
-    selectedItem.value.roomNumber = selectedRoom.value.roomNumber;
-    selectedItem.value.status = "Assigned";
+    try {
+        // Update the item in the serialNumbers array (for isDialog2Visible)
+        const serialIndex = serialNumbers.value.findIndex(
+            (item) => item.serialNumber === selectedItem.value.serialNumber
+        );
+        
+        if (serialIndex !== -1) {
+            serialNumbers.value[serialIndex].roomNumber = selectedRoom.value.roomNumber;
+            serialNumbers.value[serialIndex].status = "Assigned";
+        }
 
-    console.log("Item after assignment:", selectedItem.value);
+        // Also update in the main products data structure
+        const targetProduct = products.value.find((product) =>
+            product.batches.some((batch) =>
+                batch.serialNumbers.some(
+                    (sn) => sn.serialNumber === selectedItem.value.serialNumber
+                )
+            )
+        );
 
-    // Close the dialog
-    assignItemDialogVisible.value = false;
+        if (targetProduct) {
+            const targetBatch = targetProduct.batches.find((batch) =>
+                batch.serialNumbers.some(
+                    (sn) => sn.serialNumber === selectedItem.value.serialNumber
+                )
+            );
 
-    // Reset the selectedRoom
-    selectedRoom.value = null;
+            if (targetBatch) {
+                const targetSerial = targetBatch.serialNumbers.find(
+                    (sn) => sn.serialNumber === selectedItem.value.serialNumber
+                );
 
-    // Optional: Show success message
-    toast.value.add({
-        severity: "success",
-        summary: "Success",
-        detail: `Item ${selectedItem.value.serialNumber} assigned to Room ${selectedItem.value.roomNumber}.`,
-        life: 3000,
-    });
+                if (targetSerial) {
+                    targetSerial.roomNumber = selectedRoom.value.roomNumber;
+                    targetSerial.status = "Assigned";
+                }
+            }
+        }
+
+        // Update selectedItem for immediate UI feedback
+        const assignedRoomNumber = selectedRoom.value.roomNumber;
+        const assignedRoomId = selectedRoom.value.id || selectedRoom.value.roomId;
+        
+        selectedItem.value.roomNumber = assignedRoomNumber;
+        selectedItem.value.status = "Assigned";
+
+        console.log("Item successfully assigned:", selectedItem.value);
+
+        // Validate data before sending
+        if (!assignedRoomId) {
+            throw new Error("Room ID is missing or invalid");
+        }
+
+        // Debug: Log the data being sent
+        console.log("Assigning item:", {
+            serialNumber: selectedItem.value.serialNumber,
+            roomId: assignedRoomId,
+            roomData: selectedRoom.value
+        });
+
+        // Persist assignment to database
+        await assignItemToRoom(selectedItem.value.serialNumber, assignedRoomId);
+
+        // Close the dialog
+        assignItemDialogVisible.value = false;
+
+        // Reset the selectedRoom
+        selectedRoom.value = null;
+
+        // Show success message
+        toast.value.add({
+            severity: "success",
+            summary: "Success",
+            detail: `Item ${selectedItem.value.serialNumber} assigned to Room ${assignedRoomNumber}.`,
+            life: 3000,
+        });
+        
+    } catch (error) {
+        console.error("Error assigning item:", error);
+        toast.value.add({
+            severity: "error",
+            summary: "Error",
+            detail: "Failed to assign item to room",
+            life: 3000,
+        });
+    }
 }
 
 function openAssignItemDialog(item) {
@@ -606,53 +1152,64 @@ function openAssignItemDialog(item) {
     assignItemDialogVisible.value = true;
 }
 // Function to delete a serial number
-function deleteSerial() {
-    const { productId, batchId, serialNumber } =
-        selectedSerialForDeletion.value;
-
-    if (!productId || !batchId || !serialNumber) {
+async function deleteSerial() {
+    if (!selectedSerialForDeletion.value || !selectedSerialForDeletion.value.serialNumber) {
         console.error("Invalid data for serial deletion.");
         return;
     }
 
-    // Locate the product
-    const productIndex = products.value.findIndex(
-        (product) => product.id === productId
-    );
-    if (productIndex === -1) {
-        console.error("Product not found for deletion.");
-        return;
+    const serialNumber = selectedSerialForDeletion.value.serialNumber;
+    
+    try {
+        // Call API to delete from database
+        await deleteSerialById(serialNumber);
+        
+        // Remove from serialNumbers array (isDialog2Visible)
+        const serialIndex = serialNumbers.value.findIndex(
+            (item) => item.serialNumber === serialNumber
+        );
+        if (serialIndex !== -1) {
+            serialNumbers.value.splice(serialIndex, 1);
+        }
+        
+        // Remove from main products data structure
+        for (const product of products.value) {
+            for (const batch of product.batches || []) {
+                const itemIndex = batch.serialNumbers.findIndex(
+                    (item) => item.serialNumber === serialNumber
+                );
+                if (itemIndex !== -1) {
+                    batch.serialNumbers.splice(itemIndex, 1);
+                    break;
+                }
+            }
+        }
+        
+        console.log("Serial deleted successfully:", serialNumber);
+        
+        // Show success toast
+        toast.value.add({
+            severity: "success",
+            summary: "Success",
+            detail: `Item ${serialNumber} deleted successfully.`,
+            life: 3000,
+        });
+        
+    } catch (error) {
+        console.error("Error deleting serial:", error);
+        
+        // Show error toast
+        toast.value.add({
+            severity: "error",
+            summary: "Error",
+            detail: "Failed to delete item. Please try again.",
+            life: 3000,
+        });
+    } finally {
+        // Close the dialog and reset the state
+        deleteserialDialog.value = false;
+        selectedSerialForDeletion.value = null;
     }
-
-    // Locate the batch within the product
-    const batchIndex = products.value[productIndex].batches.findIndex(
-        (batch) => batch.batchId === batchId
-    );
-    if (batchIndex === -1) {
-        console.error("Batch not found for deletion.");
-        return;
-    }
-
-    // Locate the serial within the batch
-    const serialIndex = products.value[productIndex].batches[
-        batchIndex
-    ].serialNumbers.findIndex((serial) => serial.serialNumber === serialNumber);
-    if (serialIndex === -1) {
-        console.error("Serial number not found for deletion.");
-        return;
-    }
-
-    // Delete the serial from the batch
-    products.value[productIndex].batches[batchIndex].serialNumbers.splice(
-        serialIndex,
-        1
-    );
-
-    console.log("Serial deleted successfully:", serialNumber);
-
-    // Close the dialog and reset the state
-    deleteserialDialog.value = false;
-    selectedSerialForDeletion.value = null;
 }
 
 // Options for rental dropdown
@@ -661,25 +1218,65 @@ const rentalOptions = [
     { label: "No", value: "No" },
 ];
 
-function saveProduct() {
+async function saveProduct() {
     submitted.value = true;
 
     if (product?.value.name?.trim()) {
-        if (product.value.id) {
-            // Update existing product
-            const index = products.value.findIndex(
-                (p) => p.id === product.value.id
-            );
-            if (index !== -1) {
-                products.value[index] = product.value;
+        try {
+            if (product.value.id) {
+                // Update existing product via API
+                await updateProduct(product.value.id, {
+                    name: product.value.name,
+                    brand: product.value.brand,
+                    category: product.value.category,
+                    type: product.value.type,
+                    unit: product.value.unit,
+                    minimum_stock: product.value.minimum_stock,
+                    stock_limit: product.value.stock_limit
+                });
+
+                // Update local data only if API call succeeds
+                const index = products.value.findIndex(
+                    (p) => p.id === product.value.id
+                );
+                if (index !== -1) {
+                    products.value[index] = { ...products.value[index], ...product.value };
+                }
+
+                toast.value.add({
+                    severity: "success",
+                    summary: "Success",
+                    detail: "Product updated successfully",
+                    life: 3000
+                });
+
+                // Refresh data to get updated information
+                await refreshProducts();
+            } else {
+                // Create new product (this would need a separate API endpoint)
+                product.value.id = createId();
+                products.value.push(product.value);
+                
+                toast.value.add({
+                    severity: "info",
+                    summary: "Info",
+                    detail: "Product created locally (API endpoint needed for persistence)",
+                    life: 3000
+                });
             }
-        } else {
-            // Create new product
-            product.value.id = createId();
-            products.value.push(product.value);
+            
+            productDialog.value = false;
+            product.value = {};
+            
+        } catch (error) {
+            console.error("Error saving product:", error);
+            toast.value.add({
+                severity: "error",
+                summary: "Error",
+                detail: "Failed to save product: " + error.message,
+                life: 3000
+            });
         }
-        productDialog.value = false;
-        product.value = {};
     }
 }
 
@@ -712,7 +1309,7 @@ const unitOptions = ref([
     { label: "Boxes", value: "boxes" },
 ]);
 
-function saveNonConsumableBatchDetails() {
+async function saveNonConsumableBatchDetails() {
     if (
         !selectedBatch.value.batchNumber ||
         !selectedBatch.value.warrantyValue
@@ -729,33 +1326,62 @@ function saveNonConsumableBatchDetails() {
         selectedBatch.value.unit = selectedBatch.value.unit.value;
     }
 
-    // Find the product containing the batch
-    const productIndex = products.value.findIndex((product) =>
-        product.batches?.some(
-            (batch) => batch.batchId === selectedBatch.value.batchId
-        )
-    );
+    try {
+        // Make API call to update the batch in the database
+        // Only include fields that are editable in Non-Consumable batch dialog
+        const updateData = {
+            batchNumber: selectedBatch.value.batchNumber,
+            purchasePrice: selectedBatch.value.purchasePrice,
+            supplier: selectedBatch.value.supplier,
+            warranty: `${selectedBatch.value.warrantyValue} ${selectedBatch.value.warrantyUnit}`,
+            unitRentalPrice: selectedBatch.value.unitRentalPrice || selectedBatch.value.rentalprice,
+        };
+        
+        // Only include fields if they have values to avoid overwriting with null/undefined
+        if (selectedBatch.value.quantity) updateData.quantity = selectedBatch.value.quantity;
+        // Map frontend purchaseDate to backend arrivalDate to match database schema
+        if (selectedBatch.value.purchaseDate) updateData.arrivalDate = selectedBatch.value.purchaseDate;
+        if (selectedBatch.value.srp) updateData.unitRetailPrice = selectedBatch.value.srp;
+        if (selectedBatch.value.status) updateData.status = selectedBatch.value.status;
 
-    if (productIndex !== -1) {
-        const batchIndex = products.value[productIndex].batches.findIndex(
-            (batch) => batch.batchId === selectedBatch.value.batchId
+        await updateBatch(selectedBatch.value.batchId, updateData);
+
+        // Update the local data only if API call succeeds
+        const productIndex = products.value.findIndex((product) =>
+            product.batches?.some(
+                (batch) => batch.batchId === selectedBatch.value.batchId
+            )
         );
 
-        if (batchIndex !== -1) {
-            // Update the batch data
-            products.value[productIndex].batches[batchIndex] = {
-                ...selectedBatch.value,
-            };
-            console.log("Batch updated successfully:", selectedBatch.value);
-        } else {
-            console.warn("Batch not found in the product's list.");
-        }
-    } else {
-        console.warn("Product not found containing this batch.");
-    }
+        if (productIndex !== -1) {
+            const batchIndex = products.value[productIndex].batches.findIndex(
+                (batch) => batch.batchId === selectedBatch.value.batchId
+            );
 
-    showSuccess();
-    NonConsumablebatchDialog.value = false;
+            if (batchIndex !== -1) {
+                // Update the batch data
+                products.value[productIndex].batches[batchIndex] = {
+                    ...selectedBatch.value,
+                };
+                console.log("Batch updated successfully:", selectedBatch.value);
+            }
+        }
+
+        showSuccess();
+        NonConsumablebatchDialog.value = false;
+        
+        // Refresh the data to show updated information
+        await refreshProducts();
+        
+    } catch (error) {
+        console.error("Error updating batch:", error);
+        toast.value.add({
+            severity: "error",
+            summary: "Error",
+            detail: "Failed to update batch: " + error.message,
+            life: 3000
+        });
+    }
 }
 
 function showSuccess() {
@@ -875,21 +1501,78 @@ function createId() {
 }
 
 function confirmDeleteProduct(prod) {
+    // Check if this is a non-consumable product with assigned serial numbers
+    if (prod.category === 'Non-Consumable') {
+        let totalAssignedSerials = 0;
+        
+        // Check all batches in this product for assigned serial numbers
+        if (prod.batches && Array.isArray(prod.batches)) {
+            for (const batch of prod.batches) {
+                if (batch.serialNumbers && Array.isArray(batch.serialNumbers)) {
+                    const assignedSerials = batch.serialNumbers.filter(serial => 
+                        serial.status === 'Assigned' || 
+                        (serial.roomNumber && serial.roomNumber !== '-' && serial.roomNumber !== '')
+                    );
+                    totalAssignedSerials += assignedSerials.length;
+                }
+            }
+        }
+
+        if (totalAssignedSerials > 0) {
+            // Show warning toast for assigned items
+            toast.value.add({
+                severity: "warn",
+                summary: "Cannot Delete Product",
+                detail: `This non-consumable product has ${totalAssignedSerials} item(s) currently assigned to rooms across all batches. Please unassign all items from rooms before deleting the product.`,
+                life: 6000,
+            });
+            return; // Prevent deletion
+        }
+    }
+
     product.value = prod; // Set the product to be deleted
     deleteProductDialog.value = true; // Show the confirmation dialog
 }
 
-function deleteProduct() {
+async function deleteProduct() {
     if (product.value) {
-        const index = products.value.findIndex(
-            (p) => p.id === product.value.id
-        );
-        if (index !== -1) {
-            products.value.splice(index, 1); // Remove the product from the list
+        try {
+            // Make API call to delete the product from the database
+            await deleteProductById(product.value.id);
+
+            // Remove from local data only if API call succeeds
+            const index = products.value.findIndex(
+                (p) => p.id === product.value.id
+            );
+            if (index !== -1) {
+                products.value.splice(index, 1); // Remove the product from the list
+            }
+
+            deleteProductDialog.value = false; // Close the dialog
+            product.value = null; // Reset the product reference
+            
+            toast.value.add({
+                severity: "success",
+                summary: "Success",
+                detail: "Product deleted successfully",
+                life: 3000
+            });
+
+            // Refresh data to ensure consistency
+            await refreshProducts();
+            
+        } catch (error) {
+            console.error("Error deleting product:", error);
+            toast.value.add({
+                severity: "error",
+                summary: "Error",
+                detail: "Failed to delete product: " + error.message,
+                life: 3000
+            });
+            
+            // Close dialog even on error
+            deleteProductDialog.value = false;
         }
-        deleteProductDialog.value = false; // Close the dialog
-        product.value = null; // Reset the product reference
-        showError();
     }
 }
 
@@ -898,7 +1581,16 @@ function getOrderSeverity(order) {
         case "DELIVERED":
             return "success";
 
+        case "IN_STOCK":
+            return "success";
+
         case "CANCELLED":
+            return "danger";
+
+        case "OUT_OF_STOCK":
+            return "danger";
+
+        case "EXPIRED":
             return "danger";
 
         case "PENDING":
@@ -918,6 +1610,10 @@ function clearFilter() {
         name: { value: null, matchMode: FilterMatchMode.STARTS_WITH },
         brand: { value: null, matchMode: FilterMatchMode.STARTS_WITH },
         category: { value: null, matchMode: FilterMatchMode.EQUALS },
+        type: { value: null, matchMode: FilterMatchMode.EQUALS },
+        unit: { value: null, matchMode: FilterMatchMode.EQUALS },
+        minimum_stock: { value: null, matchMode: FilterMatchMode.EQUALS },
+        stock_limit: { value: null, matchMode: FilterMatchMode.EQUALS },
         inventoryStatus: { value: null, matchMode: FilterMatchMode.EQUALS },
     };
 }
@@ -930,7 +1626,10 @@ function toggleDataTable(item) {
 
 // Function to open the second dialog
 function toggleDataTable2(item) {
+    selectedBatch.value = item; // Store the selected batch data
     selectedItem.value = item; // Set the selected item
+    // Store the serial numbers for this specific batch
+    serialNumbers.value = Array.isArray(item.serialNumbers) ? item.serialNumbers : [];
     isDialog2Visible.value = true; // Open the dialog
 }
 
@@ -958,11 +1657,40 @@ function formatDate(value) {
     }).format(new Date(value));
 }
 
-onBeforeMount(() => {
-    ProductService.getProductsWithOrdersSmall().then((data) => {
-        console.log(data); // Check the data being loaded
-        products.value = data;
-    });
+function formatDateTime(value) {
+    if (!value) return '-';
+    return new Intl.DateTimeFormat("en-US", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true
+    }).format(new Date(value));
+}
+
+onBeforeMount(async () => {
+    try {
+        const data = await ProductService.getProductsWithOrders();
+        
+        if (Array.isArray(data)) {
+            // Ensure each product has required fields and proper structure
+            products.value = data.map(product => ({
+                ...product,
+                id: product.id || Math.random(),
+                batches: Array.isArray(product.batches) ? product.batches.map(batch => ({
+                    ...batch,
+                    batchId: batch.item_id || batch.batchId || batch.id,
+                    serialNumbers: Array.isArray(batch.serialNumbers) ? batch.serialNumbers : []
+                })) : []
+            }));
+        } else {
+            products.value = [];
+        }
+    } catch (error) {
+        console.error("Error loading products:", error);
+        products.value = [];
+    }
     // Other service calls...
 });
 
@@ -992,12 +1720,29 @@ function openNonConsumableBatchDialog(batchData) {
     // Clone the batch data into selectedBatch
     selectedBatch.value = { ...batchData };
 
-    // Ensure warrantyValue and warrantyUnit are defined
-    if (!selectedBatch.value.warrantyValue) {
-        selectedBatch.value.warrantyValue = 1; // Default warranty value
+    // Map property names for consistency between frontend and database schema
+    if (batchData.rentalprice && !selectedBatch.value.unitRentalPrice) {
+        selectedBatch.value.unitRentalPrice = batchData.rentalprice;
     }
-    if (!selectedBatch.value.warrantyUnit) {
-        selectedBatch.value.warrantyUnit = "year"; // Default warranty unit
+    
+    // Map database arrival_date to frontend purchaseDate
+    if (batchData.arrivalDate && !selectedBatch.value.purchaseDate) {
+        selectedBatch.value.purchaseDate = batchData.arrivalDate;
+    }
+
+    // Parse warranty if it's a string like "12 months"
+    if (selectedBatch.value.warranty && typeof selectedBatch.value.warranty === 'string') {
+        const warrantyParts = selectedBatch.value.warranty.split(' ');
+        selectedBatch.value.warrantyValue = parseInt(warrantyParts[0]) || 1;
+        selectedBatch.value.warrantyUnit = warrantyParts[1] || 'year';
+    } else {
+        // Ensure warrantyValue and warrantyUnit are defined
+        if (!selectedBatch.value.warrantyValue) {
+            selectedBatch.value.warrantyValue = 1; // Default warranty value
+        }
+        if (!selectedBatch.value.warrantyUnit) {
+            selectedBatch.value.warrantyUnit = "year"; // Default warranty unit
+        }
     }
 
     NonConsumablebatchDialog.value = true;
@@ -1024,6 +1769,22 @@ function initFilters() {
             operator: FilterOperator.AND,
             constraints: [{ value: null, matchMode: FilterMatchMode.EQUALS }],
         },
+        type: {
+            operator: FilterOperator.AND,
+            constraints: [{ value: null, matchMode: FilterMatchMode.EQUALS }],
+        },
+        unit: {
+            operator: FilterOperator.AND,
+            constraints: [{ value: null, matchMode: FilterMatchMode.EQUALS }],
+        },
+        minimum_stock: {
+            operator: FilterOperator.AND,
+            constraints: [{ value: null, matchMode: FilterMatchMode.EQUALS }],
+        },
+        stock_limit: {
+            operator: FilterOperator.AND,
+            constraints: [{ value: null, matchMode: FilterMatchMode.EQUALS }],
+        },
         inventoryStatus: {
             operator: FilterOperator.AND,
             constraints: [{ value: null, matchMode: FilterMatchMode.EQUALS }],
@@ -1032,14 +1793,103 @@ function initFilters() {
 }
 
 function expandAll() {
-    expandedRows.value = products.value.reduce(
-        (acc, p) => (acc[p.id] = true) && acc,
-        {}
-    );
+    try {
+        const validProducts = safeProducts.value;
+        if (!Array.isArray(validProducts) || validProducts.length === 0) {
+            console.warn("No products available for expansion");
+            expandedRows.value = {};
+            return;
+        }
+        
+        expandedRows.value = validProducts.reduce((acc, p) => {
+            if (p && typeof p.id !== 'undefined') {
+                acc[p.id] = true;
+            }
+            return acc;
+        }, {});
+        
+        console.log("Expanded all rows:", expandedRows.value);
+    } catch (error) {
+        console.error("Error expanding all rows:", error);
+        expandedRows.value = {};
+    }
 }
 
 function collapseAll() {
-    expandedRows.value = null;
+    try {
+        expandedRows.value = {};
+        batchExpandedRows.value = {};
+        console.log("Collapsed all rows");
+    } catch (error) {
+        console.error("Error collapsing rows:", error);
+        expandedRows.value = {};
+        batchExpandedRows.value = {};
+    }
+}
+
+function toggleRowExpansion(event) {
+    try {
+        // Check if the click is on a button or within a button element
+        const target = event.originalEvent?.target;
+        if (target && (target.closest('.p-button') || target.closest('button') || target.tagName === 'BUTTON')) {
+            console.log("Click on button detected, skipping row expansion");
+            return;
+        }
+
+        const rowData = event.data;
+        if (!rowData || typeof rowData.id === 'undefined') {
+            console.warn("Invalid row data for expansion:", rowData);
+            return;
+        }
+        
+        // Debug: Log current state
+        console.log("Current products count:", products.value?.length || 0);
+        console.log("Current safeProducts count:", safeProducts.value?.length || 0);
+        
+        // Toggle expansion state
+        if (expandedRows.value[rowData.id]) {
+            delete expandedRows.value[rowData.id];
+        } else {
+            expandedRows.value[rowData.id] = true;
+        }
+        
+        console.log("Toggled row expansion for:", rowData.id, expandedRows.value[rowData.id] ? 'expanded' : 'collapsed');
+        
+        // Debug: Log state after toggle
+        console.log("Products after toggle:", products.value?.length || 0);
+        console.log("SafeProducts after toggle:", safeProducts.value?.length || 0);
+        
+    } catch (error) {
+        console.error("Error toggling row expansion:", error);
+    }
+}
+
+function toggleBatchRowExpansion(event) {
+    try {
+        // Check if the click is on a button or within a button element
+        const target = event.originalEvent?.target;
+        if (target && (target.closest('.p-button') || target.closest('button') || target.tagName === 'BUTTON')) {
+            console.log("Click on button detected, skipping batch expansion");
+            return;
+        }
+
+        const batchData = event.data;
+        if (!batchData || typeof batchData.batchId === 'undefined') {
+            console.warn("Invalid batch data for expansion:", batchData);
+            return;
+        }
+        
+        // Toggle batch expansion state
+        if (batchExpandedRows.value[batchData.batchId]) {
+            delete batchExpandedRows.value[batchData.batchId];
+        } else {
+            batchExpandedRows.value[batchData.batchId] = true;
+        }
+        
+        console.log("Toggled batch expansion for:", batchData.batchId, batchExpandedRows.value[batchData.batchId] ? 'expanded' : 'collapsed');
+    } catch (error) {
+        console.error("Error toggling batch expansion:", error);
+    }
 }
 
 function confirmDeleteBatch(batch) {
@@ -1058,6 +1908,25 @@ function confirmDeleteBatch(batch) {
         return;
     }
 
+    // Check if this is a non-consumable item with assigned serial numbers
+    if (productContainingBatch.category === 'Non-Consumable') {
+        const assignedSerials = batch.serialNumbers?.filter(serial => 
+            serial.status === 'Assigned' || 
+            (serial.roomNumber && serial.roomNumber !== '-' && serial.roomNumber !== '')
+        ) || [];
+
+        if (assignedSerials.length > 0) {
+            // Show warning toast for assigned items
+            toast.value.add({
+                severity: "warn",
+                summary: "Cannot Delete Batch",
+                detail: `This batch has ${assignedSerials.length} item(s) currently assigned to rooms. Please unassign all items from rooms before deleting the batch.`,
+                life: 6000,
+            });
+            return; // Prevent deletion
+        }
+    }
+
     selectedBatchForDeletion.value = {
         ...batch,
         productId: productContainingBatch.id,
@@ -1068,7 +1937,7 @@ function confirmDeleteBatch(batch) {
     console.log("Batch set for deletion:", selectedBatchForDeletion.value);
 }
 
-function deleteBatch() {
+async function deleteBatch() {
     if (
         !selectedBatchForDeletion.value ||
         !selectedBatchForDeletion.value.batchId ||
@@ -1078,31 +1947,53 @@ function deleteBatch() {
         return;
     }
 
-    // Find the product containing the batch
-    const productIndex = products.value.findIndex(
-        (product) => product.id === selectedBatchForDeletion.value.productId
-    );
+    try {
+        // Debug: Log the batchId being sent
+        console.log("Attempting to delete batch with ID:", selectedBatchForDeletion.value.batchId);
+        console.log("Full batch data:", selectedBatchForDeletion.value);
+        
+        // Make API call to delete the batch from the database
+        await deleteBatchById(selectedBatchForDeletion.value.batchId);
 
-    if (productIndex === -1) {
-        console.error("Product containing this batch not found.");
-        return;
+        // Remove from local data only if API call succeeds
+        const productIndex = products.value.findIndex(
+            (product) => product.id === selectedBatchForDeletion.value.productId
+        );
+
+        if (productIndex !== -1) {
+            const batchIndex = products.value[productIndex].batches.findIndex(
+                (batch) => batch.batchId === selectedBatchForDeletion.value.batchId
+            );
+
+            if (batchIndex !== -1) {
+                // Remove the batch from the product's batch list
+                products.value[productIndex].batches.splice(batchIndex, 1);
+                console.log("Batch deleted successfully");
+            }
+        }
+
+        // Close the dialog
+        deleteBatchDialog.value = false;
+        
+        toast.value.add({
+            severity: "success",
+            summary: "Success",
+            detail: "Batch deleted successfully",
+            life: 3000
+        });
+        
+        // Refresh the data to show updated information
+        await refreshProducts();
+        
+    } catch (error) {
+        console.error("Error deleting batch:", error);
+        toast.value.add({
+            severity: "error",
+            summary: "Error",
+            detail: "Failed to delete batch: " + error.message,
+            life: 3000
+        });
     }
-
-    // Find the batch within the product's batch list
-    const batchIndex = products.value[productIndex].batches.findIndex(
-        (batch) => batch.batchId === selectedBatchForDeletion.value.batchId
-    );
-
-    if (batchIndex === -1) {
-        console.error("Batch not found within the product's batches.");
-        return;
-    }
-
-    // Remove the batch from the product's batch list
-    products.value[productIndex].batches.splice(batchIndex, 1);
-
-    // Close the dialog
-    deleteBatchDialog.value = false;
 
     // Reset the selectedBatchForDeletion
     selectedBatchForDeletion.value = null;
@@ -1121,11 +2012,11 @@ function showError() {
 }
 
 function formatCurrency(value) {
-    if (value == null || isNaN(value)) return "₱0.00"; // Default if invalid or null
+    if (value == null || value === '' || isNaN(parseFloat(value))) return "₱0.00"; // Default if invalid or null
     return new Intl.NumberFormat("en-PH", {
         style: "currency",
         currency: "PHP",
-    }).format(value);
+    }).format(parseFloat(value));
 }
 
 function getStatusTextColor(status) {
@@ -1134,6 +2025,8 @@ function getStatusTextColor(status) {
             return "text-yellow-600"; // Yellow for rented
         case "available":
             return "text-green-600"; // Green for available
+        case "in_stock":
+            return "text-green-600"; // Green for in_stock
         case "damaged":
             return "text-red-600"; // Red for damaged
         case "assigned":
@@ -1147,14 +2040,33 @@ function formatPrice(value) {
     if (value == null || isNaN(value)) return "₱0.00"; // Handle null or invalid value
     return `₱${parseFloat(value).toFixed(2).toLocaleString()}`; // Format to 2 decimal places with commas
 }
+
+
 </script>
+
+<style scoped>
+/* Make rows visually clickable */
+:deep(.cursor-pointer) {
+    cursor: pointer;
+}
+
+:deep(.cursor-pointer:hover) {
+    background-color: #f8f9fa !important;
+}
+
+/* Ensure action buttons don't trigger row click */
+:deep(.cursor-pointer .p-button) {
+    position: relative;
+    z-index: 10;
+}
+</style>
 
 <template>
     <div class="card">
         <div class="font-semibold text-xl mb-4">Item Control</div>
         <DataTable
             v-model:expandedRows="expandedRows"
-            :value="products"
+            :value="safeProducts"
             dataKey="id"
             v-model:filters="filters"
             filterDisplay="menu"
@@ -1162,11 +2074,17 @@ function formatPrice(value) {
                 'name',
                 'brand',
                 'category',
+                'type',
+                'unit',
+                'minimum_stock',
+                'stock_limit',
                 'inventoryStatus',
             ]"
             tableStyle="min-width: 60rem"
             paginator
             :rows="10"
+            @row-click="toggleRowExpansion"
+            :rowClass="() => 'cursor-pointer'"
         >
             <template #header>
                 <div class="flex justify-between items-center">
@@ -1215,14 +2133,54 @@ function formatPrice(value) {
                 style="min-width: "
             ></Column>
             <Column field="brand" sortable header="Brand"></Column>
-            <Column field="quantity" sortable header="Quantity"></Column>
-            <Column field="description" sortable header="Description"></Column>
             <Column
                 field="category"
                 sortable
                 header="Category"
                 style="width: 10rem"
             ></Column>
+            <Column
+                field="type"
+                sortable
+                header="Type"
+                style="width: 10rem"
+            ></Column>
+            <Column
+                field="unit"
+                sortable
+                header="Unit"
+                style="width: 8rem"
+            ></Column>
+            <Column
+                field="created_at"
+                sortable
+                header="Date Added"
+                style="width: 12rem"
+            >
+                <template #body="slotProps">
+                    <span>{{ formatDateTime(slotProps.data.created_at) }}</span>
+                </template>
+            </Column>
+            <Column
+                field="minimum_stock"
+                sortable
+                header="Minimum Stock"
+                style="width: 9rem"
+            >
+                <template #body="slotProps">
+                    <span>{{ slotProps.data.minimum_stock || 0 }}</span>
+                </template>
+            </Column>
+            <Column
+                field="stock_limit"
+                sortable
+                header="Stock Limit"
+                style="width: 10rem"
+            >
+                <template #body="slotProps">
+                    <span>{{ slotProps.data.stock_limit || 0 }}</span>
+                </template>
+            </Column>
             <Column field="inventoryStatus" sortable header="Status">
                 <template #body="slotProps">
                     <Tag
@@ -1231,6 +2189,8 @@ function formatPrice(value) {
                     />
                 </template>
             </Column>
+
+            <!---not expand actions column----->
             <Column
                 field="Actions"
                 header="Actions"
@@ -1267,6 +2227,8 @@ function formatPrice(value) {
                     "
                     dataKey="batchId"
                     v-if="slotProps.data?.category === 'Consumable'"
+                    @row-click="toggleBatchRowExpansion"
+                    :rowClass="() => 'cursor-pointer'"
                 >
                     <div class="flex items-center gap-2 mb-4">
                         <h5>Batch List for {{ slotProps.data.name }}</h5>
@@ -1300,9 +2262,15 @@ function formatPrice(value) {
                     ></Column>
                     <Column
                         field="purchaseDate"
-                        header="Purchase Date"
+                        header="Arrival Date"
                         sortable
-                    ></Column>
+                    >
+                        <template #body="slotProps">
+                            <span>{{
+                                formatDateTime(slotProps.data.purchaseDate)
+                            }}</span>
+                        </template>
+                    </Column>
                     <Column
                         field="purchasePrice"
                         header="Purchase Price"
@@ -1317,7 +2285,11 @@ function formatPrice(value) {
 
                     <Column field="srp" header="SRP" sortable>
                         <template #body="slotProps">
-                            <span>₱{{ slotProps.data.srp.toFixed(2) }}</span>
+                            <span>{{ 
+                                (slotProps.data.srp && !isNaN(parseFloat(slotProps.data.srp)))
+                                ? `₱${parseFloat(slotProps.data.srp).toFixed(2)}` 
+                                : '-' 
+                            }}</span>
                         </template>
                     </Column>
                     <Column field="unit" header="Unit" sortable></Column>
@@ -1368,146 +2340,6 @@ function formatPrice(value) {
                             </div>
                         </template>
                     </Column>
-
-                    <column header="Items">
-                        <template #body="slotProps">
-                            <div class="flex flex-wrap gap-2">
-                                <Button
-                                    type="button"
-                                    icon="pi pi-list"
-                                    @click="toggleDataTable(slotProps.data)"
-                                    rounded
-                                    class="mr-2"
-                                />
-                                <Dialog
-                                    header="Items"
-                                    v-model:visible="isDialogVisible"
-                                    :breakpoints="{ '960px': '75vw' }"
-                                    :style="{ width: '40vw' }"
-                                    :modal="true"
-                                    :dismissable-mask="true"
-                                >
-                                    <!-- Header Section -->
-                                    <template #header>
-                                        <div class="flex items-center gap-2">
-                                            <p class="font-semibold text-lg">
-                                                Items per Batch |
-                                                {{
-                                                    slotProps?.data?.batchNumber
-                                                }}
-                                            </p>
-                                        </div>
-                                    </template>
-
-                                    <!-- Nested Data Table -->
-                                    <DataTable
-                                        class="p-datatable-sm"
-                                        :value="slotProps?.data?.serialNumbers"
-                                    >
-                                        <Column
-                                            field="serialNumber"
-                                            header="Serial Number"
-                                            sortable
-                                        />
-                                        <Column
-                                            field="srp"
-                                            header="Suggested Retail Price (SRP)"
-                                            sortable
-                                        >
-                                            <template #body="slotProps">
-                                                {{
-                                                    formatCurrency(
-                                                        slotProps.data.srp
-                                                    )
-                                                }}
-                                            </template>
-                                        </Column>
-
-                                        <!-- Status Column -->
-                                        <Column
-                                            field="status"
-                                            header="Status"
-                                            sortable
-                                            style="min-width: 8rem"
-                                        >
-                                            <template #body="slotProps">
-                                                <span
-                                                    :class="{
-                                                        'text-green-500':
-                                                            slotProps.data
-                                                                .status ===
-                                                            'Available',
-                                                        'text-red-500':
-                                                            slotProps.data
-                                                                .status ===
-                                                            'Sold',
-                                                    }"
-                                                >
-                                                    {{ slotProps.data.status }}
-                                                </span>
-                                            </template>
-                                        </Column>
-
-                                        <Column
-                                            :exportable="false"
-                                            style="min-width: 12rem"
-                                        >
-                                            <template #body="slotProps">
-                                                <Button
-                                                    icon="pi pi-pencil"
-                                                    outlined
-                                                    rounded
-                                                    v-tooltip="'Edit  Details'"
-                                                    class="mr-2"
-                                                    :disabled="
-                                                        slotProps.data
-                                                            .status === 'Sold'
-                                                    "
-                                                    @click="
-                                                        openEditConsumableDialog(
-                                                            slotProps.data
-                                                        )
-                                                    "
-                                                />
-                                                <Button
-                                                    icon="pi pi-trash"
-                                                    outlined
-                                                    rounded
-                                                    severity="danger"
-                                                    v-tooltip="'Delete  '"
-                                                    @click="
-                                                        confirmDeleteConsumable(
-                                                            slotProps.data
-                                                        )
-                                                    "
-                                                />
-                                            </template>
-                                        </Column>
-                                    </DataTable>
-
-                                    <!-- Main Data Table -->
-                                    <DataTable
-                                        v-model:selection="selectedProduct"
-                                        :value="products"
-                                        selectionMode="single"
-                                        paginator
-                                        :rows="5"
-                                        :totalRecords="products.length"
-                                        @row-select="onProductSelect"
-                                    >
-                                    </DataTable>
-
-                                    <!-- Footer Section -->
-                                    <template #footer>
-                                        <Button
-                                            label="Close"
-                                            @click="isDialogVisible = false"
-                                        />
-                                    </template>
-                                </Dialog>
-                            </div>
-                        </template>
-                    </column>
                 </DataTable>
 
                 <!--Non-Consumable Batch Table-->
@@ -1523,6 +2355,8 @@ function formatPrice(value) {
                     "
                     dataKey="batchId"
                     v-if="slotProps.data?.category === 'Non-Consumable'"
+                    @row-click="toggleBatchRowExpansion"
+                    :rowClass="() => 'cursor-pointer'"
                 >
                     <div class="flex items-center gap-2 mb-4">
                         <h5>Batch List for {{ slotProps.data.name }}</h5>
@@ -1539,22 +2373,28 @@ function formatPrice(value) {
                             </InputIcon>
                             <InputText
                                 v-model="NonConsumableBatchSearch"
-                                placeholder="Search Nonconsumable batches..."
+                                placeholder="Search non-consumable items..."
                                 class="w-full"
                             />
                         </IconField>
                     </div>
-                    <Column
-                        field="batchNumber"
-                        header="Batch Number"
-                        sortable
-                    ></Column>
 
                     <Column
-                        field="purchaseDate"
-                        header="Purchase Date"
+                        field="batchNumber"
+                        header="Serial Number"
                         sortable
                     ></Column>
+                    <Column
+                        field="purchaseDate"
+                        header="Arrival Date"
+                        sortable
+                    >
+                        <template #body="slotProps">
+                            <span>{{
+                                slotProps.data.purchaseDate ? formatDateTime(slotProps.data.purchaseDate) : '-'
+                            }}</span>
+                        </template>
+                    </Column>
                     <Column
                         field="purchasePrice"
                         header="Purchase Price"
@@ -1566,15 +2406,12 @@ function formatPrice(value) {
                             }}</span>
                         </template>
                     </Column>
-                    <Column field="unit" header="Unit" sortable></Column>
 
                     <Column
                         field="supplier"
                         header="Supplier"
                         sortable
                     ></Column>
-
-                    <Column field="rental" header="Rental" sortable></Column>
 
                     <Column
                         field="rentalprice"
@@ -1596,16 +2433,6 @@ function formatPrice(value) {
                         sortable
                     ></Column>
 
-                    <Column
-                        field="minimumstocks"
-                        header="Minimum Stocks"
-                        sortable
-                    ></Column>
-                    <Column
-                        field="stocklimit"
-                        header="Stock Limit"
-                        sortable
-                    ></Column>
                     <Column field="status" header="Status" sortable>
                         <template #body="slotProps">
                             <Tag
@@ -1657,7 +2484,7 @@ function formatPrice(value) {
                                 <Dialog
                                     v-model:visible="isDialog2Visible"
                                     :header="`Items per Batch | ${
-                                        slotProps.data?.batchNumber || 'N/A'
+                                        selectedBatch?.batchNumber || 'N/A'
                                     }`"
                                     :breakpoints="{ '960px': '75vw' }"
                                     :style="{ width: '60vw' }"
@@ -1671,13 +2498,8 @@ function formatPrice(value) {
                                     >
                                         <DataTable
                                             class="p-datatable-xl"
-                                            :value="
-                                                slotProps.data.serialNumbers
-                                            "
-                                            :totalRecords="
-                                                slotProps.data.serialNumbers
-                                                    .length
-                                            "
+                                            :value="serialNumbers"
+                                            :totalRecords="serialNumbers.length"
                                             :rows="5"
                                             paginator
                                             @row-select="onProductSelect"
@@ -1710,25 +2532,6 @@ function formatPrice(value) {
                                                     </span>
                                                 </template>
                                             </Column>
-                                            <Column
-                                                field="rental"
-                                                header="Rental"
-                                                sortable
-                                            ></Column>
-                                            <Column
-                                                field="rentalPrice"
-                                                header="Rental Price"
-                                                sortable
-                                            >
-                                                <template #body="slotProps">
-                                                    {{
-                                                        formatPrice(
-                                                            slotProps.data
-                                                                .rentalPrice
-                                                        )
-                                                    }}
-                                                </template>
-                                            </Column>
 
                                             <Column
                                                 field="roomNumber"
@@ -1741,56 +2544,13 @@ function formatPrice(value) {
                                             >
                                                 <template #body="slotProps">
                                                     <div class="flex gap-2">
-                                                        <!-- Edit Button -->
-                                                        <Button
-                                                            v-if="
-                                                                slotProps.data.status.toLowerCase() ===
-                                                                    'available' ||
-                                                                slotProps.data.status.toLowerCase() ===
-                                                                    'assigned'
-                                                            "
-                                                            icon="pi pi-pencil"
-                                                            outlined
-                                                            rounded
-                                                            @click="
-                                                                editSerial(
-                                                                    slotProps.data
-                                                                )
-                                                            "
-                                                            v-tooltip="
-                                                                'Edit Serial Details'
-                                                            "
-                                                        />
-
-                                                        <!-- Delete Button -->
-                                                        <Button
-                                                            v-if="
-                                                                slotProps.data.status.toLowerCase() ===
-                                                                    'available' ||
-                                                                slotProps.data.status.toLowerCase() ===
-                                                                    'assigned' ||
-                                                                slotProps.data.status.toLowerCase() ===
-                                                                    'damaged'
-                                                            "
-                                                            icon="pi pi-trash"
-                                                            outlined
-                                                            rounded
-                                                            severity="danger"
-                                                            @click="
-                                                                confirmDeleteSerial(
-                                                                    slotProps.data
-                                                                )
-                                                            "
-                                                            v-tooltip="
-                                                                'Delete Item'
-                                                            "
-                                                        />
-
                                                         <!-- Conditional Assign Button -->
                                                         <Button
                                                             v-if="
                                                                 slotProps.data.status.toLowerCase() ===
-                                                                'available'
+                                                                'available' ||
+                                                                slotProps.data.status.toLowerCase() ===
+                                                                'in_stock'
                                                             "
                                                             icon="pi pi-arrow-up-right"
                                                             outlined
@@ -1825,25 +2585,46 @@ function formatPrice(value) {
                                                                 'Re-Assign Item'
                                                             "
                                                         ></Button>
-                                                        <!-- Damaged Button -->
+
+                                                        <!-- Edit Serial Button -->
+                                                        <Button
+                                                            icon="pi pi-pencil"
+                                                            outlined
+                                                            rounded
+                                                            severity="warning"
+                                                            @click="
+                                                                openEditSerialDialog(
+                                                                    slotProps.data
+                                                                )
+                                                            "
+                                                            v-tooltip="
+                                                                'Edit Serial Number'
+                                                            "
+                                                        />
+
+                                                        <!-- Delete Button -->
                                                         <Button
                                                             v-if="
                                                                 slotProps.data.status.toLowerCase() ===
                                                                     'available' ||
                                                                 slotProps.data.status.toLowerCase() ===
-                                                                    'assigned'
+                                                                    'assigned' ||
+                                                                slotProps.data.status.toLowerCase() ===
+                                                                    'damaged' ||
+                                                                slotProps.data.status.toLowerCase() ===
+                                                                    'in_stock'
                                                             "
-                                                            icon="pi pi-exclamation-triangle"
+                                                            icon="pi pi-trash"
                                                             outlined
                                                             rounded
                                                             severity="danger"
                                                             @click="
-                                                                reportDamage(
+                                                                confirmDeleteSerial(
                                                                     slotProps.data
                                                                 )
                                                             "
                                                             v-tooltip="
-                                                                'Report Damage'
+                                                                'Delete Item'
                                                             "
                                                         />
                                                     </div>
@@ -1921,15 +2702,51 @@ function formatPrice(value) {
                 >
             </div>
             <div>
-                <label for="description" class="block font-bold mb-3"
-                    >Description</label
+                <label for="category" class="block font-bold mb-3">Category</label>
+                <Select
+                    id="category"
+                    v-model="product.category"
+                    :options="[{label: 'Consumable', value: 'Consumable'}, {label: 'Non-Consumable', value: 'Non-Consumable'}]"
+                    optionLabel="label"
+                    optionValue="value"
+                    placeholder="Select Category"
+                    fluid
+                />
+                <small v-if="submitted && !product.category" class="text-red-500"
+                    >Category is required.</small
                 >
-                <Textarea
-                    id="description"
-                    v-model="product.description"
-                    required="true"
-                    rows="3"
-                    cols="20"
+            </div>
+            <div>
+                <label for="type" class="block font-bold mb-3">Type</label>
+                <InputText
+                    id="type"
+                    v-model.trim="product.type"
+                    fluid
+                />
+            </div>
+            <div>
+                <label for="unit" class="block font-bold mb-3">Unit</label>
+                <InputText
+                    id="unit"
+                    v-model.trim="product.unit"
+                    fluid
+                />
+            </div>
+            <div>
+                <label for="minimum_stock" class="block font-bold mb-3">Minimum Stock</label>
+                <InputNumber
+                    id="minimum_stock"
+                    v-model="product.minimum_stock"
+                    :min="0"
+                    fluid
+                />
+            </div>
+            <div>
+                <label for="stock_limit" class="block font-bold mb-3">Stock Limit</label>
+                <InputNumber
+                    id="stock_limit"
+                    v-model="product.stock_limit"
+                    :min="0"
                     fluid
                 />
             </div>
@@ -2000,30 +2817,10 @@ function formatPrice(value) {
                 >
             </div>
 
-            <!-- Quantity -->
-            <div>
-                <label for="quantity" class="block font-bold mb-3"
-                    >Quantity</label
-                >
-                <InputText
-                    id="quantity"
-                    v-model.trim="selectedBatch.quantity"
-                    required="true"
-                    type="number"
-                    :invalid="submitted && !selectedBatch.quantity"
-                    fluid
-                />
-                <small
-                    v-if="submitted && !selectedBatch.quantity"
-                    class="text-red-500"
-                    >Quantity is required.</small
-                >
-            </div>
-
-            <!-- Purchase Date -->
+            <!-- Arrival Date -->
             <div>
                 <label for="purchaseDate" class="block font-bold mb-3"
-                    >Purchase Date</label
+                    >Arrival Date</label
                 >
                 <DatePicker
                     id="purchaseDate"
@@ -2034,7 +2831,7 @@ function formatPrice(value) {
                 <small
                     v-if="submitted && !selectedBatch.purchaseDate"
                     class="text-red-500"
-                    >Purchase Date is required.</small
+                    >Arrival Date is required.</small
                 >
             </div>
 
@@ -2063,25 +2860,6 @@ function formatPrice(value) {
                     currency="PHP"
                     fluid
                 />
-            </div>
-
-            <!-- Unit -->
-            <div>
-                <label for="unit" class="block font-bold mb-3">Unit</label>
-                <Select
-                    id="unit"
-                    v-model="selectedBatch.unit"
-                    :options="unitOptions"
-                    optionLabel="label"
-                    optionValue="value"
-                    fluid
-                />
-
-                <small
-                    v-if="submitted && !selectedBatch.unit"
-                    class="text-red-500"
-                    >Unit is required.</small
-                >
             </div>
 
             <!-- Supplier -->
@@ -2134,7 +2912,7 @@ function formatPrice(value) {
         </template>
     </Dialog>
 
-    <!-- Edit  Non-Consumable Batch  Details Dialog -->
+    <!-- Edit Non-Consumable Batch Details Dialog -->
     <Dialog
         :dismissableMask="true"
         v-model:visible="NonConsumablebatchDialog"
@@ -2146,36 +2924,11 @@ function formatPrice(value) {
             <!-- Batch Number -->
             <div>
                 <label for="batchNumber" class="block font-bold mb-3"
-                    >Batch Number</label
+                    >Serial Number</label
                 >
                 <InputText
                     id="batchNumber"
                     v-model.trim="selectedBatch.batchNumber"
-                    fluid
-                />
-            </div>
-
-            <!-- Quantity -->
-            <div>
-                <label for="quantity" class="block font-bold mb-3"
-                    >Quantity</label
-                >
-                <InputText
-                    id="quantity"
-                    v-model.trim="selectedBatch.quantity"
-                    type="number"
-                    fluid
-                />
-            </div>
-
-            <!-- Purchase Date -->
-            <div>
-                <label for="purchaseDate" class="block font-bold mb-3"
-                    >Purchase Date</label
-                >
-                <DatePicker
-                    id="purchaseDate"
-                    v-model="selectedBatch.purchaseDate"
                     fluid
                 />
             </div>
@@ -2194,26 +2947,6 @@ function formatPrice(value) {
                 />
             </div>
 
-            <!-- Unit -->
-            <!-- Unit -->
-            <div>
-                <label for="unit" class="block font-bold mb-3">Unit</label>
-                <Select
-                    id="unit"
-                    v-model="selectedBatch.unit"
-                    :options="unitOptions"
-                    optionLabel="label"
-                    optionValue="value"
-                    fluid
-                />
-
-                <small
-                    v-if="submitted && !selectedBatch.unit"
-                    class="text-red-500"
-                    >Unit is required.</small
-                >
-            </div>
-
             <!-- Supplier -->
             <div>
                 <label for="supplier" class="block font-bold mb-3"
@@ -2225,17 +2958,17 @@ function formatPrice(value) {
                     fluid
                 />
             </div>
+
+            <!-- Unit Rental Price -->
             <div>
-                <label for="rental" class="block font-bold mb-3">Rental</label>
-                <InputText id="rental" v-model="selectedBatch.rental" fluid />
-            </div>
-            <div>
-                <label for="rentalprice" class="block font-bold mb-3"
-                    >Rental Price</label
+                <label for="unitRentalPrice" class="block font-bold mb-3"
+                    >Unit Rental Price</label
                 >
-                <InputText
-                    id="rentalprice"
-                    v-model="selectedBatch.rentalprice"
+                <InputNumber
+                    id="unitRentalPrice"
+                    v-model="selectedBatch.unitRentalPrice"
+                    mode="currency"
+                    currency="PHP"
                     fluid
                 />
             </div>
@@ -2393,6 +3126,7 @@ function formatPrice(value) {
         :style="{ width: '450px' }"
         :header="`Assign Item - ${selectedItem?.serialNumber || 'N/A'}`"
         :modal="true"
+        :dismissable-mask="true"
     >
         <div class="flex flex-col gap-4">
             <!-- Display item details -->
@@ -2412,9 +3146,30 @@ function formatPrice(value) {
                     id="overlay_panel"
                     style="width: 750px"
                 >
+                    <!-- Search Room Input -->
+                    <div class="flex items-center gap-2 mb-3 p-2">
+                        <Button
+                            type="button"
+                            icon="pi pi-filter-slash"
+                            label="Clear"
+                            outlined
+                            @click="clearRoomSearch"
+                        />
+                        <IconField>
+                            <InputIcon>
+                                <i class="pi pi-search" />
+                            </InputIcon>
+                            <InputText
+                                v-model="roomSearchQuery"
+                                placeholder="Search by room number..."
+                                class="w-full"
+                            />
+                        </IconField>
+                    </div>
+                    
                     <DataTable
                         v-model:selection="selectedRoom"
-                        :value="availableRooms"
+                        :value="filteredRooms"
                         selectionMode="single"
                         :paginator="true"
                         :rows="5"
@@ -2424,17 +3179,13 @@ function formatPrice(value) {
                             header="Room Number"
                             sortable
                         ></Column>
-                        <Column field="type" header="Type" sortable></Column>
+                        <Column field="type" header="Room Type" sortable></Column>
+                        <Column field="category" header="Category" sortable></Column>
                         <Column
                             field="status"
                             header="Status"
                             sortable
                         ></Column>
-                        <Column field="price" header="Price" sortable>
-                            <template #body="slotProps">
-                                {{ formatPrice(slotProps.data.price) }}
-                            </template>
-                        </Column>
                         <Column header="Action">
                             <template #body="slotProps">
                                 <Button
@@ -2454,7 +3205,9 @@ function formatPrice(value) {
                 <p>
                     <strong>Room Number:</strong> {{ selectedRoom.roomNumber }}
                 </p>
-                <p><strong>Type:</strong> {{ selectedRoom.type }}</p>
+                <p><strong>Room Type:</strong> {{ selectedRoom.type }}</p>
+                <p><strong>Category:</strong> {{ selectedRoom.category }}</p>
+                <p><strong>Status:</strong> {{ selectedRoom.status }}</p>
             </div>
         </div>
 
@@ -2572,65 +3325,112 @@ function formatPrice(value) {
     <!-- Damage Report Dialog -->
     <Dialog
         v-model:visible="damageDialogVisible"
+        header="Report Damage"
         :dismissableMask="true"
-        :header="`Report Damaged Item - ${
-            selectedDamageItem?.serialNumber || 'N/A'
-        }`"
         :modal="true"
-        :style="{ width: '400px' }"
+        :style="{ width: '500px' }"
     >
-        <div class="p-fluid p-3">
-            <!-- Assigned Room -->
-            <div class="grid grid-cols-1 gap-2">
-                <label for="roomNumber">Assigned Room</label>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Item Serial Number</label>
                 <InputText
-                    id="roomNumber"
-                    :value="selectedDamageItem?.roomNumber || '–'"
+                    v-model="selectedDamageItem.serialNumber"
                     readonly
-                    placeholder="Assigned Room"
-                    class="p-inputtext-sm"
+                    class="w-full bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 />
             </div>
 
-            <!-- Damage Type -->
-            <div class="grid grid-cols-1 gap-2 mt-3">
-                <label for="damageType">Damage Type</label>
-                <Select
-                    id="damageType"
-                    v-model="damageDetails.type"
-                    :options="damageTypes"
-                    optionLabel="label"
-                    placeholder="Select Damage Type"
-                    class="p-dropdown-sm"
+            <div>
+                <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Assigned Room</label>
+                <InputText
+                    :value="selectedDamageItem?.roomNumber || 'Not Assigned'"
+                    readonly
+                    class="w-full bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 />
             </div>
 
-            <!-- Damage Reason -->
-            <div class="grid grid-cols-1 gap-2 mt-3">
-                <label for="damageReason">Reason</label>
+            <div>
+                <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Damage Description *</label>
                 <Textarea
-                    id="damageReason"
-                    v-model="damageDetails.reason"
+                    v-model="damageDetails.damage_description"
                     rows="3"
-                    placeholder="Provide details..."
-                    class="p-inputtext-sm"
+                    placeholder="Describe the damage..."
+                    class="w-full"
+                />
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Additional Notes</label>
+                <Textarea
+                    v-model="damageDetails.notes"
+                    rows="3"
+                    placeholder="Any additional notes..."
+                    class="w-full"
                 />
             </div>
         </div>
 
         <template #footer>
-            <Button
-                label="Cancel"
-                icon="pi pi-times"
-                class="p-button-text p-button-sm"
-                @click="cancelDamageReport"
-            />
-            <Button
-                label="Submit"
-                icon="pi pi-check"
-                class="p-button-sm"
-                @click="submitDamageReport"
-            />
+            <div class="flex justify-end gap-2">
+                <Button
+                    label="Cancel"
+                    severity="secondary"
+                    @click="cancelDamageReport"
+                />
+                <Button
+                    label="Submit Report"
+                    severity="danger"
+                    @click="submitDamageReport"
+                />
+            </div>
+        </template>
+    </Dialog>
+
+    <!-- Edit Serial Dialog for isDialog2Visible -->
+    <Dialog
+        v-model:visible="editSerialDialogVisible"
+        header="Edit Serial Number"
+        :dismissableMask="true"
+        :modal="true"
+        :style="{ width: '450px' }"
+    >
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Serial Number *</label>
+                <InputText
+                    v-model="editingSerialData.serialNumber"
+                    placeholder="Enter serial number"
+                    class="w-full"
+                    :class="{ 'border-red-500': serialNumberExists }"
+                    @input="checkSerialNumberExists(editingSerialData.serialNumber)"
+                    autofocus
+                />
+                <small class="text-gray-500 mt-1 block">
+                    Current: {{ editingSerialData.originalSerialNumber }}
+                </small>
+                <div v-if="serialNumberWarning" class="mt-2">
+                    <small class="text-red-500 flex items-center gap-1">
+                        <i class="pi pi-exclamation-triangle"></i>
+                        {{ serialNumberWarning }}
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <template #footer>
+            <div class="flex justify-end gap-2">
+                <Button
+                    label="Cancel"
+                    severity="secondary"
+                    @click="cancelEditSerial"
+                />
+                <Button
+                    label="Update Serial Number"
+                    severity="success"
+                    :disabled="isUpdateButtonDisabled"
+                    @click="saveEditedSerialNumber"
+                />
+            </div>
         </template>
     </Dialog>
 
@@ -2668,13 +3468,13 @@ function formatPrice(value) {
         </template>
     </Dialog>
 
-    <!-- Edit COmsumable Serial Dialog -->
+    <!-- Edit Consumable Serial Dialog -->
     <Dialog
         v-model:visible="editConsumableDialogVisible"
         :style="{ width: '450px' }"
         header="Edit Consumable"
         :modal="true"
-        :dissmissableMask="true"
+        :dismissableMask="true"
     >
         <div class="flex flex-col gap-4">
             <!-- Serial Number -->
@@ -2713,6 +3513,12 @@ function formatPrice(value) {
                 icon="pi pi-times"
                 text
                 @click="editConsumableDialogVisible = false"
+            />
+            <Button
+                label="Delete"
+                icon="pi pi-trash"
+                severity="danger"
+                @click="confirmDeleteConsumable(editingConsumableData)"
             />
             <Button
                 label="Save"

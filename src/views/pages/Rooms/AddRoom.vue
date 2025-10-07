@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from "vue";
 import { useToast } from "primevue/usetoast";
-import { getRoomTypes, getAvailableAmenities, addRoom, fetchRoomCategories, getRooms, getSerialTypes  } from "@/api/auth";
+import { getRoomTypes, getAvailableAmenities, getAvailableAmenitiesAddRoom, addRoom, fetchRoomCategories, getRooms, getSerialTypes  } from "@/api/auth";
 
 
 const amenityTypes = ref([]);
@@ -194,11 +194,21 @@ const selectedRoomType = ref(null);
 const flatData = ref([]);
 const selectedItems = ref([]);
 
-const filteredData = computed(() =>
-    flatData.value.filter(
-        (item) => item.category === "Non-Consumable" && item.status === "in_stock"
-    )
-);
+const filteredData = computed(() => {
+    return flatData.value.filter((item) => {
+        // More flexible category matching - include items without categories or with amenity-related categories
+        const categoryMatch = !item.category || 
+            item.category.toLowerCase().includes('non-consumable') || 
+            item.category.toLowerCase().includes('non consumable') ||
+            item.category.toLowerCase().includes('amenity') ||
+            item.category === 'Non-Consumable' ||
+            item.category === '';
+             
+        const statusMatch = item.status === "in_stock";
+        
+        return categoryMatch && statusMatch;
+    });
+});
 const toast = useToast();
 const completedSteps = ref([]);
 
@@ -347,7 +357,8 @@ const availableAmenities = computed(() => {
 
 const fetchAmenities = async () => {
     try {
-        const res = await getAvailableAmenities();
+        const res = await getAvailableAmenitiesAddRoom();
+        
         flatData.value = Array.isArray(res.data)
             ? res.data.map(item => ({
                 serialId: item.serial_id,
@@ -359,7 +370,18 @@ const fetchAmenities = async () => {
                 type: item.type, 
             }))
             : [];
+        
+        if (flatData.value.length === 0) {
+            toast.add({
+                severity: "warn",
+                summary: "No Amenities Found",
+                detail: "No non-consumable items found in inventory. Add products first.",
+                life: 5000
+            });
+        }
+        
     } catch (e) {
+        console.error('❌ AddRoom amenities error:', e);
         toast.add({ severity: "error", summary: "Amenities error", detail: e.message, life: 3000 });
     }
 };
@@ -391,21 +413,7 @@ onMounted(async () => {
     } catch (e) {
         toast.add({ severity: "error", summary: "Room types error", detail: e.message, life: 3000 });
     }
-    try {
-        const res = await getAvailableAmenities();
-        flatData.value = Array.isArray(res.data)
-            ? res.data.map(item => ({
-                serialId: item.serial_id,
-                productName: item.product_name,
-                brand: item.brand,
-                serialNumber: item.serial_number,
-                category: item.category,
-                status: item.status,
-            }))
-            : [];
-    } catch (e) {
-        toast.add({ severity: "error", summary: "Amenities error", detail: e.message, life: 3000 });
-    }
+    // Fetch amenities using the new AddRoom-specific endpoint
     await fetchAmenities();
      await fetchRooms();
     try {
@@ -1263,7 +1271,7 @@ async function saveRoom() {
   :style="{ width: '50vw' }"
 >
   <div>
-    <h3 class="text-lg font-medium mb-4">Available Products</h3>
+    <h3 class="text-lg font-medium mb-4">Available Amenities</h3>
 
     <div class="flex items-center mb-4 gap-2">
       <Select

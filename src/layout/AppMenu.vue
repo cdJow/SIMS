@@ -5,7 +5,7 @@ import AppMenuItem from "./AppMenuItem.vue";
 
 const model = ref([
     {
-        label: " Admin",
+        label: "System Admin",
         items: [
             {
                 label: "Rates Management",
@@ -165,6 +165,15 @@ const model = ref([
                 icon: "pi pi-fw pi-cog",
                 to: "/Inventory/ManageInventory/ManageItems",
             },
+
+            {
+                label: "Amenities Control",
+                icon: "pi pi-fw pi-cog",
+                to: "/Inventory/ManageInventory/CleanAmenities",
+            },
+            
+
+
             {
                 label: "Stock History",
                 icon: "pi pi-fw pi-calendar",
@@ -182,7 +191,7 @@ const model = ref([
             },
 
             {
-                label: "Damaged Report",
+                label: "Damaged Report/",
                 icon: "pi pi-fw pi-minus-circle",
                 to: "/Rooms/DamageReport",
             },

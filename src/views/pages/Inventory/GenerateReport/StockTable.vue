@@ -3,8 +3,6 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useToast } from "primevue/usetoast";
 import axios from 'axios';
 
-// Configuration
-const API_BASE_URL = 'http://localhost:5000';
 const toast = useToast();
 
 const stockMovements = ref([]); // Full stock movement data
@@ -18,13 +16,6 @@ const lastRefreshTime = ref(null);
 const isAutoRefresh = ref(true);
 const isUpdating = ref(false);
 const isExporting = ref(false);
-
-// Get auth token from localStorage
-const getAuthToken = () => {
-    const token = localStorage.getItem('authToken') || localStorage.getItem('access_token') || '';
-    console.log('🔑 Auth token found:', token ? 'Yes (length: ' + token.length + ')' : 'No');
-    return token;
-};
 
 // Fetch stock movements data
 onMounted(() => {
@@ -45,7 +36,6 @@ function startAutoRefresh() {
     // Refresh every 60 seconds to prevent flickering
     autoRefreshInterval.value = setInterval(() => {
         if (isAutoRefresh.value) {
-            console.log('🔄 Auto-refreshing stock movements...');
             fetchStockMovements(true); // true = silent refresh
         }
     }, 60000);
@@ -71,7 +61,6 @@ function toggleAutoRefresh() {
 async function fetchStockMovements(silentRefresh = false) {
     // Prevent overlapping requests
     if (silentRefresh && isUpdating.value) {
-        console.log("📊 Skipping refresh - already updating");
         return;
     }
     
@@ -83,28 +72,11 @@ async function fetchStockMovements(silentRefresh = false) {
     }
     
     try {
-        const token = getAuthToken();
-        
-        if (!token) {
-            console.warn('⚠️ No authentication token found. Trying without auth...');
-        }
-        
         // Add timestamp to avoid cache and get latest data
         const timestamp = new Date().getTime();
-        const headers = {
-            'Content-Type': 'application/json'
-        };
         
-        // Only add Authorization header if token exists
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
-        }
-        
-        console.log('🌐 Making request to:', `${API_BASE_URL}/stock-movements`);
-        console.log('📋 Request headers:', headers);
-        
-        const response = await axios.get(`${API_BASE_URL}/stock-movements?t=${timestamp}`, {
-            headers,
+        // Making request to stock-movements endpoint - auth handled by axios interceptor
+        const response = await axios.get(`/stock-movements?t=${timestamp}`, {
             timeout: 10000 // 10 second timeout
         });
         
@@ -124,23 +96,18 @@ async function fetchStockMovements(silentRefresh = false) {
                     stockMovements.value = newData;
                     filteredStockMovements.value = newData;
                     lastRefreshTime.value = new Date();
-                    console.log(`📊 Silent refresh: Updated ${newData.length} stock movements`);
                 } else {
-                    console.log("📊 Silent refresh: No changes detected, keeping existing data");
+                    // No changes detected, keeping existing data
                 }
             } else {
                 // For manual refresh, always update
                 stockMovements.value = newData;
                 filteredStockMovements.value = newData;
                 lastRefreshTime.value = new Date();
-                console.log("Stock movements fetched successfully:", newData.length, "records");
-                
-                // Debug: Show all unique action types
-                const actionTypes = [...new Set(newData.map(m => m.actionType))];
-                console.log("📋 Found action types:", actionTypes);
+                // Stock movements fetched successfully
             }
         } else {
-            console.warn("No stock movement data received");
+            // No stock movement data received
             // Only clear data for manual refresh, keep existing data for silent refresh
             if (!silentRefresh) {
                 stockMovements.value = [];
@@ -154,19 +121,22 @@ async function fetchStockMovements(silentRefresh = false) {
         }
         
     } catch (error) {
-        console.error("❌ Error fetching stock movements:", error);
-        console.error("📊 Error details:", {
-            message: error.message,
-            status: error.response?.status,
-            data: error.response?.data,
-            config: error.config
-        });
+        // Error fetching stock movements (console output removed)
         
         if (!silentRefresh) {
             if (error.code === 'ECONNABORTED') {
                 errorMessage.value = "Connection timeout. Please check if the backend server is running.";
             } else if (error.response?.status === 401) {
-                errorMessage.value = "Authentication failed. Please log in again.";
+                errorMessage.value = "Authentication failed. Please log in again or check your session.";
+                // Show toast notification for auth error
+                toast.add({
+                    severity: 'warn',
+                    summary: 'Authentication Required',
+                    detail: 'Please log in to view stock movements.',
+                    life: 5000
+                });
+            } else if (error.response?.status === 403) {
+                errorMessage.value = "Access denied. You don't have permission to view this data.";
             } else if (error.response?.status === 500) {
                 errorMessage.value = `Server error: ${error.response?.data?.error || 'Internal server error'}`;
             } else if (error.code === 'ECONNREFUSED') {
@@ -175,11 +145,13 @@ async function fetchStockMovements(silentRefresh = false) {
                 errorMessage.value = error.response?.data?.error || error.message || "Failed to load stock movements data.";
             }
             
+
+            
             // Fallback to empty array on error
             stockMovements.value = [];
             filteredStockMovements.value = [];
         } else {
-            console.warn("Silent refresh failed, keeping existing data");
+            // Silent refresh failed, keeping existing data
         }
     } finally {
         if (!silentRefresh) {
@@ -193,21 +165,15 @@ async function fetchStockMovements(silentRefresh = false) {
 // Fetch stock summary for additional insights
 async function fetchStockSummary() {
     try {
-        const token = getAuthToken();
-        const response = await axios.get(`${API_BASE_URL}/stock-summary`, {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
-        });
+        // Auth handled by axios interceptor
+        const response = await axios.get('/stock-summary');
         
         if (response.data && Array.isArray(response.data)) {
             stockSummary.value = response.data;
-            console.log("Stock summary fetched successfully:", response.data.length, "products");
         }
         
     } catch (error) {
-        console.error("Error fetching stock summary:", error);
+        // Error fetching stock summary (console output removed)
     }
 }
 
@@ -245,7 +211,6 @@ function exportStockMovements() {
                 detail: searchQuery.value ? 'No movements match your current search criteria.' : 'No stock movements available to export.',
                 life: 3000
             });
-            console.warn('No stock movements data to export');
             return;
         }
         
@@ -290,10 +255,8 @@ function exportStockMovements() {
             life: 4000
         });
         
-        console.log(`✅ Exported ${exportData.length} stock movement records to ${filename}`);
-        
     } catch (error) {
-        console.error('❌ Error exporting stock movements:', error);
+        // Error exporting stock movements (console output removed)
         
         // Show error toast
         toast.add({
@@ -312,7 +275,6 @@ function exportStockMovements() {
 // Convert data to CSV format
 function convertToCSV(data) {
     if (!data || data.length === 0) {
-        console.warn('No data to convert to CSV');
         return '';
     }
     
@@ -343,7 +305,6 @@ function convertToCSV(data) {
         
         return [csvHeaders, ...csvRows].join('\n');
     } catch (error) {
-        console.error('❌ Error converting to CSV:', error);
         throw new Error('Failed to convert data to CSV format');
     }
 }
@@ -379,24 +340,19 @@ function downloadCSV(csvContent, filename) {
         // Clean up the URL object
         setTimeout(() => URL.revokeObjectURL(url), 100);
         
-        console.log('✅ CSV file downloaded successfully:', filename);
-        
     } catch (error) {
-        console.error('❌ Error downloading CSV:', error);
         throw new Error('Failed to download CSV file');
     }
 }
 
 // Refresh data
 function refreshData() {
-    console.log('🔄 Manual refresh triggered');
     fetchStockMovements(false); // Force full refresh
     fetchStockSummary();
 }
 
 // Force refresh (bypass cache)
 function forceRefresh() {
-    console.log('🔄 Force refresh triggered');
     // Clear existing data first
     stockMovements.value = [];
     filteredStockMovements.value = [];
@@ -421,6 +377,19 @@ function formatDateTime(dateTime) {
     return new Date(dateTime).toLocaleString("en-US", options);
 }
 
+// Navigate to login page
+function goToLogin() {
+    // You might need to adjust this path based on your routing setup
+    window.location.href = '/login';
+    // Or if using Vue Router: this.$router.push('/login');
+}
+
+// Manual refresh
+function checkAuthToken() {
+    fetchStockMovements(false);
+    fetchStockSummary();
+}
+
 // Get action type color class
 function getActionTypeColor(actionType) {
     switch (actionType) {
@@ -430,9 +399,9 @@ function getActionTypeColor(actionType) {
         case 'Stock Out': return 'text-red-600 dark:text-red-400';
         case 'Resolve': return 'text-emerald-600 dark:text-emerald-400';
         case 'Damage': return 'text-orange-600 dark:text-orange-400';
-        case 'Damage Report': return 'text-orange-600 dark:text-orange-400'; // Backward compatibility
+        case 'Damage': return 'text-orange-600 dark:text-orange-400'; // Updated terminology
         case 'Rental Charge': return 'text-purple-600 dark:text-purple-400';
-        case 'Room Assigned': return 'text-blue-600 dark:text-blue-400';
+        case 'Assigned': return 'text-blue-600 dark:text-blue-400';
         case 'Adjustment': return 'text-yellow-600 dark:text-yellow-400';
         default: return 'text-gray-600 dark:text-gray-400';
     }
@@ -510,6 +479,8 @@ function getActionTypeColor(actionType) {
             </div>
         </div>
         
+
+        
         <!-- Stats Cards -->
         <div v-if="!isLoading && stockMovements.length > 0" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <div class="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 rounded-lg p-4">
@@ -545,7 +516,7 @@ function getActionTypeColor(actionType) {
             <div class="bg-gradient-to-r from-orange-50 to-orange-100 dark:from-orange-900/30 dark:to-orange-800/20 rounded-lg p-4">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-orange-600 dark:text-orange-400 text-sm font-medium">Damage Reports</p>
+                        <p class="text-orange-600 dark:text-orange-400 text-sm font-medium">Damages</p>
                         <p class="text-2xl font-bold text-orange-800 dark:text-orange-200">{{ stockMovements.filter(m => ['Damage', 'Resolve'].includes(m.actionType)).length }}</p>
                     </div>
                     <i class="pi pi-exclamation-triangle text-orange-500 text-2xl"></i>
@@ -719,11 +690,11 @@ function getActionTypeColor(actionType) {
                                 :class="{
                                     'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300': slotProps.data.reference === 'Inventory',
                                     'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300': slotProps.data.reference === 'POS',
-                                    'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300': slotProps.data.reference === 'Damage Report' || slotProps.data.reference === 'Damage',
+                                    'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300': slotProps.data.reference === 'Damage',
                                     'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300': slotProps.data.reference === 'Assigned',
                                     'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300': slotProps.data.reference === 'Rental',
                                     'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300': slotProps.data.reference === 'Manual',
-                                    'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300': !['Inventory', 'POS', 'Damage Report', 'Damage', 'Assigned', 'Rental', 'Manual'].includes(slotProps.data.reference)
+                                    'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300': !['Inventory', 'POS', 'Damage', 'Assigned', 'Rental', 'Manual'].includes(slotProps.data.reference)
                                 }"
                             >
                                 {{ slotProps.data.reference || 'Other' }}

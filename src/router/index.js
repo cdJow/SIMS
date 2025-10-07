@@ -76,6 +76,8 @@ const router = createRouter({
                     name: "Room List",
                     component: () => import("@/views/pages/Rooms/RoomList.vue"),
                 },
+
+            
                 {
                     path: "/Rooms/CheckIn",
                     name: "Check In",
@@ -188,6 +190,16 @@ const router = createRouter({
                             "@/views/pages/Inventory/ManageInventory/ManageItems.vue"
                         ),
                 },
+
+                 {
+                    path: "/Inventory/ManageInventory/CleanAmenities",
+                    name: "Clean Amenities",
+                    component: () =>
+                        import(
+                            "@/views/pages/Inventory/ManageInventory/CleanAmenities.vue"
+                        ),
+                },
+                
 
                 {
                     path: "/Inventory/GenerateReport/InventorySummary",

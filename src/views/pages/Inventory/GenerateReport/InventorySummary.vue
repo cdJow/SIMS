@@ -12,6 +12,10 @@ import SummaryWidget from "./SummaryWidget.vue";
     <div class="grid grid-cols-2 gap-4">
         <StockMovement />
         <LowStockAlert />
-        <Chart1 />
+    
+    </div>
+
+     <div>
+          <Chart1 />
     </div>
 </template>

@@ -2,7 +2,8 @@
 
 const API_URL = 'http://127.0.0.1:5000';
 
-
+// Set axios base URL for all requests
+axios.defaults.baseURL = API_URL;
 
 // -- Axios interceptor for JWT (put at the top of your file) --
 axios.interceptors.request.use(
@@ -100,7 +101,10 @@ export function getAvailableAmenities() {
     return axios.get(`${API_URL}/available-amenities`);
 }
 
-
+// 2b. Fetch available amenities specifically for AddRoom (more lenient filtering)
+export function getAvailableAmenitiesAddRoom() {
+    return axios.get(`${API_URL}/available-amenities-addroom`);
+}
 
 // 3. Add a new room
 export function addRoom(roomData) {
@@ -341,6 +345,18 @@ export function removeDamageReport(damageReportId) {
   return axios.delete(`${API_URL}/damage-reports/${damageReportId}`);
 }
 
+export function exportDamageReports() {
+  return axios.get(`${API_URL}/damage-reports/export`, {
+    responseType: 'blob'
+  });
+}
+
+export function exportRoomDamageReports(roomId) {
+  return axios.get(`${API_URL}/damage-reports/export/room/${roomId}`, {
+    responseType: 'blob'
+  });
+}
+
 // Room Invoice Admin API
 export function fetchRoomInvoiceAdmin() {
   return axios.get(`${API_URL}/room-invoice-admin`);
@@ -352,4 +368,88 @@ export function deleteRoomInvoice(invoiceId) {
 
 export function fetchInvoiceSummary() {
   return axios.get(`${API_URL}/room-invoice-admin/summary`);
+}
+
+// Manage Items API
+export const getProductsWithItems = () => {
+  return axios.get(`${API_URL}/manage-items/products`);
+}
+
+export const getProductsSimple = () => {
+  return axios.get(`${API_URL}/manage-items/products/simple`);
+}
+
+// Update product
+export const updateProduct = (productId, productData) => {
+  return axios.put(`${API_URL}/manage-items/product/${productId}`, productData);
+}
+
+// Delete product
+export const deleteProductById = (productId) => {
+  return axios.delete(`${API_URL}/manage-items/product/${productId}`);
+}
+
+// Update batch
+export const updateBatch = (batchId, batchData) => {
+  return axios.put(`${API_URL}/manage-items/batch/${batchId}`, batchData);
+}
+
+// Delete batch
+export const deleteBatchById = (batchId) => {
+  return axios.delete(`${API_URL}/manage-items/batch/${batchId}`);
+}
+
+// Delete serial number
+export const deleteSerialById = (serialNumber) => {
+  return axios.delete(`${API_URL}/manage-items/serial/${serialNumber}`);
+}
+
+// Assign item to room
+export const assignItemToRoom = (serialNumber, roomId) => {
+  return axios.post(`${API_URL}/manage-items/assign-to-room`, {
+    serialNumber,
+    roomId
+  });
+}
+
+// Unassign item from room
+export const unassignItemFromRoom = (serialNumber) => {
+  return axios.post(`${API_URL}/manage-items/unassign-from-room`, {
+    serialNumber
+  });
+}
+
+// Update serial number
+export const updateSerialNumber = (serialId, serialData) => {
+  return axios.put(`${API_URL}/manage-items/serial/${serialId}`, serialData);
+}
+
+// Rental Summary APIs
+export const getRentalSummary = () => {
+  return axios.get(`${API_URL}/rental-summary`);
+}
+
+export const getRentalItems = () => {
+  return axios.get(`${API_URL}/rental-items`);
+}
+
+export const getRentalCategories = () => {
+  return axios.get(`${API_URL}/rental-categories`);
+}
+
+export const getLowStockRentals = () => {
+  return axios.get(`${API_URL}/low-stock-rentals`);
+}
+
+// Stock Movement APIs (using StockTable endpoints)
+export const getStockMovements = () => {
+  return axios.get(`${API_URL}/stock-movements`);
+}
+
+export const forceRefreshStockMovements = () => {
+  return axios.post(`${API_URL}/force-refresh-stock-movements`);
+}
+
+export const debugStockData = () => {
+  return axios.get(`${API_URL}/debug-stock-data`);
 }

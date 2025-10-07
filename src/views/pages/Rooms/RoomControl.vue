@@ -528,7 +528,48 @@ onUnmounted(() => {
     <div class="flex-1">
       <div class="card">
         <div class="font-semibold text-xl mb-4">Rooms</div>
-        <DataView :value="filteredRooms" :layout="layout">
+        <!-- Empty State Check -->
+        <div v-if="filteredRooms.length === 0" class="text-center p-12 bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600">
+          <i class="pi pi-home text-6xl text-gray-400 mb-4"></i>
+          <h3 class="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">
+            <span v-if="selectedFilter.searchQuery || selectedFilter.roomCategory || selectedStatus">
+              No Rooms Found
+            </span>
+            <span v-else>
+              No Rooms Available
+            </span>
+          </h3>
+          <p class="text-gray-500 dark:text-gray-400 mb-4">
+            <span v-if="selectedFilter.searchQuery">
+              No rooms match your search "{{ selectedFilter.searchQuery }}"
+            </span>
+            <span v-else-if="selectedFilter.roomCategory || selectedStatus">
+              No rooms match your current filters
+            </span>
+            <span v-else>
+              There are no rooms in the system yet. Add your first room to get started.
+            </span>
+          </p>
+          <div class="flex justify-center gap-2">
+            <Button 
+              v-if="selectedFilter.searchQuery || selectedFilter.roomCategory || selectedStatus"
+              icon="pi pi-filter-slash" 
+              label="Clear Filters" 
+              class="p-button-outlined p-button-secondary"
+              @click="clearFilters"
+            />
+            <router-link v-else to="/Rooms/AddRoom">
+              <Button 
+                icon="pi pi-plus" 
+                label="Add Your First Room" 
+                class="p-button-primary"
+              />
+            </router-link>
+          </div>
+        </div>
+
+        <!-- Rooms DataView -->
+        <DataView v-else :value="filteredRooms" :layout="layout">
           <template #grid="slotProps">
             <div class="grid grid-cols-2 gap-4 items-stretch">
               <div v-for="room in slotProps.items" :key="room.id" class="border rounded-lg shadow-md p-4 card h-full flex flex-col">
@@ -597,7 +638,17 @@ onUnmounted(() => {
 </div>
 
     <h4 class="font-semibold mt-4 mb-2">Assigned Amenities</h4>
-    <div class="grid grid-cols-4 gap-2 text-sm font-medium">
+    
+    <!-- Empty State for No Amenities -->
+    <div v-if="assignedSerialNumbers.length === 0" class="text-center p-6 bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600">
+      <i class="pi pi-box text-3xl text-gray-400 mb-2"></i>
+      <p class="text-gray-500 dark:text-gray-400 text-sm">
+        No amenities assigned to this room
+      </p>
+    </div>
+    
+    <!-- Amenities Grid -->
+    <div v-else class="grid grid-cols-4 gap-2 text-sm font-medium">
       <div class="font-semibold">Product</div>
       <div class="font-semibold">Category</div>
       <div class="font-semibold">Brand</div>
@@ -746,8 +797,32 @@ onUnmounted(() => {
         @click="clearAmenitySearch"
       />
     </div>
+    <!-- Empty State for No Available Amenities -->
+    <div v-if="availableAmenities.length === 0" class="text-center p-8 bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600">
+      <i class="pi pi-search text-4xl text-gray-400 mb-4"></i>
+      <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">
+        No Amenities Found
+      </h3>
+      <p class="text-gray-500 dark:text-gray-400 mb-4">
+        <span v-if="amenitySearch || selectedType">
+          No amenities match your current search or filter
+        </span>
+        <span v-else>
+          No amenities are available in the inventory
+        </span>
+      </p>
+      <Button 
+        v-if="amenitySearch || selectedType"
+        icon="pi pi-filter-slash" 
+        label="Clear Search & Filters" 
+        class="p-button-outlined p-button-secondary"
+        @click="clearAmenitySearch"
+      />
+    </div>
+
     <!-- DataTable for Available Amenities -->
     <DataTable
+      v-else
       :value="availableAmenities"
       selection-mode="multiple"
       v-model:selection="selectedAmenities"

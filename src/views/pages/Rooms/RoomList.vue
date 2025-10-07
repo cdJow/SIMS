@@ -2249,13 +2249,24 @@ async function openOccupiedExtrasDialog(){
 
   try {
     const resA = await getAvailableAmenities();
-    occAmenitiesList.value = (resA?.data || []).map(a => ({
-      serial_id: Number(a.serial_id ?? a.id ?? a.serialId),
-      serial_number: a.serial_number,
-      product_name: a.product_name,
-      brand: a.brand,
-      unit_rental_price: Number(a.unit_rental_price || 0)
-    }));
+    occAmenitiesList.value = (resA?.data || [])
+      .filter(a => {
+        const category = (a.category || '').toLowerCase().trim();
+        const type = (a.type || '').toLowerCase().trim();
+        // Only allow Foam and Bath & Bed Linens
+        return category === 'foam' || type === 'foam' || 
+               category === 'bath & bed linens' || type === 'bath & bed linens' ||
+               category === 'bathbedlinens' || type === 'bathbedlinens';
+      })
+      .map(a => ({
+        serial_id: Number(a.serial_id ?? a.id ?? a.serialId),
+        serial_number: a.serial_number,
+        product_name: a.product_name,
+        brand: a.brand,
+        category: a.category,
+        type: a.type,
+        unit_rental_price: Number(a.unit_rental_price || 0)
+      }));
   } catch (e) {
     occAmenitiesList.value = [];
   }
@@ -2535,16 +2546,27 @@ productSearchQueryPD.value = "";
 // load active discounts last
 await loadDiscounts();
 
- // Load available amenities with unit rental price (in-stock only)
+ // Load available amenities with unit rental price (in-stock only) - Foam and Bath & Bed Linens only
  try {
    const resA = await getAvailableAmenities();
-   amenitiesPD.value = (resA?.data || []).map(a => ({
-     serial_id: Number(a.serial_id ?? a.id ?? a.serialId),
-     serial_number: a.serial_number,
-     product_name: a.product_name,
-     brand: a.brand,
-     unit_rental_price: Number(a.unit_rental_price || 0)
-   }));
+   amenitiesPD.value = (resA?.data || [])
+     .filter(a => {
+       const category = (a.category || '').toLowerCase().trim();
+       const type = (a.type || '').toLowerCase().trim();
+       // Only allow Foam and Bath & Bed Linens
+       return category === 'foam' || type === 'foam' || 
+              category === 'bath & bed linens' || type === 'bath & bed linens' ||
+              category === 'bathbedlinens' || type === 'bathbedlinens';
+     })
+     .map(a => ({
+       serial_id: Number(a.serial_id ?? a.id ?? a.serialId),
+       serial_number: a.serial_number,
+       product_name: a.product_name,
+       brand: a.brand,
+       category: a.category,
+       type: a.type,
+       unit_rental_price: Number(a.unit_rental_price || 0)
+     }));
  } catch (e) {
    amenitiesPD.value = [];
  }
@@ -3120,7 +3142,6 @@ watch(customerType, (val) => {
         const room = rooms.value.find(r => r.id === selectedRoom.value.id);
         if (!room) return;
 const isBookType = customerType.value === "Book";
-const effectiveCheckIn = isBookType ? new Date() : (guestDetails.checkInDateTime || new Date());
 
 const bookingData = {
   room_id: room.id,
@@ -3129,7 +3150,8 @@ const bookingData = {
   guest_email: guestDetails.guestEmail,
   booking_type: "Booking",
   status: "Booked",
-  check_in_datetime: toPHDateTimeString(effectiveCheckIn), // <- forced for Book
+  // Don't set check_in_datetime for bookings - only when actually checking in
+  check_in_datetime: isBookType ? null : toPHDateTimeString(guestDetails.checkInDateTime || new Date()),
   selected_hours: guestDetails.selectedHours,
   selected_rate: guestDetails.selectedrate,
   room_code: generateroomCode(room.id),
@@ -3140,10 +3162,11 @@ const bookingData = {
 const nowMs = Date.now();
 uiBookedAtMsByRoom.set(room.id, nowMs);
 
-// Optimistic UI so the card shows ~59:59 immediately
+// Optimistic UI - bookings should not have checkInDateTime until actual check-in
 const optimisticDetails = {
   ...guestDetails,
-  checkInDateTime: new Date(nowMs).toISOString(),
+  checkInDateTime: isBookType ? null : new Date(nowMs).toISOString(),
+  createdAt: new Date(nowMs).toISOString(), // Use createdAt for booking expiry calculations
 };
 selectedRoom.value.status = "Booked";
 selectedRoom.value.guestDetails = optimisticDetails;

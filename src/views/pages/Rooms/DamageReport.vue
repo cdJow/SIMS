@@ -5,7 +5,9 @@ import {
     fetchRoomAmenitiesWithDamageStatus, 
     createDamageReport, 
     removeDamageReport,
-    updateDamageReport
+    updateDamageReport,
+    exportDamageReports,
+    exportRoomDamageReports
 } from "@/api/auth";
 import { useToast } from "primevue/usetoast";
 
@@ -28,20 +30,9 @@ const damagedItems = computed(
 const loadRooms = async () => {
     try {
         loading.value = true;
-        console.log("Loading rooms for damage report...");
         const response = await fetchRoomsForDamageReport();
-        console.log("Rooms response:", response);
         rooms.value = response.data;
-        console.log("Loaded rooms:", rooms.value);
     } catch (error) {
-        console.error("Error loading rooms:", error);
-        console.error("Error details:", {
-            message: error.message,
-            status: error.response?.status,
-            statusText: error.response?.statusText,
-            data: error.response?.data
-        });
-        
         const errorMessage = error.response?.data?.error || error.message || "Failed to load rooms";
         toast.add({
             severity: "error",
@@ -64,7 +55,6 @@ const selectRoom = async (room) => {
         };
         showAmenitiesDialog.value = true;
     } catch (error) {
-        console.error("Error loading room amenities:", error);
         toast.add({
             severity: "error",
             summary: "Error",
@@ -119,7 +109,6 @@ const submitDamageReport = async () => {
         
         cancelDamageReport();
     } catch (error) {
-        console.error("Error creating damage report:", error);
         toast.add({
             severity: "error",
             summary: "Error", 
@@ -161,7 +150,6 @@ const removeDamageReportItem = async (item) => {
         // Refresh the rooms list to update damage count
         await loadRooms();
     } catch (error) {
-        console.error("Error removing damage report:", error);
         toast.add({
             severity: "error",
             summary: "Error",
@@ -182,9 +170,8 @@ const testAPI = async () => {
     try {
         const response = await fetch('http://127.0.0.1:5000/damage-reports/test');
         const data = await response.json();
-        console.log("API test result:", data);
     } catch (error) {
-        console.error("API test failed:", error);
+        // API test failed silently
     }
 };
 
@@ -265,6 +252,106 @@ const getItemResolutionStatus = (itemName) => {
         return "Will be marked as available";
     }
 };
+
+// Export functions
+const exporting = ref(false);
+const exportingRoom = ref(false);
+
+const exportReports = async () => {
+    try {
+        exporting.value = true;
+        const response = await exportDamageReports();
+        
+        // Create download link
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        
+        // Extract filename from response headers or create default
+        const contentDisposition = response.headers['content-disposition'];
+        let filename = `damage_reports_${new Date().toISOString().slice(0, 10)}.csv`;
+        if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+            if (filenameMatch) {
+                filename = filenameMatch[1];
+            }
+        }
+        
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
+        toast.add({
+            severity: "success",
+            summary: "Export Successful",
+            detail: "Damage reports exported successfully",
+            life: 3000,
+        });
+    } catch (error) {
+        const errorMessage = error.response?.status === 404 
+            ? "No damage reports found to export" 
+            : error.response?.data?.message || error.message || "Failed to export damage reports";
+        
+        toast.add({
+            severity: "error",
+            summary: "Export Failed",
+            detail: errorMessage,
+            life: 5000,
+        });
+    } finally {
+        exporting.value = false;
+    }
+};
+
+const exportRoomReports = async (roomId, roomNumber) => {
+    try {
+        exportingRoom.value = true;
+        const response = await exportRoomDamageReports(roomId);
+        
+        // Create download link
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        
+        // Extract filename from response headers or create default
+        const contentDisposition = response.headers['content-disposition'];
+        let filename = `room_${roomNumber}_damage_reports_${new Date().toISOString().slice(0, 10)}.csv`;
+        if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+            if (filenameMatch) {
+                filename = filenameMatch[1];
+            }
+        }
+        
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
+        toast.add({
+            severity: "success",
+            summary: "Export Successful",
+            detail: `Room ${roomNumber} damage reports exported successfully`,
+            life: 3000,
+        });
+    } catch (error) {
+        const errorMessage = error.response?.status === 404 
+            ? `No damage reports found for Room ${roomNumber}` 
+            : error.response?.data?.message || "Failed to export room damage reports";
+        
+        toast.add({
+            severity: "error",
+            summary: "Export Failed",
+            detail: errorMessage,
+            life: 3000,
+        });
+    } finally {
+        exportingRoom.value = false;
+    }
+};
 </script>
 
 <template>
@@ -273,7 +360,21 @@ const getItemResolutionStatus = (itemName) => {
             <!-- Room Grid -->
             <div class="card flex-1">
                 <div class="room-grid">
-                    <h2 class="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">Rooms Status</h2>
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Rooms Status</h2>
+                        <div class="flex gap-2">
+                            <Button
+                                icon="pi pi-download"
+                                label="Export Damage Reports"
+                                severity="info"
+                                :loading="exporting"
+                                @click="exportReports"
+                                size="small"
+                                outlined
+                                title="Export damage reports (unresolved only)"
+                            />
+                        </div>
+                    </div>
                     <div
                         v-if="loading"
                         class="flex justify-center items-center h-64"
@@ -440,6 +541,22 @@ const getItemResolutionStatus = (itemName) => {
             :modal="true"
             maximizable
         >
+            <template #header>
+                <div class="flex justify-between items-center w-full">
+                    <span class="text-xl font-semibold">Room {{ selectedRoom.room_number }} Amenities</span>
+                    <Button
+                        v-if="damagedItems.length > 0"
+                        icon="pi pi-download"
+                        label="Export Room Reports"
+                        severity="info"
+                        size="small"
+                        outlined
+                        :loading="exportingRoom"
+                        @click="exportRoomReports(selectedRoom.id, selectedRoom.room_number)"
+                        title="Export damage reports for this room"
+                    />
+                </div>
+            </template>
             <div class="amenities-dialog-content">
                 <div v-if="amenitiesLoading" class="flex justify-center p-4">
                     <ProgressSpinner />
