@@ -1,5 +1,5 @@
 <script>
-import { fetchRooms } from "@/api/auth";
+import { fetchRooms, getRevenueStats } from "@/api/auth";
 
 export default {
     data() {
@@ -9,13 +9,12 @@ export default {
                 occupiedRooms: 0,
                 underMaintinance: 0, // Cleaning / Maintenance
                 totalRooms: 0, // Booked
-                // Keep revenue placeholders for future wiring
-                revenue: 1254000,
-                revenueIncrease: 12.4,
+                // Real-time revenue data from checkin_payments
+                revenue: 0,
                 revenueBreakdown: [
-                    { name: "Room Revenue", amount: 854000, percentage: 68 },
-                    { name: "Food & Beverage", amount: 235000, percentage: 19 },
-                    { name: "Amenities", amount: 98000, percentage: 8 },
+                    { name: "Room Revenue", amount: 0, percentage: 0 },
+                    { name: "Consumables", amount: 0, percentage: 0 },
+                    { name: "Amenities", amount: 0, percentage: 0 },
                 ],
             },
             _timer: null,
@@ -36,15 +35,34 @@ export default {
             this.stats.underMaintinance = cleaning;
             this.stats.totalRooms = booked;
         },
+        async _loadRevenue() {
+            try {
+                const response = await getRevenueStats();
+                const revenueData = response.data;
+                
+                // Update revenue data
+                this.stats.revenue = revenueData.revenue;
+                this.stats.revenueBreakdown = revenueData.revenueBreakdown;
+                
+                console.log("✅ Revenue data updated:", revenueData);
+            } catch (e) {
+                console.error("StatsWidget: failed to fetch revenue data", e);
+            }
+        },
         async _load() {
             if (this._loading) return;
             this._loading = true;
             try {
-                const res = await fetchRooms();
-                const rooms = Array.isArray(res?.data) ? res.data : [];
+                // Load both room and revenue data
+                const [roomsRes] = await Promise.all([
+                    fetchRooms(),
+                    this._loadRevenue()
+                ]);
+                
+                const rooms = Array.isArray(roomsRes?.data) ? roomsRes.data : [];
                 this._computeCounts(rooms);
             } catch (e) {
-                console.error("StatsWidget: failed to fetch rooms", e);
+                console.error("StatsWidget: failed to fetch data", e);
             } finally {
                 this._loading = false;
             }
@@ -68,7 +86,7 @@ export default {
 </script>
 
 <template>
-    <div class="grid grid-cols-12 gap-4">
+    <div class="grid grid-cols-12 gap-4 mb-2">
         <!-- Total Available Rooms -->
         <div class="col-span-12 lg:col-span-6 xl:col-span-3">
             <div class="card mb-0">
@@ -162,7 +180,11 @@ export default {
         </div>
 
         <!-- Revenue -->
-        <div class="col-span-12 lg:col-span-6 xl:col-span-6">
+       
+
+    </div>
+
+     <div class="col-span-12 lg:col-span-6 xl:col-span-6">
             <div class="card mb-0">
                 <div class="flex justify-between mb-4">
                     <div>
@@ -215,15 +237,7 @@ export default {
                     </div>
                 </div>
 
-                <div class="mt-4 flex justify-between items-center">
-                    <div>
-                        <span class="text-primary font-medium"
-                            >{{ stats.revenueIncrease }}%+
-                        </span>
-                        <span class="text-sm">weekly increase</span>
-                    </div>
-                </div>
+
             </div>
         </div>
-    </div>
 </template>

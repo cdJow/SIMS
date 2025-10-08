@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, watch, onMounted } from "vue";
 
 const selectedPeriod = ref("month");
 const periods = ref([
@@ -8,23 +8,36 @@ const periods = ref([
     { label: "Last Year", value: "year" },
 ]);
 
-// Sample data for different time periods
+// Initialize revenue data structure
 const revenueData = ref({
-    week: {
-        labels: ["Single Size Bed", "Double Size Bed", "Queen Size Bed"],
-        data: [45, 80, 65],
-        total: 190,
-    },
-    month: {
-        labels: ["Single Size Bed", "Double Size Bed", "Queen Size Bed"],
-        data: [120, 250, 180],
-        total: 550,
-    },
-    year: {
-        labels: ["Single Size Bed", "Double Size Bed", "Queen Size Bed"],
-        data: [1500, 3200, 2400],
-        total: 7100,
-    },
+    week: { labels: [], data: [], total: 0 },
+    month: { labels: [], data: [], total: 0 },
+    year: { labels: [], data: [], total: 0 },
+});
+
+// Fetch revenue data from backend
+const fetchRevenueData = async (period) => {
+    try {
+        const response = await fetch(`http://localhost:5000/api/room-revenue/${period}`);
+        const data = await response.json();
+        if (response.ok) {
+            revenueData.value[period] = data;
+        } else {
+            console.error('Error fetching revenue data:', data.error);
+        }
+    } catch (error) {
+        console.error('Error fetching revenue data:', error);
+    }
+};
+
+// Watch for period changes and fetch new data
+watch(selectedPeriod, (newPeriod) => {
+    fetchRevenueData(newPeriod);
+});
+
+// Initial data fetch
+onMounted(() => {
+    fetchRevenueData(selectedPeriod.value);
 });
 
 const pieChartOptions = ref({
@@ -56,8 +69,30 @@ const roomSizeData = computed(() => ({
     datasets: [
         {
             data: revenueData.value[selectedPeriod.value].data,
-            backgroundColor: ["#3B82F6", "#10B981", "#F59E0B"],
-            hoverBackgroundColor: ["#2563EB", "#059669", "#D97706"],
+            backgroundColor: [
+                "#3B82F6", // Blue
+                "#10B981", // Green
+                "#F59E0B", // Orange
+                "#EC4899", // Pink
+                "#8B5CF6", // Purple
+                "#14B8A6", // Teal
+                "#EF4444", // Red
+                "#6366F1", // Indigo
+                "#F97316", // Dark Orange
+                "#84CC16", // Lime
+            ],
+            hoverBackgroundColor: [
+                "#2563EB", // Darker Blue
+                "#059669", // Darker Green
+                "#D97706", // Darker Orange
+                "#DB2777", // Darker Pink
+                "#7C3AED", // Darker Purple
+                "#0D9488", // Darker Teal
+                "#DC2626", // Darker Red
+                "#4F46E5", // Darker Indigo
+                "#EA580C", // Darker Dark Orange
+                "#65A30D", // Darker Lime
+            ],
         },
     ],
 }));
@@ -141,7 +176,7 @@ const getDateRange = (period) => {
                         color: roomSizeData.datasets[0].backgroundColor[index],
                     }"
                 >
-                    {{ roomSizeData.datasets[0].data[index].toLocaleString() }}
+                    ₱{{ roomSizeData.datasets[0].data[index].toLocaleString() }}
                 </div>
                 <div class="text-sm text-gray-500">
                     ({{
@@ -157,7 +192,7 @@ const getDateRange = (period) => {
 
         <!-- Total Summary -->
         <div class="text-center font-semibold">
-            Total : {{ totalRevenue.toLocaleString() }}
+            Total: ₱{{ totalRevenue.toLocaleString() }}
         </div>
     </div>
 </template>

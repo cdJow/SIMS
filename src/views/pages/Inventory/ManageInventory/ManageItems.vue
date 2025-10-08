@@ -31,6 +31,8 @@ const selectedBatch = ref({});
 const products = ref([]); // Products for the DataTable
 const selectedProduct = ref(null); // Selected product from the DataTable
 const selectedItem = ref(null); // Selected item details
+const isLoading = ref(false); // Loading state
+const error = ref(null); // Error state
 
 // Computed property to ensure products is always a valid array with proper structure
 const safeProducts = computed(() => {
@@ -194,6 +196,8 @@ const filterConsumableBatches = (batches) => {
 
 // Function to refresh products data
 async function refreshProducts() {
+    isLoading.value = true;
+    error.value = null;
     try {
         console.log("Refreshing products with batches...");
         const data = await ProductService.getProductsWithOrders();
@@ -218,20 +222,25 @@ async function refreshProducts() {
             console.warn("API returned non-array data:", data);
             products.value = [];
         }
-    } catch (error) {
-        console.error("Error refreshing products:", error);
+    } catch (err) {
+        console.error("Error refreshing products:", err);
+        error.value = err.message || "Failed to refresh products data";
         if (toast.value) {
             toast.value.add({
                 severity: "error",
                 summary: "Error",
-                detail: "Failed to refresh products data",
+                detail: error.value,
                 life: 3000
             });
         }
+    } finally {
+        isLoading.value = false;
     }
 }
 
 onMounted(async () => {
+    isLoading.value = true;
+    error.value = null;
     try {
         console.log("Loading products with batches...");
         const data = await ProductService.getProductsWithOrders();
@@ -259,10 +268,13 @@ onMounted(async () => {
         }
         
         initFilters();
-    } catch (error) {
-        console.error("Data loading failed:", error);
-        showErrorToast("Failed to load product data");
+    } catch (err) {
+        console.error("Data loading failed:", err);
+        error.value = err.message || "Failed to load product data";
+        showErrorToast(error.value);
         products.value = []; // Ensure empty array state
+    } finally {
+        isLoading.value = false;
     }
 });
 
@@ -403,6 +415,24 @@ function saveEditConsumable() {
 }
 
 // Functions for editing serial number in isDialog2Visible
+// Computed property for filtered products
+const filteredProducts = computed(() => {
+    const globalFilter = filters.value.global?.value?.toLowerCase().trim() || '';
+    return globalFilter
+        ? products.value.filter(product => {
+            return [
+                product.name,
+                product.brand,
+                product.category,
+                product.type,
+                product.unit
+            ].some(field => 
+                field?.toString().toLowerCase().includes(globalFilter)
+            );
+        })
+        : products.value;
+});
+
 // Computed property for button state
 const isUpdateButtonDisabled = computed(() => {
     return !editingSerialData.value.serialNumber.trim() || 
@@ -2064,7 +2094,58 @@ function formatPrice(value) {
 <template>
     <div class="card">
         <div class="font-semibold text-xl mb-4">Item Control</div>
+        <!-- Loading State -->
+        <div v-if="isLoading" class="text-center py-12">
+            <i class="pi pi-spin pi-spinner text-6xl text-gray-300 dark:text-gray-600 mb-4 block"></i>
+            <h3 class="text-lg font-semibold text-gray-600 dark:text-gray-400 mb-2">Loading Inventory</h3>
+            <p class="text-gray-500 dark:text-gray-500">Please wait while we fetch your inventory items...</p>
+        </div>
+
+        <!-- Error State -->
+        <div v-else-if="error" class="text-center py-12">
+            <i class="pi pi-exclamation-triangle text-6xl text-red-500 mb-4 block"></i>
+            <h3 class="text-lg font-semibold text-gray-600 dark:text-gray-400 mb-2">Error Loading Items</h3>
+            <p class="text-gray-500 dark:text-gray-500 mb-4">{{ error }}</p>
+            <Button
+                icon="pi pi-refresh"
+                label="Try Again"
+                severity="danger"
+                @click="refreshProducts"
+            />
+        </div>
+
+        <!-- Empty State -->
+        <div v-else-if="!safeProducts.length" class="text-center py-12">
+            <i class="pi pi-box text-6xl text-gray-300 dark:text-gray-600 mb-4 block"></i>
+            <h3 class="text-lg font-semibold text-gray-600 dark:text-gray-400 mb-2">No Items in Inventory</h3>
+            <p class="text-gray-500 dark:text-gray-500 mb-4">
+                Your inventory is empty. You can:<br>
+                • Add new products<br>
+                • Create batches<br>
+                • Manage serial numbers<br><br>
+                Get started by adding your first item!
+            </p>
+        </div>
+
+        <!-- Search No Results State -->
+        <div v-else-if="filters.global?.value && !filteredProducts.length" class="text-center py-12">
+            <i class="pi pi-search text-6xl text-gray-300 dark:text-gray-600 mb-4 block"></i>
+            <h3 class="text-lg font-semibold text-gray-600 dark:text-gray-400 mb-2">No Results Found</h3>
+            <p class="text-gray-500 dark:text-gray-500 mb-4">
+                No items match your search "{{ filters.global.value }}"<br>
+                Try adjusting your search terms or clear the filter to see all items.
+            </p>
+            <Button
+                icon="pi pi-times"
+                label="Clear Search"
+                class="p-button-text"
+                @click="clearFilter"
+            />
+        </div>
+
+        <!-- DataTable when data exists -->
         <DataTable
+            v-else
             v-model:expandedRows="expandedRows"
             :value="safeProducts"
             dataKey="id"

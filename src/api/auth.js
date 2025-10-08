@@ -453,3 +453,21 @@ export const forceRefreshStockMovements = () => {
 export const debugStockData = () => {
   return axios.get(`${API_URL}/debug-stock-data`);
 }
+
+// Revenue Stats API
+export const getRevenueStats = () => {
+  return axios.get(`${API_URL}/stats/revenue`);
+}
+
+export const getRevenueBreakdown = (period, offset) => {
+  return axios.get(`${API_URL}/revenue-breakdown-chart`, {
+    params: { period, offset }
+  });
+};
+
+export const getCategoryBreakdown = (period) => {
+  return axios.get(`${API_URL}/category-breakdown-chart`, {
+    params: { period }
+  });
+}
+

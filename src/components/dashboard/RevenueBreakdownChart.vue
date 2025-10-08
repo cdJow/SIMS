@@ -1,5 +1,6 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, onMounted, onUnmounted } from "vue";
+import { getRevenueBreakdown } from "@/api/auth";
 
 const periodOptions = ref([
     { name: "Weekly", value: "week" },
@@ -82,59 +83,44 @@ function handleRevenuePeriodChange() {
     loadRevenueData();
 }
 
-async function loadRevenueData() {
-    // Implement data loading based on period and offset
-    const params = {
-        period: selectedRevenuePeriod.value.value,
-        offset: revenueOffset.value,
-    };
-    console.log("Loading revenue data with:", params);
-    // await fetchRevenueData(params);
-}
-
-const filteredRevenueData = computed(() => {
-    // Replace with actual data fetching logic
-    return {
-        labels: getChartLabels(),
-        datasets: [
-            {
-                label: "Revenue",
-                data: generateSampleData(),
-                backgroundColor: "#4F46E5",
-            },
-        ],
-    };
+const chartData = ref({
+    labels: [],
+    datasets: []
 });
 
-function getChartLabels() {
-    switch (selectedRevenuePeriod.value.value) {
-        case "week":
-            return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-        case "month":
-            return ["Week 1", "Week 2", "Week 3", "Week 4"];
-        case "year":
-            return [
-                "Jan",
-                "Feb",
-                "Mar",
-                "Apr",
-                "May",
-                "Jun",
-                "Jul",
-                "Aug",
-                "Sep",
-                "Oct",
-                "Nov",
-                "Dec",
-            ];
+async function loadRevenueData() {
+    try {
+        const params = {
+            period: selectedRevenuePeriod.value.value,
+            offset: revenueOffset.value,
+        };
+        console.log("📊 Loading revenue data with:", params);
+        
+        const response = await getRevenueBreakdown(params.period, params.offset);
+        chartData.value = response.data;
+        
+        console.log("✅ Revenue data loaded:", response.data);
+    } catch (error) {
+        console.error("❌ Failed to load revenue data:", error);
     }
 }
 
-function generateSampleData() {
-    // Replace with actual data
-    const length = getChartLabels().length;
-    return Array.from({ length }, () => Math.floor(Math.random() * 10000));
-}
+const filteredRevenueData = computed(() => chartData.value);
+
+// Set up auto-refresh every minute
+let refreshTimer = null;
+
+onMounted(() => {
+    loadRevenueData();
+    refreshTimer = setInterval(loadRevenueData, 60000); // Refresh every minute
+});
+
+// Clean up timer on component unmount
+onUnmounted(() => {
+    if (refreshTimer) {
+        clearInterval(refreshTimer);
+    }
+});
 
 const revenueChartOptions = ref({
     responsive: true,

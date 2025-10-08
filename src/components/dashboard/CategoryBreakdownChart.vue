@@ -1,163 +1,189 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, onMounted, onUnmounted } from "vue";
+import { getCategoryBreakdown } from "@/api/auth";
+import Chart from 'primevue/chart';
 
-const selectedPeriod = ref("month");
-const periods = ref([
-    { label: "Last Week", value: "week" },
-    { label: "Last Month", value: "month" },
-    { label: "Last Year", value: "year" },
-]);
+const defaultChartData = {
+    current: {
+        labels: [],
+        datasets: [{
+            data: [],
+            backgroundColor: ['#4F46E5', '#10B981', '#F59E0B'],
+            borderWidth: 0
+        }],
+        percentages: []
+    },
+    trend: {
+        labels: [],
+        datasets: []
+    },
+    total: 0
+};
 
-// Sample data for different time periods
-const revenueData = ref({
-    week: {
-        labels: ["Room Revenue", "Food & Beverage", "Amenities"],
-        data: [185000, 55000, 22000],
-        total: 262000,
-    },
-    month: {
-        labels: ["Room Revenue", "Food & Beverage", "Amenities"],
-        data: [854000, 235000, 98000],
-        total: 1254000,
-    },
-    year: {
-        labels: ["Room Revenue", "Food & Beverage", "Amenities"],
-        data: [9854000, 2235000, 1498000],
-        total: 13587000,
-    },
-});
+const chartData = ref({ ...defaultChartData });
 
-const pieChartOptions = ref({
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-        legend: {
-            position: "bottom",
-            labels: {
-                usePointStyle: true,
-                padding: 20,
-            },
-        },
-        tooltip: {
-            callbacks: {
-                label: (context) => {
-                    const total = context.dataset.data.reduce((a, b) => a + b);
-                    const value = context.raw || 0;
-                    const percentage = ((value / total) * 100).toFixed(1);
-                    return `${context.label}: ₱${value.toLocaleString()} (${percentage}%)`;
+async function loadCategoryData() {
+    try {
+        const response = await getCategoryBreakdown('year');  // Always use yearly view
+        if (response?.data) {
+            chartData.value = {
+                current: {
+                    labels: response.data.current?.labels || [],
+                    datasets: [{
+                        data: response.data.current?.datasets?.[0]?.data || [],
+                        backgroundColor: ['#4F46E5', '#10B981', '#F59E0B'],
+                        borderWidth: 0
+                    }],
+                    percentages: response.data.current?.percentages || []
                 },
-            },
-        },
-    },
+                trend: {
+                    labels: response.data.trend?.labels || [],
+                    datasets: response.data.trend?.datasets || []
+                },
+                total: response.data.total || 0
+            };
+        } else {
+            chartData.value = { ...defaultChartData };
+        }
+        console.log("✅ Category breakdown data loaded:", chartData.value);
+    } catch (error) {
+        console.error("❌ Failed to load category breakdown:", error);
+        chartData.value = { ...defaultChartData };
+    }
+}
+
+// Remove period watch as we only show yearly data
+
+let refreshTimer = null;
+
+onMounted(() => {
+    loadCategoryData();
+    refreshTimer = setInterval(loadCategoryData, 60000);
 });
 
-const revenueCategoriesData = computed(() => ({
-    labels: revenueData.value[selectedPeriod.value].labels,
-    datasets: [
-        {
-            data: revenueData.value[selectedPeriod.value].data,
-            backgroundColor: ["#3B82F6", "#10B981", "#F59E0B"],
-            hoverBackgroundColor: ["#2563EB", "#059669", "#D97706"],
-        },
-    ],
-}));
+onUnmounted(() => {
+    if (refreshTimer) {
+        clearInterval(refreshTimer);
+    }
+});
 
-const totalRevenue = computed(
-    () => revenueData.value[selectedPeriod.value].total,
+const totalRevenue = computed(() => chartData.value.total || 0);
+const formattedTotal = computed(() => 
+    totalRevenue.value.toLocaleString('en-PH', {
+        style: 'currency',
+        currency: 'PHP',
+        minimumFractionDigits: 2
+    })
 );
 
-const getDateRange = (period) => {
-    const now = new Date();
-    const format = (date) =>
-        date.toLocaleDateString("en-PH", {
-            year: "numeric",
-            month: "short",
-            day: "numeric",
-        });
+const pieChartData = computed(() => ({
+    labels: chartData.value.current.labels || [],
+    datasets: chartData.value.current.datasets || [{
+        data: [],
+        backgroundColor: ['#4F46E5', '#10B981', '#F59E0B'],
+        borderWidth: 0
+    }]
+}));
 
-    switch (period) {
-        case "week": {
-            const lastWeek = new Date(now);
-            lastWeek.setDate(now.getDate() - 7);
-            return `${format(lastWeek)} - ${format(now)}`;
+const trendChartData = computed(() => ({
+    labels: chartData.value.trend.labels || [],
+    datasets: chartData.value.trend.datasets || []
+}));
+
+const chartConfig = {
+    pie: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: "bottom",
+                labels: {
+                    usePointStyle: true,
+                    padding: 20
+                }
+            },
+            tooltip: {
+                callbacks: {
+                    label: (context) => {
+                        const value = context.raw || 0;
+                        const percentage = chartData.value.current.percentages[context.dataIndex] || 0;
+                        return `${context.label}: ₱${value.toLocaleString()} (${percentage}%)`;
+                    }
+                }
+            }
         }
-        case "month": {
-            const lastMonth = new Date(now);
-            lastMonth.setMonth(now.getMonth() - 1);
-            return `${format(lastMonth)} - ${format(now)}`;
+    },
+    trend: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    callback: (value) => '₱' + value.toLocaleString()
+                }
+            }
+        },
+        plugins: {
+            legend: {
+                position: 'bottom',
+                labels: {
+                    usePointStyle: true,
+                    padding: 20
+                }
+            }
         }
-        case "year": {
-            const lastYear = new Date(now);
-            lastYear.setFullYear(now.getFullYear() - 1);
-            return `${format(lastYear)} - ${format(now)}`;
-        }
-        default:
-            return format(now);
     }
 };
 </script>
 
 <template>
     <div>
-        <div class="flex justify-between items-center">
+        <div class="flex justify-between items-center mb-4">
             <h3 class="text-lg font-semibold">Revenue Breakdown by Category</h3>
-            <div class="flex items-center gap-2">
-                <Select
-                    v-model="selectedPeriod"
-                    :options="periods"
-                    optionLabel="label"
-                    optionValue="value"
-                    class="w-full"
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="card p-4 flex flex-col">
+                <h4 class="text-base font-medium mb-4">Current Period</h4>
+                <Chart
+                    type="doughnut"
+                    :data="pieChartData"
+                    :options="chartConfig.pie"
+                    class="min-h-[415px]"
+                />
+               
+            </div>
+
+            <div class="card p-4 flex flex-col">
+                <h4 class="text-base font-medium mb-4">Revenue Trend</h4>
+                <Chart
+                    type="line"
+                    :data="trendChartData"
+                    :options="chartConfig.trend"
+                    class="min-h-[415px]"
                 />
             </div>
         </div>
 
-        <div class="mb-4 text-sm text-gray-600">
-            {{ getDateRange(selectedPeriod) }}
-        </div>
-
-        <Chart
-            type="doughnut"
-            :data="revenueCategoriesData"
-            :options="pieChartOptions"
-            class="min-h-[400px]"
-        />
-
-        <div class="mt-4 grid grid-cols-3 gap-4 text-center">
-            <div
-                v-for="(label, index) in revenueCategoriesData.labels"
-                :key="label"
-            >
-                <div class="text-sm font-medium">
-                    {{ label }}
-                </div>
-                <div
-                    class="text-lg font-semibold"
-                    :style="{
-                        color: revenueCategoriesData.datasets[0]
-                            .backgroundColor[index],
-                    }"
-                >
-                    ₱{{
-                        revenueCategoriesData.datasets[0].data[
-                            index
-                        ].toLocaleString()
-                    }}
+        <div v-if="chartData.value?.current?.labels?.length > 0" class="mt-6 grid grid-cols-3 gap-4">
+            <div v-for="(label, index) in chartData.value.current.labels" 
+                 :key="label" 
+                 class="card p-4 text-center">
+                <div class="text-sm font-medium mb-2">{{ label }}</div>
+                <div class="text-lg font-semibold" 
+                     :style="{ color: chartData.value.current.datasets[0]?.backgroundColor?.[index] || '#000000' }">
+                    ₱{{ (chartData.value.current.datasets[0]?.data?.[index] || 0).toLocaleString() }}
                 </div>
                 <div class="text-sm text-gray-500">
-                    ({{
-                        (
-                            (revenueCategoriesData.datasets[0].data[index] /
-                                totalRevenue) *
-                            100
-                        ).toFixed(1)
-                    }}%)
+                    ({{ chartData.value.current.percentages?.[index] || 0 }}%)
                 </div>
             </div>
         </div>
-
-        <div class="mt-4 text-center font-semibold">
-            Total Revenue: ₱{{ totalRevenue.toLocaleString() }}
+       
+        <!-- Centered Total Revenue at the bottom -->
+        <div class="mt-8 text-center">
+            <div class="text-md font-bold mt-2">Total Revenue: {{ formattedTotal }}</div>
         </div>
     </div>
 </template>
