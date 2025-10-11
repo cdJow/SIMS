@@ -2,35 +2,51 @@
 import Avatar from "primevue/avatar";
 import Menu from "primevue/menu";
 import { useToast } from "primevue/usetoast";
-import { computed, ref } from "vue";
+import { computed, ref, onMounted } from "vue";
 import { useRouter } from "vue-router"; // Add these imports
+import axios from "axios";
 
-const roomRates = ref([
-    {
-        type: "Single Size Bed",
-        durations: [
-            { hours: 6, price: 200 },
-            { hours: 12, price: 400 },
-            { hours: 24, price: 800 },
-        ],
-    },
-    {
-        type: "Double Size Bed",
-        durations: [
-            { hours: 6, price: 200 },
-            { hours: 12, price: 400 },
-            { hours: 24, price: 800 },
-        ],
-    },
-    {
-        type: "Queen Size Bed",
-        durations: [
-            { hours: 6, price: 200 },
-            { hours: 12, price: 400 },
-            { hours: 24, price: 800 },
-        ],
-    },
-]);
+// Real-time room rates from database
+const roomRates = ref([]);
+const loadingRates = ref(false);
+
+// Fetch room rates from API
+const fetchRoomRates = async () => {
+    try {
+        loadingRates.value = true;
+        const response = await axios.get('http://127.0.0.1:5000/api/landing/room-rates');
+        
+        console.log('Room Rates API Response:', response.data);
+        
+        if (response.data && response.data.room_rates) {
+            roomRates.value = response.data.room_rates;
+        }
+    } catch (error) {
+        console.error('Error fetching room rates:', error);
+        toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to load room rates',
+            life: 3000
+        });
+        
+        // Fallback to default data
+        roomRates.value = [
+            {
+                type: "Standard Room",
+                category: "Standard",
+                occupancy: "2 persons",
+                durations: [
+                    { hours: 6, price: 200 },
+                    { hours: 12, price: 400 },
+                    { hours: 24, price: 800 }
+                ]
+            }
+        ];
+    } finally {
+        loadingRates.value = false;
+    }
+};
 
 
 
@@ -38,7 +54,16 @@ const roomRates = ref([
 const showMobileMenu = ref(false);
 const showProfileMenu = ref(false);
 const profileMenu = ref();
-const isLoggedIn = ref(false); // Replace with actual auth state
+// Check actual authentication status
+const isLoggedIn = ref(false);
+
+// Check if user is authenticated
+const checkAuthStatus = () => {
+    const token = localStorage.getItem('token');
+    const userData = localStorage.getItem('userData');
+    isLoggedIn.value = !!(token && userData);
+    return isLoggedIn.value;
+};
 
 const toggleMobileMenu = () => {
     showMobileMenu.value = !showMobileMenu.value;
@@ -72,9 +97,13 @@ const menuItems = computed(() => {
 });
 
 const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('userData');
     isLoggedIn.value = false;
     router.push("/");
 };
+
+
 
 const responsiveOptions = ref([
     {
@@ -103,8 +132,15 @@ const responsiveOptions = ref([
 const showBookingDialog = ref(false);
 
 // Add this method
+// Handle Book Now button click - redirect based on auth status
 const handleBookNow = () => {
-    showBookingDialog.value = true;
+    if (checkAuthStatus()) {
+        // User is logged in, redirect to BookedRooms
+        router.push('/pages/website/BookedRooms');
+    } else {
+        // User is not logged in, redirect to login
+        router.push('/pages/auth/login');
+    }
 };
 
 const amenities = ref([
@@ -126,63 +162,68 @@ const router = useRouter();
 
 const showAll = ref(false);
 
-const rooms = ref([
-    {
-        name: "Double Size Bed - Standard",
-        description: "Perfect for two guests with additional space.",
-        bedType: "Double Size Bed",
-        occupancy: 2,
-        rates: [
-            { duration: 6, price: 50 },
-            { duration: 12, price: 80 },
-            { duration: 24, price: 120 },
-        ],
-    },
-    {
-        name: "Queen Size Bed - Deluxe",
-        description: "A spacious and comfortable room for a relaxing stay.",
-        bedType: "Queen Size Bed",
-        occupancy: 2,
-        rates: [
-            { duration: 6, price: 70 },
-            { duration: 12, price: 100 },
-            { duration: 24, price: 150 },
-        ],
-    },
-    {
-        name: "King Size Bed - Suite",
-        description: "Luxury suite with a king-size bed and extra amenities.",
-        bedType: "King Size Bed",
-        occupancy: 2,
-        rates: [
-            { duration: 6, price: 100 },
-            { duration: 12, price: 150 },
-            { duration: 24, price: 200 },
-        ],
-    },
-    {
-        name: "Family Room - Standard",
-        description: "Ideal for families, featuring multiple beds.",
-        bedType: "Two Double Beds",
-        occupancy: 4,
-        rates: [
-            { duration: 6, price: 120 },
-            { duration: 12, price: 180 },
-            { duration: 24, price: 250 },
-        ],
-    },
-    {
-        name: "Single Room - Budget",
-        description: "A compact room suitable for solo travelers.",
-        bedType: "Single Bed",
-        occupancy: 1,
-        rates: [
-            { duration: 6, price: 30 },
-            { duration: 12, price: 50 },
-            { duration: 24, price: 75 },
-        ],
-    },
-]);
+// Real-time room data from database
+const rooms = ref([]);
+const loading = ref(false);
+
+// Fetch rooms from API
+const fetchRooms = async () => {
+    try {
+        loading.value = true;
+        const response = await axios.get('http://127.0.0.1:5000/api/landing/rooms');
+        
+        console.log('API Response:', response.data);
+        
+        if (response.data && response.data.rooms) {
+            console.log('Transforming rooms data:', response.data.rooms);
+            // Transform API data to match UI expectations  
+            rooms.value = response.data.rooms.map(room => {
+                console.log('Processing room:', room);
+                
+                return {
+                    id: room.id,
+                    room_number: room.room_number,
+                    name: room.name || `Room ${room.room_number}`,
+                    description: room.description || `Experience comfort in our accommodations.`,
+                    bedType: room.bedType || 'Standard Room',
+                    occupancy: room.occupancy || 2,
+                    status: room.status || 'available',
+                    image_url: room.image_url ? `http://127.0.0.1:5000${room.image_url}` : null,
+                    rates: room.rates || [
+                        { duration: 6, price: 200, hours: 6 },
+                        { duration: 12, price: 400, hours: 12 },
+                        { duration: 24, price: 800, hours: 24 }
+                    ]
+                };
+            });
+        }
+    } catch (error) {
+        console.error('Error fetching rooms:', error);
+        toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to load room data',
+            life: 3000
+        });
+        
+        // Fallback to static data
+        rooms.value = [
+            {
+                name: "Standard Room - Available",
+                description: "Perfect for guests seeking comfort and value.",
+                bedType: "Double Bed",
+                occupancy: 2,
+                rates: [
+                    { duration: 6, price: 200, hours: 6 },
+                    { duration: 12, price: 400, hours: 12 },
+                    { duration: 24, price: 800, hours: 24 },
+                ]
+            }
+        ];
+    } finally {
+        loading.value = false;
+    }
+};
 
 const visibleRooms = computed(() => {
     return showAll.value ? rooms.value : rooms.value.slice(0, 4);
@@ -198,6 +239,13 @@ const toggleShowAll = () => {
         });
     }
 };
+
+// Fetch rooms and rates when component mounts
+onMounted(() => {
+    checkAuthStatus(); // Check authentication status
+    fetchRooms();
+    fetchRoomRates();
+});
 </script>
 
 <template>
@@ -234,13 +282,13 @@ const toggleShowAll = () => {
 
                     <!-- Desktop Auth Buttons -->
                     <div class="hidden md:flex items-center space-x-4">
-                        <Button
+                        <a
                             v-if="!isLoggedIn"
-                            label="Login"
-                            class="p-button-text"
-                            style="color: white"
+                             class="hover:text-accent text-white transition-colors p-2"
                             @click="router.push('/pages/auth/login')"
+                             >Login</a
                         />
+                        
                         <Button
                             v-else
                             label="Logout"
@@ -249,13 +297,7 @@ const toggleShowAll = () => {
                         />
                     </div>
 
-                    <!-- Profile Icon (Always visible) -->
-                    <Avatar
-                        icon="pi pi-user"
-                        class="cursor-pointer bg-primary hover:bg-primary-dark transition-colors"
-                        size="large"
-                        shape="circle"
-                    />
+                    
                 </div>
 
                 <!-- Mobile Controls -->
@@ -368,7 +410,7 @@ const toggleShowAll = () => {
                                 class="p-button-lg bg-amber-500 hover:bg-amber-600 border-0 text-white px-10 py-5 shadow-lg"
                                 icon="pi pi-calendar"
                                 iconPos="right"
-                                @click="router.push('/pages/Catalog')"
+                                @click="handleBookNow"
                             />
                         </div>
                     </div>
@@ -471,14 +513,22 @@ const toggleShowAll = () => {
             <div class="mx-auto max-w-9xl">
                 <h2 class="text-3xl md:text-4xl font-bold mb-10 text-center">
                     Our Accommodations
+                    <span v-if="loading" class="text-sm text-gray-500 ml-2">
+                        <i class="pi pi-spin pi-spinner"></i>
+                        Loading...
+                    </span>
                 </h2>
 
-                <div class="p-6 md:p-8">
+                <div class="p-6 md:p-8" v-if="!loading && rooms.length > 0">
                     <Carousel
                         :value="rooms"
                         :numVisible="2"
                         :numScroll="2"
-                        :responsiveOptions="responsiveOptions"
+                        :responsiveOptions="[
+                            { breakpoint: '1200px', numVisible: 2, numScroll: 1 },
+                            { breakpoint: '768px', numVisible: 1, numScroll: 1 },
+                            { breakpoint: '560px', numVisible: 1, numScroll: 1 }
+                        ]"
                         circular
                         :autoplayInterval="4000"
                     >
@@ -491,29 +541,44 @@ const toggleShowAll = () => {
                                     class="flex flex-col md:flex-row gap-6 md:gap-8 p-4"
                                 >
                                     <!-- Image Container -->
-                                    <div class="md:w-1/2">
+                                    <div class="w-full">
                                         <div
-                                            class="relative rounded-xl overflow-hidden shadow-lg h-64 md:h-96"
+                                            class="relative rounded-xl overflow-hidden shadow-lg h-48 sm:h-64 md:h-80"
                                         >
                                             <img
-                                                src="@/assets/images/2.jpg"
+                                                :src="slotProps.data.image_url || '@/assets/images/2.jpg'"
                                                 class="w-full h-full object-cover transform hover:scale-105 transition-all duration-300"
-                                                alt="Room Image"
+                                                :alt="`${slotProps.data.name} Image`"
+                                                @error="$event.target.src = '@/assets/images/2.jpg'"
                                             />
                                             <div
                                                 class="absolute inset-0 bg-gradient-to-t from-black/40 via-black/20 to-transparent"
                                             ></div>
+                                            
+                                            <!-- Status Badge -->
+                                            <div 
+                                                v-if="slotProps.data.status"
+                                                class="absolute top-2 right-2 sm:top-4 sm:right-4 px-2 py-1 sm:px-3 rounded-full text-xs font-bold shadow-lg"
+                                                :class="{
+                                                    'bg-green-500 text-white': slotProps.data.status.toLowerCase() === 'available',
+                                                    'bg-red-500 text-white': slotProps.data.status.toLowerCase() === 'occupied',
+                                                    'bg-yellow-500 text-black': slotProps.data.status.toLowerCase() === 'maintenance',
+                                                    'bg-blue-500 text-white': slotProps.data.status.toLowerCase() === 'reserved'
+                                                }"
+                                            >
+                                                {{ slotProps.data.status.toUpperCase() }}
+                                            </div>
                                         </div>
                                     </div>
 
                                     <!-- Content Container -->
                                     <div
-                                        class="md:w-1/2 flex flex-col justify-center"
+                                        class="w-full flex flex-col justify-center"
                                     >
-                                        <div class="p-4 md:p-6">
+                                        <div class="p-2 sm:p-4 md:p-6">
                                             <!-- ... Keep existing content structure ... -->
                                             <h3
-                                                class="text-2xl md:text-3xl font-bold text-gray-800 mb-2"
+                                                class="text-2xl md:text-3l font-bold text-gray-800 mb-2"
                                             >
                                                 {{ slotProps.data.name }}
                                             </h3>
@@ -582,6 +647,7 @@ const toggleShowAll = () => {
                                             >
                                                 <Button
                                                     class="p-button-primary bg-gradient-to-r from-red-600 to-orange-500 text-white border-none"
+                                                    @click="handleBookNow"
                                                 >
                                                     <i
                                                         class="pi pi-bookmark mr-2"
@@ -597,16 +663,31 @@ const toggleShowAll = () => {
                     </Carousel>
                 </div>
 
-                <!-- See More Button -->
-                <div class="mt-12 text-center" v-if="rooms.length > 4">
-                    <button
-                        @click="router.push('/pages/Catalog')"
-                        class="px-8 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold transition-colors duration-300"
-                    >
-                        See Full Catalog
-                        <i class="pi pi-arrow-right ml-2"></i>
-                    </button>
+                <!-- Loading State -->
+                <div v-else-if="loading" class="text-center py-12">
+                    <div class="inline-flex items-center space-x-2 text-gray-500">
+                        <i class="pi pi-spin pi-spinner text-2xl"></i>
+                        <span class="text-lg">Loading accommodations...</span>
+                    </div>
                 </div>
+
+                <!-- No Rooms Available -->
+                <div v-else class="text-center py-12">
+                    <div class="text-gray-500">
+                        <i class="pi pi-exclamation-triangle text-4xl mb-4"></i>
+                        <h3 class="text-xl font-semibold mb-2">No rooms available</h3>
+                        <p>Please check back later or contact us directly.</p>
+                        <Button 
+                            label="Refresh" 
+                            icon="pi pi-refresh" 
+                            class="mt-4"
+                            @click="fetchRooms"
+                        />
+                    </div>
+                </div>
+
+                <!-- See More Button -->
+            
             </div>
         </section>
 
@@ -632,72 +713,113 @@ const toggleShowAll = () => {
                         Flexible options for every need, featuring premium
                         amenities and exceptional comfort
                     </p>
+                    <span v-if="loadingRates" class="text-sm text-gray-500 ml-2">
+                        <i class="pi pi-spin pi-spinner"></i>
+                        Loading rates...
+                    </span>
                 </div>
 
-                <div class="grid gap-8 md:grid-cols-2 lg:grid-cols-3 xl:gap-10">
-                    <div
-                        v-for="(room, index) in roomRates"
-                        :key="index"
-                        class="group relative bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 border-b-4 border-red-500 overflow-hidden"
-                    >
-                        <div
-                            class="absolute inset-0 bg-gradient-to-b from-red-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"
-                        ></div>
+                <!-- Loading State -->
+                <div v-if="loadingRates" class="text-center py-12">
+                    <div class="inline-flex items-center space-x-2 text-gray-500">
+                        <i class="pi pi-spin pi-spinner text-2xl"></i>
+                        <span class="text-lg">Loading room rates...</span>
+                    </div>
+                </div>
 
-                        <div class="p-8">
-                            <!-- Header -->
-                            <div class="flex items-start mb-6">
-                                <div
-                                    class="bg-red-500 p-3 rounded-lg shadow-md"
-                                >
-                                    <i
-                                        class="pi pi-star text-xl text-white"
-                                    ></i>
-                                </div>
-                                <div class="ml-4">
-                                    <h3
-                                        class="text-2xl font-bold text-gray-900"
+                <!-- Carousel for Room Rates -->
+                <div v-else-if="!loadingRates && roomRates.length > 0" class="p-2 sm:p-6 md:p-8">
+                    <Carousel
+                        :value="roomRates"
+                        :numVisible="3"
+                        :numScroll="1"
+                        :responsiveOptions="[
+                            { breakpoint: '1200px', numVisible: 3, numScroll: 1 },
+                            { breakpoint: '1024px', numVisible: 2, numScroll: 1 },
+                            { breakpoint: '768px', numVisible: 1, numScroll: 1 },
+                            { breakpoint: '560px', numVisible: 1, numScroll: 1 }
+                        ]"
+                        circular
+                        :autoplayInterval="5000"
+                    >
+                        <template #item="slotProps">
+                            <div class="m-2">
+                                <div class="group relative bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 border-b-4 border-red-500 overflow-hidden">
+                                    <div
+                                        class="absolute inset-0 bg-gradient-to-b from-red-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"
+                                    ></div>
+
+                                    <div class="p-8">
+                                        <!-- Header -->
+                                        <div class="flex items-start mb-6">
+                                            <div
+                                                class="bg-red-500 p-3 rounded-lg shadow-md"
+                                            >
+                                                <i
+                                                    class="pi pi-star text-xl text-white"
+                                                ></i>
+                                            </div>
+                                            <div class="ml-4">
+                                                <h3
+                                                    class="text-2xl font-bold text-gray-900"
+                                                >
+                                                    {{ slotProps.data.type }}
+                                                </h3>
+                                                <p class="text-gray-500 mt-1 text-sm">
+                                                    {{ slotProps.data.occupancy }}
+                                                </p>
+                                            
+                                            </div>
+                                        </div>
+
+                                        <!-- Features -->
+                                        <ul class="space-y-4 mb-8">
+                                            <li
+                                                v-for="(duration, dIndex) in slotProps.data.durations"
+                                                :key="dIndex"
+                                                class="flex justify-between items-center p-3 bg-gray-50 rounded-lg hover:bg-white transition-colors"
+                                            >
+                                                <div class="flex items-center">
+                                                    <i
+                                                        class="pi pi-clock text-red-500 mr-3"
+                                                    ></i>
+                                                    <span class="text-gray-700"
+                                                        >{{ duration.hours }} Hours</span
+                                                    >
+                                                </div>
+                                                <span
+                                                    class="text-lg font-bold text-red-600"
+                                                >
+                                                    ₱{{ duration.price }}
+                                                </span>
+                                            </li>
+                                        </ul>
+                                    </div>
+
+                                    <!-- Hover Ribbon -->
+                                    <div
+                                        class="absolute top-4 right-[-45px] group-hover:right-0 bg-red-500 text-white px-6 py-1 transform rotate-45 transition-all duration-300"
                                     >
-                                        {{ room.type }}
-                                    </h3>
-                                    <p class="text-gray-500 mt-1 text-sm">
-                                        {{ room.occupancy }}
-                                    </p>
+                                        <span class="text-xs font-bold">POPULAR</span>
+                                    </div>
                                 </div>
                             </div>
+                        </template>
+                    </Carousel>
+                </div>
 
-                            <!-- Features -->
-                            <ul class="space-y-4 mb-8">
-                                <li
-                                    v-for="(duration, dIndex) in room.durations"
-                                    :key="dIndex"
-                                    class="flex justify-between items-center p-3 bg-gray-50 rounded-lg hover:bg-white transition-colors"
-                                >
-                                    <div class="flex items-center">
-                                        <i
-                                            class="pi pi-clock text-red-500 mr-3"
-                                        ></i>
-                                        <span class="text-gray-700"
-                                            >{{ duration.hours }} Hours</span
-                                        >
-                                    </div>
-                                    <span
-                                        class="text-lg font-bold text-red-600"
-                                    >
-                                        ₱{{ duration.price }}
-                                    </span>
-                                </li>
-                            </ul>
-
-                            <!-- Additional Info -->
-                        </div>
-
-                        <!-- Hover Ribbon -->
-                        <div
-                            class="absolute top-4 right-[-45px] group-hover:right-0 bg-red-500 text-white px-6 py-1 transform rotate-45 transition-all duration-300"
-                        >
-                            <span class="text-xs font-bold">POPULAR</span>
-                        </div>
+                <!-- No Rates Available -->
+                <div v-else class="text-center py-12">
+                    <div class="text-gray-500">
+                        <i class="pi pi-exclamation-triangle text-4xl mb-4"></i>
+                        <h3 class="text-xl font-semibold mb-2">No rates available</h3>
+                        <p>Please check back later or contact us directly.</p>
+                        <Button 
+                            label="Refresh Rates" 
+                            icon="pi pi-refresh" 
+                            class="mt-4"
+                            @click="fetchRoomRates"
+                        />
                     </div>
                 </div>
             </div>
@@ -764,8 +886,8 @@ const toggleShowAll = () => {
                                     Address
                                 </h3>
                                 <p class="text-gray-600 leading-relaxed">
-                                    123 Luxury Avenue<br />
-                                    Prime District, City Center 9000<br />
+                                    Roxas Ave<br />
+                                    Iligan City, Lanao del Norte<br />
                                     Philippines
                                 </p>
                             </div>
@@ -788,7 +910,7 @@ const toggleShowAll = () => {
                                         href="tel:+631234567890"
                                         class="hover:text-red-500 transition-colors"
                                     >
-                                        +63 123 456 7890 </a
+                                       0956 680 1497</a
                                     ><br />
                                     <a
                                         href="mailto:info@woodlandsuites.com"
@@ -826,14 +948,14 @@ const toggleShowAll = () => {
                 <div>
                     <h3 class="font-semibold mb-4 text-white">Contact</h3>
                     <p class="text-gray-300">
-                        Poblacion Iligan <br />Iligan City<br />Phone: (555)
+                         Roxas Ave <br />Iligan City<br /> Lanao del Norte <br/>Phone: (555)
                         123-4567<br />Email: woodlandsuite@gmail.com
                     </p>
                 </div>
                 <div>
                     <h3 class="font-semibold mb-4 text-white">Follow Us</h3>
                     <div class="flex space-x-4">
-                        <a href="#" class="hover:text-accent transition-colors"
+                        <a href="https://www.facebook.com/profile.php?id=61562524193132" class="hover:text-accent transition-colors"
                             ><i class="pi pi-facebook"></i
                         ></a>
                         <a href="#" class="hover:text-accent transition-colors"

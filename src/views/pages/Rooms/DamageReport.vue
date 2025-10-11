@@ -127,15 +127,8 @@ const removeDamageReportItem = async (item) => {
         const itemStatus = responseData.item_status || 'available';
         const itemName = responseData.item_name || 'Item';
         
-        // Provide specific feedback based on item status
-        let statusMessage = '';
-        if (itemStatus === 'in_stock') {
-            statusMessage = ` - ${itemName} returned to stock`;
-        } else if (itemStatus === 'cleaning') {
-            statusMessage = ` - ${itemName} sent to cleaning`;
-        } else {
-            statusMessage = ` - ${itemName} marked as available`;
-        }
+        // Show status message indicating no status change
+        const statusMessage = ` - ${itemName} status remains: ${itemStatus}`;
         
         toast.add({
             severity: "success",
@@ -237,20 +230,8 @@ const formatDate = (dateString) => {
 };
 
 const getItemResolutionStatus = (itemName) => {
-    if (!itemName) return "Will be marked as available";
-    
-    const itemNameLower = itemName.toLowerCase();
-    
-    if (itemNameLower.includes('foam') || itemNameLower.includes('mattress') || itemNameLower.includes('pillow')) {
-        return "Will return to stock";
-    } else if (itemNameLower.includes('bath') || itemNameLower.includes('bed') || 
-               itemNameLower.includes('linen') || itemNameLower.includes('towel') || 
-               itemNameLower.includes('sheet') || itemNameLower.includes('blanket') || 
-               itemNameLower.includes('pillowcase')) {
-        return "Will be sent to cleaning";
-    } else {
-        return "Will be marked as available";
-    }
+    // Status will remain unchanged when resolving damage reports
+    return "Status will remain unchanged";
 };
 
 // Export functions

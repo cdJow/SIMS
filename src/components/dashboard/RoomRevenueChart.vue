@@ -57,7 +57,7 @@ const pieChartOptions = ref({
                     const total = context.dataset.data.reduce((a, b) => a + b);
                     const value = context.raw || 0;
                     const percentage = ((value / total) * 100).toFixed(1);
-                    return `${context.label}: ${value} (${percentage}%)`;
+                    return `${context.label}: ₱${value.toLocaleString()} (${percentage}%)`;
                 },
             },
         },

@@ -2728,6 +2728,15 @@ await loadDiscounts();
             .filter(id => Number.isFinite(id))
     ));
 
+    // Function to toggle damage marking of an amenity during checkout
+    function toggleCheckoutAmenityDamage(amenity) {
+        // This function is called when the damage checkbox is toggled
+        // The amenity.damaged property is automatically updated by v-model
+        // Note: This only marks the item for damage reporting - it does NOT change
+        // the serial_numbers status. The status will remain unchanged (assigned, cleaning, etc.)
+        // Only a damage report will be created during checkout
+    }
+
     async function loadCheckoutAssignedAmenities(roomId) {
         if (!roomId) {
             checkoutAssignedAmenities.value = [];
@@ -2888,7 +2897,7 @@ await loadDiscounts();
             });
             const damageLabel = damageCount === 1 ? 'amenity' : 'amenities';
             const detailMessage = damageCount
-                ? `Room ${roomNumberLabel} checked out. ${damageCount} ${damageLabel} marked damaged.`
+                ? `Room ${roomNumberLabel} checked out. ${damageCount} ${damageLabel} reported as damaged (status preserved).`
                 : `Room ${roomNumberLabel} has been checked out.`;
             toast.add({
                 severity: "success",

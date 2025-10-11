@@ -1,7 +1,37 @@
 import AppLayout from "@/layout/AppLayout.vue";
 import WebsiteLayout from "@/layout/WebsiteLayout.vue";
+import { getCurrentUser } from "@/api/auth";
 
 import { createRouter, createWebHistory } from "vue-router";
+
+// Helper function to check if user has required roles
+const hasRequiredRole = (userRoles, requiredRoles) => {
+    if (!requiredRoles || requiredRoles.length === 0) return true;
+    if (!userRoles || userRoles.length === 0) return false;
+    
+    return requiredRoles.some(role => userRoles.includes(role));
+};
+
+// Helper function to get user roles
+const getUserRoles = async () => {
+    try {
+        const userId = localStorage.getItem("userId");
+        if (!userId) return [];
+        
+        const response = await getCurrentUser(userId);
+        const user = response.data.user;
+        
+        const roles = [user.role];
+        if (user.additional_roles && Array.isArray(user.additional_roles)) {
+            roles.push(...user.additional_roles);
+        }
+        
+        return roles;
+    } catch (error) {
+        console.error("Error fetching user roles:", error);
+        return [];
+    }
+};
 
 const router = createRouter({
     history: createWebHistory(),
@@ -37,6 +67,13 @@ const router = createRouter({
                     component: () =>
                         import("@/views/pages/website/TransactionHistory.vue"),
                 },
+
+                {
+                    path: "/pages/website/BookedRooms",
+                    name: "BookedRooms",
+                    component: () =>
+                        import("@/views/pages/website/BookedRooms.vue"),
+                },
             ],
         },
 
@@ -49,18 +86,21 @@ const router = createRouter({
                     path: "/Dashboard",
                     name: "dashboard",
                     component: () => import("@/views/Dashboard.vue"),
+                    meta: { requiredRoles: ["Manager", "System Admin", "Front Desk"] },
                 },
                 {
                     path: "/Rooms/RoomControl",
                     name: "Room Control",
                     component: () =>
                         import("@/views/pages/Rooms/RoomControl.vue"),
+                    meta: { requiredRoles: ["System Admin"] },
                 },
                 {
                     path: "/Accounts/AccountsPanel",
                     name: "Accounts Panel",
                     component: () =>
                         import("@/views/pages/Accounts/AccountsPanel.vue"),
+                    meta: { requiredRoles: ["System Admin"] },
                 },
                 {
                     path: "/Inventory/AddItems/ConsumableForm",
@@ -69,12 +109,14 @@ const router = createRouter({
                         import(
                             "@/views/pages/Inventory/AddItems/ConsumableForm.vue"
                         ),
+                    meta: { requiredRoles: ["Inventory", "System Admin"] },
                 },
 
                 {
                     path: "/Rooms/RoomList",
                     name: "Room List",
                     component: () => import("@/views/pages/Rooms/RoomList.vue"),
+                    meta: { requiredRoles: ["Front Desk", "Manager", "System Admin"] },
                 },
 
             
@@ -82,6 +124,7 @@ const router = createRouter({
                     path: "/Rooms/CheckIn",
                     name: "Check In",
                     component: () => import("@/views/pages/Rooms/CheckIn.vue"),
+                    meta: { requiredRoles: ["Front Desk", "Manager", "System Admin"] },
                 },
 
                 {
@@ -89,6 +132,7 @@ const router = createRouter({
                     name: " Check In",
                     component: () =>
                         import("@/views/pages/Rooms/CheckInList.vue"),
+                    meta: { requiredRoles: ["Front Desk", "Manager", "System Admin"] },
                 },
 
                 {
@@ -96,6 +140,7 @@ const router = createRouter({
                     name: " Check Out List",
                     component: () =>
                         import("@/views/pages/Rooms/CheckoutList.vue"),
+                    meta: { requiredRoles: ["Front Desk", "Manager", "System Admin"] },
                 },
 
                 {
@@ -103,6 +148,7 @@ const router = createRouter({
                     name: " Damage Report",
                     component: () =>
                         import("@/views/pages/Rooms/DamageReport.vue"),
+                    meta: { requiredRoles: ["Front Desk", "Manager", "System Admin", "Inventory"] },
                 },
 
 
@@ -110,31 +156,31 @@ const router = createRouter({
                 {
                     path: "/Rooms/CanceledBooking",
                     name: " Canceled Booking",
-
                     component: () =>
                         import("@/views/pages/Rooms/CanceledBooking.vue"),
+                    meta: { requiredRoles: ["Front Desk", "Manager", "System Admin"] },
                 },
 
                 {
                     path: "/Rooms/CanceledBookingAdmin",
                     name: " Cancelled Booking",
-
                     component: () =>
                         import("@/views/pages/Rooms/CanceledBookingAdmin.vue"),
+                    meta: { requiredRoles: ["System Admin"] },
                 },
 
                 {
                     path: "/POS/POS",
                     name: " POS",
                     component: () => import("@/views/pages/POS/POS.vue"),
+                    meta: { requiredRoles: ["Front Desk", "Manager", "System Admin"] },
                 },
-
-                
 
                 {
                     path: "/POS/Invoice",
                     name: " Invoice",
                     component: () => import("@/views/pages/POS/Invoice.vue"),
+                    meta: { requiredRoles: ["Front Desk", "Manager", "System Admin"] },
                 },
 
                 {
@@ -142,6 +188,7 @@ const router = createRouter({
                     name: " Room Invoice",
                     component: () =>
                         import("@/views/pages/POS/RoomInvoice.vue"),
+                    meta: { requiredRoles: ["Front Desk", "Manager", "System Admin"] },
                 },
 
                 {
@@ -149,6 +196,7 @@ const router = createRouter({
                     name: " Invoice Admin",
                     component: () =>
                         import("@/views/pages/POS/InvoiceAdmin.vue"),
+                    meta: { requiredRoles: ["System Admin"] },
                 },
 
                 {
@@ -156,6 +204,7 @@ const router = createRouter({
                     name: " Room AdminInvoice",
                     component: () =>
                         import("@/views/pages/POS/RoomInvoiceAdmin.vue"),
+                    meta: { requiredRoles: ["System Admin"] },
                 },
 
                 {
@@ -165,12 +214,14 @@ const router = createRouter({
                         import(
                             "@/views/pages/Inventory/ViewInventory/ViewItems.vue"
                         ),
+                    meta: { requiredRoles: ["Manager", "System Admin", "Inventory"] },
                 },
 
                 {
                     path: "/Rooms/AddRoom",
                     name: "Rooms ",
                     component: () => import("@/views/pages/Rooms/AddRoom.vue"),
+                    meta: { requiredRoles: ["System Admin"] },
                 },
 
                 {
@@ -180,6 +231,7 @@ const router = createRouter({
                         import(
                             "@/views/pages/Inventory/AddItems/NonConsumableForm.vue"
                         ),
+                    meta: { requiredRoles: ["Inventory", "System Admin"] },
                 },
 
                 {
@@ -189,6 +241,7 @@ const router = createRouter({
                         import(
                             "@/views/pages/Inventory/ManageInventory/ManageItems.vue"
                         ),
+                    meta: { requiredRoles: ["Inventory", "System Admin", "Manager"] },
                 },
 
                  {
@@ -198,6 +251,7 @@ const router = createRouter({
                         import(
                             "@/views/pages/Inventory/ManageInventory/CleanAmenities.vue"
                         ),
+                    meta: { requiredRoles: ["Inventory", "System Admin", "Manager"] },
                 },
                 
 
@@ -208,20 +262,22 @@ const router = createRouter({
                         import(
                             "@/views/pages/Inventory/GenerateReport/InventorySummary.vue"
                         ),
+                    meta: { requiredRoles: ["Manager", "System Admin"] },
                 },
 
                 {
                     path: "/Rates/RatePage",
                     name: " Rate Page",
                     component: () => import("@/views/pages/Rates/RatePage.vue"),
+                    meta: { requiredRoles: ["System Admin"] },
                 },
 
                 {
                     path: "/Rooms/Discount",
                     name: " Discount",
                     component: () => import("@/views/pages/Rooms/Discount.vue"),
+                    meta: { requiredRoles: ["System Admin"] },
                 },
-
 
                 {
                     path: "/Inventory/GenerateReport/StockHistory",
@@ -230,6 +286,7 @@ const router = createRouter({
                         import(
                             "@/views/pages/Inventory/GenerateReport/StockHistory.vue"
                         ),
+                    meta: { requiredRoles: ["Inventory", "System Admin", "Manager"] },
                 },
 
                 {
@@ -239,6 +296,7 @@ const router = createRouter({
                         import(
                             "@/views/pages/Inventory/GenerateReport/LowstockReport.vue"
                         ),
+                    meta: { requiredRoles: ["Inventory", "System Admin", "Manager"] },
                 },
 
                 {
@@ -248,6 +306,7 @@ const router = createRouter({
                         import(
                             "@/views/pages/Inventory/GenerateReport/DamagedItems.vue"
                         ),
+                    meta: { requiredRoles: ["Inventory", "System Admin", "Manager"] },
                 },
 
                 {
@@ -257,6 +316,7 @@ const router = createRouter({
                         import(
                             "@/views/pages/Inventory/GenerateReport/ExpiredItems.vue"
                         ),
+                    meta: { requiredRoles: ["Inventory", "System Admin", "Manager"] },
                 },
 
                 {
@@ -407,7 +467,38 @@ const router = createRouter({
     ],
 });
 
-
-
+// Navigation guard for role-based access control
+router.beforeEach(async (to, from, next) => {
+    // Check if user is authenticated
+    const token = localStorage.getItem("token");
+    const userId = localStorage.getItem("userId");
+    
+    // If route requires authentication and user is not logged in
+    if (to.matched.some(record => record.meta.requiresAuth) && (!token || !userId)) {
+        next("/pages/auth/login");
+        return;
+    }
+    
+    // Check role-based permissions
+    if (to.meta && to.meta.requiredRoles) {
+        try {
+            const userRoles = await getUserRoles();
+            
+            if (!hasRequiredRole(userRoles, to.meta.requiredRoles)) {
+                // User doesn't have required role, redirect to access denied
+                next("/auth/access");
+                return;
+            }
+        } catch (error) {
+            console.error("Error checking user roles:", error);
+            // If we can't verify roles, redirect to login for safety
+            next("/pages/auth/login");
+            return;
+        }
+    }
+    
+    // If all checks pass, proceed to the route
+    next();
+});
 
 export default router;

@@ -1,137 +1,140 @@
 <script setup>
-import { computed, ref } from "vue";
+import { ref, onMounted, onUnmounted } from 'vue';
+import { getOccupancyChart } from '@/api/auth';
 
-// Individual week offsets for each chart
-const chartWeekOffsets = ref({
-    booking: 0,
-    revenue: 0,
-    occupancy: 0,
-    products: 0,
-    menu: 0,
-    roomSize: 0,
+// Week offset for chart navigation
+const weekOffset = ref(0);
+
+// Chart data
+const chartData = ref({
+    labels: [],
+    datasets: []
 });
 
-// Date formatting utilities
-const generateWeeklyLabels = (offset) => {
-    const start = new Date();
-    start.setDate(start.getDate() - start.getDay() - offset * 7);
-    const labels = [];
+// Date range for display
+const dateRange = ref('');
 
-    for (let i = 0; i < 7; i++) {
-        const date = new Date(start);
-        date.setDate(start.getDate() + i);
-        labels.push(
-            date.toLocaleDateString("en-US", {
-                weekday: "short",
-                month: "short",
-                day: "numeric",
-            })
-        );
-    }
-    return labels;
-};
-
-// Add specific options for pie chart
-
-const formattedDateRange = (offset) => {
-    const start = new Date();
-    start.setDate(start.getDate() - start.getDay() - offset * 7);
-    const end = new Date(start);
-    end.setDate(start.getDate() + 6);
-    return `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`;
-};
-
-// Dynamic data generator with individual offsets
-const generateChartData = (baseData, offset) => {
-    return baseData.map((values) => ({
-        ...values,
-        data: values.data.map((v) =>
-            Math.round(v * (1 - offset * 0.1 + Math.random() * 0.1))
-        ),
-    }));
-};
-
-const occupancyRate = computed(() => ({
-    labels: generateWeeklyLabels(chartWeekOffsets.value.occupancy),
-    datasets: generateChartData(
-        [
-            {
-                label: "Occupancy",
-                data: [85, 78, 92, 89, 96, 88, 95],
-                borderColor: "#3B82F6",
-                fill: true,
-                backgroundColor: "rgba(59, 130, 246, 0.2)",
-            },
-        ],
-        chartWeekOffsets.value.occupancy
-    ),
-}));
-
-// Update week offset for individual charts
-const updateWeekOffset = (chartType, delta) => {
-    chartWeekOffsets.value[chartType] = Math.max(
-        0,
-        chartWeekOffsets.value[chartType] + delta
-    );
-};
+// Occupancy stats
+const totalBookingsWithCheckin = ref(0);
+const totalOccupied = ref(0);
 
 const chartOptions = ref({
     responsive: true,
-    maintainAspectRatio: false, // allows the chart to fill its container
+    maintainAspectRatio: false,
     plugins: {
         legend: {
             display: true,
-            position: "top",
+            position: 'top',
         },
         tooltip: {
             enabled: true,
-        },
+            mode: 'index',
+            intersect: false,
+            callbacks: {
+                label: function(context) {
+                    return context.dataset.label + ': ' + context.raw + ' rooms';
+                }
+            }
+        }
     },
     scales: {
         x: {
             display: true,
             title: {
                 display: true,
-                text: "Day",
-            },
+                text: 'Day'
+            }
         },
         y: {
             display: true,
             beginAtZero: true,
+            ticks: {
+                stepSize: 1,
+                precision: 0
+            },
             title: {
                 display: true,
-                text: "Bookings",
-            },
-        },
+                text: 'Number of Occupied Rooms'
+            }
+        }
     },
+    interaction: {
+        intersect: false,
+        mode: 'index'
+    }
+});
+
+// Function to load occupancy data
+async function loadOccupancyData() {
+    try {
+        const response = await getOccupancyChart(weekOffset.value);
+        if (response?.data) {
+            chartData.value = {
+                labels: response.data.labels,
+                datasets: response.data.datasets
+            };
+            
+            // Format date range
+            const start = new Date(response.data.dateRange.start);
+            const end = new Date(response.data.dateRange.end);
+            dateRange.value = `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`;
+            
+            // Set total bookings with check-in and calculate total occupied
+            totalBookingsWithCheckin.value = response.data.totalBookingsWithCheckin;
+            const counts = response.data.occupancyData.counts;
+            totalOccupied.value = counts.reduce((a, b) => a + b, 0);
+        }
+    } catch (error) {
+    }
+}
+
+// Update week offset and reload data
+const updateWeekOffset = (delta) => {
+    weekOffset.value = Math.max(0, weekOffset.value + delta);
+    loadOccupancyData();
+};
+
+// Auto-refresh timer
+let refreshTimer = null;
+
+onMounted(() => {
+    loadOccupancyData();
+    refreshTimer = setInterval(loadOccupancyData, 60000); // Refresh every minute
+});
+
+onUnmounted(() => {
+    if (refreshTimer) {
+        clearInterval(refreshTimer);
+    }
 });
 </script>
 
 <template>
     <div class="col-span-12 md:col-span-6 lg:col-span-6">
         <div class="flex justify-between items-center mb-4">
-            <h3 class="text-lg font-semibold">Occupancy Rate</h3>
+            <h3 class="text-lg font-semibold">Daily Occupied Rooms</h3>
             <div class="flex gap-2 items-center">
-                <span class="text-sm">
-                    {{ formattedDateRange(chartWeekOffsets.occupancy) }}
-                </span>
+                <span class="text-sm">{{ dateRange }}</span>
                 <button
-                    @click="updateWeekOffset('occupancy', 1)"
+                    @click="updateWeekOffset(1)"
                     class="p-1 hover:bg-gray-100 rounded"
+                    title="Previous Week"
                 >
                     ←
                 </button>
                 <button
-                    @click="updateWeekOffset('occupancy', -1)"
-                    :disabled="chartWeekOffsets.occupancy === 0"
-                    class="p-1 hover:bg-gray-100 rounded"
+                    @click="updateWeekOffset(-1)"
+                    :disabled="weekOffset === 0"
+                    class="p-1 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Next Week"
                 >
                     →
                 </button>
             </div>
         </div>
-        <div class="rounded-lg">
-            <Chart type="line" :data="occupancyRate" :options="chartOptions" />
+        <Chart type="line" :data="chartData" :options="chartOptions" class="h-80" />
+        <div class="mt-4 text-center text-sm text-gray-600">
+            Total of occupied rooms this week: {{ totalOccupied }} (Total of Occupied: {{ totalBookingsWithCheckin }})
         </div>
     </div>
 </template>

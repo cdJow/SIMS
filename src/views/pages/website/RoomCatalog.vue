@@ -1,10 +1,10 @@
 <script setup>
-import { useAuthStore } from "@/stores/auth";
+
 import Dialog from "primevue/dialog";
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
-const authStore = useAuthStore();
+
 const router = useRouter();
 
 // Reactive state
@@ -103,7 +103,7 @@ const roomTypes = ref([
 ]);
 
 // Computed properties
-const isLoggedIn = computed(() => authStore.isAuthenticated);
+
 const filteredRooms = computed(() => {
     let result = [...rooms.value];
 

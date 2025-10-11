@@ -1,344 +1,506 @@
-<script setup>
-import { useToast } from "primevue/usetoast";
-import { computed, ref } from "vue";
-
-const toast = useToast();
-
-// Transaction Data
-const transactions = ref([
-    {
-        id: "TX-2354",
-        date: "2024-03-15",
-        type: "booking",
-        description: "Deluxe Room Booking",
-        amount: 15500,
-        paymentMethod: "credit_card",
-        status: "completed",
-        items: [
-            { name: "Room Charge", amount: 12000 },
-            { name: "Taxes", amount: 3500 },
-        ],
-    },
-    // Add more transactions...
-]);
-
-// Filter/Sort State
-const selectedType = ref(null);
-const selectedStatus = ref(null);
-const dateRange = ref();
-const searchText = ref("");
-const sortField = ref("date");
-const sortOrder = ref(-1);
-const loading = ref(false);
-
-// Options
-const transactionTypes = ref([
-    { name: "Booking", value: "booking" },
-    { name: "Amenity", value: "amenity" },
-    { name: "Dining", value: "dining" },
-]);
-
-const statusOptions = ref([
-    { name: "Completed", value: "completed" },
-    { name: "Pending", value: "pending" },
-    { name: "Refunded", value: "refunded" },
-]);
-
-// Computed
-const filteredTransactions = computed(() => {
-    return transactions.value.filter((tx) => {
-        const matchesType =
-            !selectedType.value?.value || tx.type === selectedType.value.value;
-        const matchesStatus =
-            !selectedStatus.value?.value ||
-            tx.status === selectedStatus.value.value;
-        const matchesSearch = tx.description
-            .toLowerCase()
-            .includes(searchText.value.toLowerCase());
-
-        // Date filtering
-        let matchesDate = true;
-        if (dateRange.value && dateRange.value[0] && dateRange.value[1]) {
-            const txDate = new Date(tx.date);
-            matchesDate =
-                txDate >= dateRange.value[0] && txDate <= dateRange.value[1];
-        }
-
-        return matchesType && matchesStatus && matchesSearch && matchesDate;
-    });
-});
-
-// Methods
-const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString("en-PH", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-    });
-};
-
-const formatCurrency = (amount) => {
-    return amount.toLocaleString("en-PH");
-};
-
-const statusSeverity = (status) => {
-    const statusMap = {
-        completed: "success",
-        pending: "warning",
-        refunded: "info",
-    };
-    return statusMap[status] || "info";
-};
-
-const getTransactionIcon = (type) => {
-    const icons = {
-        booking: "pi pi-home",
-        amenity: "pi pi-spa",
-        dining: "pi pi-utensils",
-    };
-    return icons[type] || "pi pi-dollar";
-};
-
-const getPaymentMethodIcon = (method) => {
-    const icons = {
-        credit_card: "pi pi-credit-card",
-        paypal: "pi pi-paypal",
-        cash: "pi pi-money-bill",
-    };
-    return icons[method] || "pi pi-wallet";
-};
-
-const amountColor = (amount) => {
-    return amount > 0 ? "text-green-600" : "text-red-600";
-};
-
-const exportCSV = () => {
-    // Implement CSV export logic
-    toast.add({
-        severity: "success",
-        summary: "Export Started",
-        detail: "CSV export will download shortly",
-        life: 3000,
-    });
-};
-</script>
 
 <template>
-    <Card class="shadow-sm border-round-lg mb-6">
-        <template #title>
-            <div class="flex justify-between items-center">
-                <div>
-                    <h2 class="text-xl font-bold">Transaction History</h2>
-                    <span class="text-sm text-gray-500"
-                        >All financial activities</span
-                    >
-                </div>
-                <div class="flex gap-2">
-                    <Button
-                        label="Export CSV"
-                        icon="pi pi-file"
-                        class="p-button-outlined p-button-sm"
-                        @click="exportCSV"
-                    />
-                    <Button
-                        label="PDF"
-                        icon="pi pi-file-pdf"
-                        severity="danger"
-                        class="p-button-outlined p-button-sm"
-                    />
-                </div>
-            </div>
-        </template>
+    <div class="card">
+        <div class="font-semibold text-xl mb-4 text-gray-900 dark:text-gray-100">Transaction History</div>
 
-        <template #subtitle>
-            <div class="flex flex-wrap gap-4 items-center mt-4">
-                <div class="flex items-center gap-2">
-                    <span class="text-sm">Filter by:</span>
-                    <Dropdown
-                        v-model="selectedType"
-                        :options="transactionTypes"
-                        optionLabel="name"
-                        placeholder="Type"
-                        class="w-32"
-                    />
-                    <Dropdown
-                        v-model="selectedStatus"
-                        :options="statusOptions"
-                        optionLabel="name"
-                        placeholder="Status"
-                        class="w-32"
-                    />
-                    <Calendar
-                        v-model="dateRange"
-                        selectionMode="range"
-                        dateFormat="yy-mm-dd"
-                        placeholder="Date Range"
-                        class="w-48"
-                    />
+        <!-- Search -->
+        <div class="flex gap-2 mb-3 items-center">
+            <Button
+                type="button"
+                icon="pi pi-filter-slash"
+                label="Clear"
+                outlined
+                @click="clearFilters"
+            />
+            <IconField class="p-input-icon-left">
+                <InputText 
+                    v-model="searchQuery" 
+                    placeholder="Search room code" 
+                    style="width: 200px"
+                    @input="filterTransactions"
+                />
+            </IconField>
+            <Dropdown
+                v-model="statusFilter"
+                :options="statusOptions"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="All Status"
+                style="width: 200px"
+                @change="filterTransactions"
+            />
+        </div>
+        
+        <!-- Empty State -->
+        <div v-if="!loading && (!filteredTransactions || filteredTransactions.length === 0)" 
+             class="text-center py-12 mt-6">
+            <div class="flex flex-col items-center gap-4">
+                <i class="pi pi-sign-out text-6xl text-gray-300 dark:text-gray-600"></i>
+                <div class="space-y-2">
+                    <h3 class="text-xl font-semibold text-gray-600 dark:text-gray-400">No Transaction History Today</h3>
+                    <p class="text-gray-500 dark:text-gray-500 max-w-md">
+                        There are currently no transaction history. 
+                        <br>Check back later or adjust your date filter to view other periods.
+                    </p>
                 </div>
-                <div class="flex-1 max-w-xs">
-                    <span class="p-input-icon-left">
-                        <i class="pi pi-search" />
-                        <InputText
-                            v-model="searchText"
-                            placeholder="Search transactions..."
-                            class="w-full"
-                        />
-                    </span>
-                </div>
+                <Button
+                    icon="pi pi-refresh"
+                    label="Refresh"
+                    class="p-button-outlined"
+                    @click="loadTransactionHistory"
+                    :loading="loading"
+                />
             </div>
-        </template>
+        </div>
 
-        <template #content>
-            <DataTable
-                :value="filteredTransactions"
-                paginator
-                :rows="10"
-                :rowsPerPageOptions="[10, 20, 50]"
-                removableSort
-                class="p-datatable-sm"
-                stripedRows
-                v-model:sortField="sortField"
-                v-model:sortOrder="sortOrder"
-                :loading="loading"
-                expandable
-                rowKey="id"
+        <!-- Data Table (only show when there's data) -->
+        <DataTable
+            v-if="!loading && filteredTransactions && filteredTransactions.length > 0"
+            :value="filteredTransactions"
+            scrollable
+            scrollHeight="600px"
+            class="mt-6"
+            :loading="loading"
+        >
+            <!-- Visible Columns -->
+            <Column
+                field="room_number"
+                header="Room Number"
+                style="min-width: 120px"
+            ></Column>
+
+            <Column
+                field="room_code"
+                header="Booking Code"
+                style="min-width: 150px"
+            ></Column>
+
+            <Column
+                field="booking_created_at"
+                header="Check-In Date/Time"
+                style="min-width: 200px"
+                class="text-red-500"
             >
-                <!-- Expand Row -->
-                <template #expansion="slotProps">
-                    <div class="p-4 bg-gray-50 border-t">
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <template #body="{ data }">
+                    {{ data.check_in_datetime ? formatDateTime(data.check_in_datetime) : formatDateTime(data.booking_created_at) }}
+                </template>
+            </Column>
+
+            <Column
+                field="status"
+                header="Status"
+                style="min-width: 120px"
+            >
+                <template #body="{ data }">
+                    <Tag 
+                        :value="getStatusLabel(data.status)" 
+                        :severity="getStatusSeverity(data.status)"
+                    />
+                </template>
+            </Column>
+
+            <!-- Action Column with Popover -->
+            <Column header="Actions" style="min-width: 100px">
+                <template #body="{ data }">
+                    <Button
+                        icon="pi pi-info-circle"
+                        class="p-button-info"
+                        outlined
+                        rounded
+                        @click="handleClick($event, data)"
+                    />
+                </template>
+            </Column>
+        </DataTable>
+
+        <!-- Popover Overlay -->
+        <Popover ref="op">
+            <div class="p-4 bg-white dark:bg-gray-800" v-if="selectedTransaction">
+                <!-- Main Horizontal Container -->
+                <div class="flex flex-row gap-4">
+                    <!-- Left Column -->
+                    <div class="flex-1 flex flex-col gap-3 min-w-[200px]">
+                        <!-- Guest Name -->
+                        <div class="font-bold text-lg border-b border-gray-200 dark:border-gray-600 pb-2 text-gray-900 dark:text-gray-100">
+                            {{ selectedTransaction.guest_name }}
+                        </div>
+
+                        <!-- Room Details -->
+                        <div class="flex flex-col gap-2">
                             <div>
-                                <h4 class="font-medium mb-2">
-                                    Transaction Details
-                                </h4>
-                                <dl class="space-y-1">
-                                    <dt class="text-sm text-gray-500">
-                                        Transaction ID
-                                    </dt>
-                                    <dd class="text-sm">
-                                        {{ slotProps.data.id }}
-                                    </dd>
-                                    <dt class="text-sm text-gray-500">
-                                        Payment Method
-                                    </dt>
-                                    <dd class="text-sm capitalize">
-                                        {{ slotProps.data.paymentMethod }}
-                                    </dd>
-                                </dl>
-                            </div>
-                            <div>
-                                <h4 class="font-medium mb-2">Breakdown</h4>
-                                <div class="space-y-1">
-                                    <div
-                                        v-for="(item, index) in slotProps.data
-                                            .items"
-                                        :key="index"
-                                        class="flex justify-between text-sm"
-                                    >
-                                        <span>{{ item.name }}</span>
-                                        <span>₱{{ item.amount }}</span>
-                                    </div>
+                                <label class="font-medium text-gray-700 dark:text-gray-300">Room Type:</label>
+                                <div class="mt-1 text-gray-900 dark:text-gray-100">
+                                    {{ selectedTransaction.room_type_name }}
                                 </div>
                             </div>
                             <div>
-                                <h4 class="font-medium mb-2">Documents</h4>
-                                <Button
-                                    label="Download Invoice"
-                                    icon="pi pi-download"
-                                    class="p-button-text p-button-sm"
+                                <label class="font-medium text-gray-700 dark:text-gray-300"
+                                    >Selected Hours:</label
+                                >
+                                <Tag
+                                    :value="`${selectedTransaction.selected_hours}hrs`"
+                                    severity="info"
+                                    class="mt-1"
                                 />
                             </div>
                         </div>
                     </div>
-                </template>
 
-                <!-- Columns -->
-                <Column
-                    field="date"
-                    header="Date"
-                    sortable
-                    class="min-w-[120px]"
-                >
-                    <template #body="{ data }">
-                        {{ formatDate(data.date) }}
-                    </template>
-                </Column>
-
-                <Column
-                    field="description"
-                    header="Description"
-                    sortable
-                    class="min-w-[200px]"
-                >
-                    <template #body="{ data }">
-                        <div class="flex items-center gap-2">
-                            <i
-                                :class="getTransactionIcon(data.type)"
-                                class="text-lg"
-                            ></i>
-                            {{ data.description }}
+                    <!-- Middle Column -->
+                    <div class="flex-1 flex flex-col gap-3 min-w-[250px]">
+                        <div>
+                            <label class="text-gray-700 dark:text-gray-300"> Rate</label>
+                            <div class="flex items-center gap-1">
+                                <i class="pi pi-money-bill text-blue-500"></i>
+                                <span class="text-gray-900 dark:text-gray-100">{{
+                                    formatCurrency(
+                                        selectedTransaction.selected_rate,
+                                    )
+                                }}</span>
+                            </div>
                         </div>
-                    </template>
-                </Column>
 
-                <Column
-                    field="amount"
-                    header="Amount"
-                    sortable
-                    class="min-w-[120px]"
-                >
-                    <template #body="{ data }">
-                        <span :class="amountColor(data.amount)">
-                            ₱{{ formatCurrency(data.amount) }}
-                        </span>
-                    </template>
-                </Column>
-
-                <Column
-                    field="paymentMethod"
-                    header="Payment Method"
-                    class="min-w-[150px]"
-                >
-                    <template #body="{ data }">
-                        <div class="flex items-center gap-2">
-                            <i
-                                :class="
-                                    getPaymentMethodIcon(data.paymentMethod)
-                                "
-                            ></i>
-                            <span class="capitalize">{{
-                                data.paymentMethod
-                            }}</span>
+                        <!-- Check-in/Check-out Times -->
+                        <div v-if="selectedTransaction.check_in_datetime || selectedTransaction.check_out_datetime" class="bg-blue-50 dark:bg-blue-900/30 p-3 rounded">
+                            <div class="flex items-center gap-2 text-blue-700 dark:text-blue-300 mb-2">
+                                <i class="pi pi-clock"></i>
+                                <span class="text-sm font-medium">Check-in/Check-out</span>
+                            </div>
+                            <div class="space-y-1 text-sm text-gray-800 dark:text-gray-200">
+                                <div v-if="selectedTransaction.check_in_datetime" class="flex justify-between">
+                                    <span>Check-in:</span>
+                                    <span>{{ formatDateTime(selectedTransaction.check_in_datetime) }}</span>
+                                </div>
+                                <div v-if="selectedTransaction.check_out_datetime" class="flex justify-between">
+                                    <span>Check-out:</span>
+                                    <span>{{ formatDateTime(selectedTransaction.check_out_datetime) }}</span>
+                                </div>
+                            </div>
                         </div>
-                    </template>
-                </Column>
 
-                <Column
-                    field="status"
-                    header="Status"
-                    sortable
-                    class="min-w-[120px]"
-                >
-                    <template #body="{ data }">
-                        <Tag
-                            :value="data.status"
-                            :severity="statusSeverity(data.status)"
-                            class="capitalize"
-                        />
-                    </template>
-                </Column>
+                        <!-- Discount Information -->
+                        <div v-if="selectedTransaction.payments && selectedTransaction.payments.length > 0 && selectedTransaction.payments[0].discount_name" class="bg-green-50 dark:bg-green-900/30 p-3 rounded">
+                            <div class="flex items-center gap-2 text-green-700 dark:text-green-300 mb-2">
+                                <i class="pi pi-percentage"></i>
+                                <span class="text-sm font-medium">Discount Applied</span>
+                            </div>
+                            <div class="text-sm">
+                                <div class="text-gray-800 dark:text-gray-200">{{ selectedTransaction.payments[0].discount_name }}</div>
+                                <div class="text-green-600 dark:text-green-400 font-medium">{{ selectedTransaction.payments[0].discount_percent }}% off</div>
+                            </div>
+                        </div>
 
-                <Column headerStyle="width: 3rem">
-                    <template #body="slotProps">
-                        <Button
-                            icon="pi pi-ellipsis-h"
-                            class="p-button-text"
-                            @click="toggleRow(slotProps)"
-                        />
-                    </template>
-                </Column>
-            </DataTable>
-        </template>
-    </Card>
+                        <!-- Payment Summary -->
+                        <div v-if="selectedTransaction.payments && selectedTransaction.payments.length > 0" class="bg-blue-50 dark:bg-blue-900/30 p-3 rounded">
+                            <div class="flex items-center gap-2 text-blue-700 dark:text-blue-300 mb-2">
+                                <i class="pi pi-credit-card"></i>
+                                <span class="text-sm font-medium">Payment Summary</span>
+                            </div>
+                            <div class="space-y-1 text-sm text-gray-800 dark:text-gray-200" v-for="payment in selectedTransaction.payments" :key="payment.payment_id">
+                                <div class="flex justify-between">
+                                    <span>Room Rate:</span>
+                                    <span>{{ formatCurrency(payment.room_rate) }}</span>
+                                </div>
+                                <div v-if="payment.extend_amount > 0" class="flex justify-between">
+                                    <span>Extend Charges <span v-if="payment.extend_hours > 0" class="bg-orange-200 text-orange-800 px-2 py-1 rounded-full text-xs font-medium ml-2">{{ payment.extend_hours }}h</span>:</span>
+                                    <span>{{ formatCurrency(payment.extend_amount) }}</span>
+                                </div>
+                                <div v-if="payment.extras_total > 0" class="flex justify-between">
+                                    <span>Consumables:</span>
+                                    <span>{{ formatCurrency(payment.extras_total) }}</span>
+                                </div>
+                                <div v-if="payment.amenities_total > 0" class="flex justify-between">
+                                    <span>Amenities:</span>
+                                    <span>{{ formatCurrency(payment.amenities_total) }}</span>
+                                </div>
+                                <div v-if="payment.damage_charges > 0" class="flex justify-between text-red-600">
+                                    <span>Damage Charges:</span>
+                                    <span>{{ formatCurrency(payment.damage_charges) }}</span>
+                                </div>
+                                <div class="border-t pt-1 font-medium flex justify-between">
+                                    <span>Total Due:</span>
+                                    <span>{{ formatCurrency(payment.total_due) }}</span>
+                                </div>
+                                <div class="flex justify-between text-green-600 font-medium">
+                                    <span>Payment Status:</span>
+                                    <span>✓ Fully Paid</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div v-else class="bg-yellow-50 dark:bg-yellow-900/30 p-3 rounded">
+                            <div class="flex items-center gap-2 text-yellow-700 dark:text-yellow-300 text-sm">
+                                <i class="pi pi-info-circle"></i>
+                                <span>No check-in payment recorded yet</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column -->
+                    <div class="flex-1 flex flex-col gap-3 min-w-[200px]">
+                        <!-- Contact Info -->
+                        <div class="flex flex-col gap-2">
+                            <div>
+                                <label class="font-medium text-gray-700 dark:text-gray-300">Contact Info:</label>
+                                <div class="mt-1 flex flex-col gap-1">
+                                    <div class="flex items-center gap-2 text-gray-800 dark:text-gray-200">
+                                        <i class="pi pi-phone text-blue-500"></i>
+                                        {{ selectedTransaction.cellphone || 'N/A' }}
+                                    </div>
+                                    <div v-if="selectedTransaction.guest_email" class="flex items-center gap-2 text-gray-800 dark:text-gray-200">
+                                        <i class="pi pi-envelope text-blue-500"></i>
+                                        {{ selectedTransaction.guest_email }}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <i class="pi pi-box text-blue-500 mr-2"></i>
+                                <label class="font-medium text-gray-700 dark:text-gray-300">Rented Amenities:</label>
+                                <div class="mt-1">
+                                    <div v-if="selectedTransaction.rented_amenities && selectedTransaction.rented_amenities.length > 0" 
+                                         class="overflow-y-auto" 
+                                         style="max-height: 120px;">
+                                        <div v-for="amenity in selectedTransaction.rented_amenities" 
+                                             :key="amenity.rental_id"
+                                             class="flex items-center justify-between gap-2 py-1 border-b last:border-b-0 border-gray-100 dark:border-gray-600">
+                                            <div class="flex flex-col gap-1">
+                                                <span class="text-gray-800 dark:text-gray-200 text-sm font-medium">
+                                                    {{ amenity.amenity_name || amenity.product_name }}
+                                                </span>
+                                                <span v-if="amenity.brand" class="text-xs text-gray-500 dark:text-gray-400">
+                                                    {{ amenity.brand }}
+                                                </span>
+                                            </div>
+                                            <span class="text-green-600 dark:text-green-400 font-medium text-sm">
+                                                ₱{{ formatPrice(amenity.unit_rental_price) }}
+                                            </span>
+                                        </div>
+                                        <div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600 flex justify-between font-medium">
+                                            <span class="text-gray-700 dark:text-gray-300">Total Amenities:</span>
+                                            <span class="text-green-600 dark:text-green-400">
+                                                ₱{{ formatPrice(selectedTransaction.rented_amenities.reduce((sum, item) => sum + item.unit_rental_price, 0)) }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div v-else class="text-gray-500 dark:text-gray-400 italic">
+                                        No rented amenities
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Consumables (Extras Bill) -->
+                            <div>
+                                <i class="pi pi-shopping-cart text-blue-500 mr-2"></i>
+                                <label class="font-medium text-gray-700 dark:text-gray-300">Consumables:</label>
+                                <div class="mt-1">
+                                    <div v-if="selectedTransaction.consumables && selectedTransaction.consumables.length > 0"
+                                         class="overflow-y-auto"
+                                         style="max-height: 120px;">
+                                        <div v-for="consumable in selectedTransaction.consumables" 
+                                             :key="consumable.item_id"
+                                             class="flex items-center justify-between gap-2 py-1 border-b last:border-b-0 border-gray-100 dark:border-gray-600">
+                                            <div class="flex flex-col gap-1">
+                                                <span class="text-gray-800 dark:text-gray-200 text-sm font-medium">
+                                                    {{ consumable.product_name }}
+                                                </span>
+                                                <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                                                    <span v-if="consumable.brand">{{ consumable.brand }}</span>
+                                                    <span>Qty: {{ consumable.quantity }}</span>
+                                                </div>
+                                            </div>
+                                            <div class="text-right">
+                                                <div class="text-sm font-medium text-green-600 dark:text-green-400">
+                                                    ₱{{ formatPrice(consumable.total_item_cost) }}
+                                                </div>
+                                            
+                                            </div>
+                                        </div>
+                                        <div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600 flex justify-between font-medium">
+                                            <span class="text-gray-700 dark:text-gray-300">Total Consumables:</span>
+                                            <span class="text-green-600 dark:text-green-400">
+                                                ₱{{ formatPrice(selectedTransaction.consumables.reduce((sum, item) => sum + item.total_item_cost, 0)) }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div v-else class="text-gray-500 dark:text-gray-400 italic">
+                                        No consumables
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Payment Notes (Full Width) -->
+                <div v-if="selectedTransaction.payments && selectedTransaction.payments.length > 0" class="mt-4 pt-3 border-t border-gray-200 dark:border-gray-600">
+                    <div v-for="payment in selectedTransaction.payments" :key="payment.payment_id">
+                        <div v-if="payment.payment_note">
+                            <label class="font-medium text-gray-700 dark:text-gray-300">Payment Notes:</label>
+                            <div class="p-2 bg-gray-100 dark:bg-gray-700 rounded mt-1 text-gray-800 dark:text-gray-200">
+                                {{ payment.payment_note }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </Popover>
+    </div>
 </template>
+
+<script setup>
+import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { useToast } from 'primevue/usetoast'
+import { fetchTransactionHistory, fetchTransactionSummary } from '@/api/transactionHistory'
+
+const router = useRouter()
+const toast = useToast()
+
+// Reactive data
+const loading = ref(true)
+const error = ref(null)
+const transactions = ref([])
+const summary = ref(null)
+
+// Filters
+const statusFilter = ref(null)
+const searchQuery = ref('')
+const filteredTransactions = ref([])
+const selectedTransaction = ref(null)
+const op = ref()
+
+const statusOptions = [
+    { label: 'All Status', value: null },
+    { label: 'Pending Check-In', value: 'Booked' },
+    { label: 'Checked In', value: 'Occupied' },
+    { label: 'Completed', value: 'Completed' },
+    { label: 'Cancelled', value: 'Cancelled' }
+]
+
+// Load transaction history
+const loadTransactionHistory = async () => {
+    try {
+        loading.value = true
+        error.value = null
+        
+        // Load transaction history
+        const transactionData = await fetchTransactionHistory()
+        transactions.value = transactionData || []
+        
+        // Initialize filtered transactions
+        filterTransactions()
+        
+    } catch (err) {
+        console.error('Error loading transaction history:', err)
+        error.value = err.message || 'Failed to load transaction history'
+        toast.add({
+            severity: 'error',
+            summary: 'Loading Failed',
+            detail: error.value,
+            life: 5000
+        })
+    } finally {
+        loading.value = false
+    }
+}
+
+// Filter transactions
+const filterTransactions = () => {
+    let filtered = [...transactions.value]
+    
+    // Filter by status
+    if (statusFilter.value) {
+        filtered = filtered.filter(t => t.status === statusFilter.value)
+    }
+    
+    // Filter by search query
+    if (searchQuery.value.trim()) {
+        const query = searchQuery.value.toLowerCase().trim()
+        filtered = filtered.filter(t => 
+            t.guest_name?.toLowerCase().includes(query) ||
+            t.room_number?.toString().includes(query) ||
+            t.room_code?.toLowerCase().includes(query) ||
+            t.book_code?.toLowerCase().includes(query) ||
+            t.room_type_name?.toLowerCase().includes(query)
+        )
+    }
+    
+    filteredTransactions.value = filtered
+}
+
+// Clear filters
+const clearFilters = () => {
+    statusFilter.value = null
+    searchQuery.value = ''
+    filterTransactions()
+}
+
+// Handle popover click
+const handleClick = (event, data) => {
+    selectedTransaction.value = data
+    op.value.toggle(event)
+}
+
+// Utility functions
+const formatPrice = (price) => {
+    if (!price) return '0.00'
+    return parseFloat(price).toFixed(2)
+}
+
+const formatCurrency = (amount) => {
+    if (!amount) return '₱0.00'
+    return `₱${parseFloat(amount).toFixed(2)}`
+}
+
+const formatDate = (dateString) => {
+    if (!dateString) return 'N/A'
+    return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+    })
+}
+
+const formatDateTime = (dateString) => {
+    if (!dateString) return 'N/A'
+    return new Date(dateString).toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+    })
+}
+
+const getStatusLabel = (status) => {
+    const labels = {
+        'Booked': 'Pending Check-In',
+        'Occupied': 'Checked In',
+        'Completed': 'Completed',
+        'Cancelled': 'Cancelled'
+    }
+    return labels[status] || status
+}
+
+const getStatusSeverity = (status) => {
+    const severities = {
+        'Booked': 'info',
+        'Occupied': 'success',
+        'Completed': 'secondary',
+        'Cancelled': 'danger'
+    }
+    return severities[status] || 'secondary'
+}
+
+// Lifecycle
+onMounted(async () => {
+    await loadTransactionHistory()
+})
+</script>
+
+<style scoped>
+
+
+
+</style>

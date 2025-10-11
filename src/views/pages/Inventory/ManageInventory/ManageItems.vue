@@ -441,6 +441,9 @@ const isUpdateButtonDisabled = computed(() => {
 });
 
 function openEditSerialDialog(serial) {
+    // Close the batch items dialog first
+    isDialog2Visible.value = false;
+    
     editingSerialData.value = { 
         id: serial.id || serial.serialId,
         serialNumber: serial.serialNumber,
@@ -897,6 +900,9 @@ async function moveToStockroom() {
 
 // Function to open the dialog for reassignment
 function reassign(item) {
+    // Close the batch items dialog first
+    isDialog2Visible.value = false;
+    
     console.log("Reassigning item:", item); // Debugging
     selectedItem.value = { ...item }; // Clone the item to avoid direct mutations
     reassignItemDialogVisible.value = true; // Open the dialog
@@ -1178,6 +1184,9 @@ async function assignItem() {
 }
 
 function openAssignItemDialog(item) {
+    // Close the batch items dialog first
+    isDialog2Visible.value = false;
+    
     selectedItem.value = item;
     assignItemDialogVisible.value = true;
 }
@@ -2564,7 +2573,7 @@ function formatPrice(value) {
                                 />
                                 <Dialog
                                     v-model:visible="isDialog2Visible"
-                                    :header="`Items per Batch | ${
+                                    :header="`Batch | ${
                                         selectedBatch?.batchNumber || 'N/A'
                                     }`"
                                     :breakpoints="{ '960px': '75vw' }"

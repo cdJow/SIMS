@@ -9,7 +9,8 @@ const rentalSummary = ref({
     total_items: 0,
     available_items: 0,
     rented_items: 0,
-    total_revenue: 0
+    total_revenue: 0,
+    total_damage_charges: 0
 });
 const lowStockCount = ref(0);
 const lowStockItems = ref([]);
@@ -67,7 +68,7 @@ onMounted(() => {
 
 <template>
     <div
-        class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 mb-4"
+        class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2 mb-4"
     >
         <!-- Card 1: Total Rental Items -->
         <div class="card h-full p-6 transition-all hover:shadow-lg">
@@ -175,6 +176,32 @@ onMounted(() => {
             <div class="text-sm">
                 <span class="text-purple-600 font-semibold">Total value</span>
                 <span class="text-gray-500 ml-1">of rental inventory</span>
+            </div>
+        </div>
+
+        <!-- Card 5: Damage Charges Total -->
+        <div class="card h-full p-6 transition-all hover:shadow-lg">
+            <div class="flex justify-between items-center mb-4">
+                <div>
+                    <span class="block text-gray-600 text-sm font-medium mb-1"
+                        >Damage Charges</span
+                    >
+                    <div
+                        class="text-2xl font-bold text-gray-900 dark:text-white"
+                    >
+                        <ProgressSpinner v-if="loading" size="small" />
+                        <span v-else>{{ formatCurrency(rentalSummary.total_damage_charges) }}</span>
+                    </div>
+                </div>
+                <div
+                    class="w-12 h-12 bg-red-100 dark:bg-red-500/10 rounded-lg flex items-center justify-center"
+                >
+                    <i class="pi pi-exclamation-triangle text-red-500 text-xl"></i>
+                </div>
+            </div>
+            <div class="text-sm">
+                <span class="text-red-600 font-semibold">Total charges</span>
+                <span class="text-gray-500 ml-1">for damages</span>
             </div>
         </div>
     </div>

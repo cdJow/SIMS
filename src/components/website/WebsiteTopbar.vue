@@ -1,8 +1,139 @@
 <script setup>
+import { ref, onMounted, onBeforeUnmount } from "vue";
+import { useRouter } from "vue-router";
+import { useToast } from "primevue/usetoast";
 import { useLayout } from "@/layout/composables/layout";
-import WebsiteConfigurator from "./WebsiteConfigurator.vue";
+import Menu from "primevue/menu";
+import Tag from "primevue/tag";
+import Avatar from "primevue/avatar";
+import Button from "primevue/button";
+import { getCurrentUser, logoutUserLog } from "@/api/auth";
+
 
 const { toggleMenu, toggleDarkMode, isDarkTheme } = useLayout();
+const router = useRouter();
+const toast = useToast();
+const isLoggedIn = ref(false);
+const user = ref(null);
+const menu = ref();
+
+// Check authentication status and fetch user data
+const checkAuthStatus = async () => {
+    const token = localStorage.getItem('token');
+    const userId = localStorage.getItem('userId');
+    isLoggedIn.value = !!(token && userId);
+    
+    if (isLoggedIn.value && userId) {
+        try {
+            const response = await getCurrentUser(userId);
+            user.value = response.data.user;
+        } catch (error) {
+            console.error('Error fetching user:', error);
+            // If user fetch fails, consider user logged out
+            isLoggedIn.value = false;
+            user.value = null;
+        }
+    } else {
+        user.value = null;
+    }
+};
+
+const handleLogin = () => {
+    router.push('/pages/auth/login');
+};
+
+const handleLogout = async () => {
+    try {
+        const userId = localStorage.getItem('userId');
+        if (userId) {
+            await logoutUserLog(userId);
+        }
+    } catch (error) {
+        console.error('Error logging logout:', error);
+    }
+    
+    // Clear authentication data
+    localStorage.removeItem('token');
+    localStorage.removeItem('userId');
+    
+    // Update auth status
+    isLoggedIn.value = false;
+    user.value = null;
+    
+    // Show success message
+    toast.add({
+        severity: 'success',
+        summary: 'Logged Out',
+        detail: 'You have been successfully logged out',
+        life: 3000
+    });
+    
+    // Redirect to home page
+    router.push('/');
+};
+
+// User menu items
+const userMenuItems = ref([
+    {
+        label: "Profile",
+        icon: "pi pi-user",
+        command: () => router.push('/pages/website/ProfilePage')
+    },
+    {
+        label: "My Bookings",
+        icon: "pi pi-calendar-plus",
+        command: () => router.push('/pages/website/BookedRooms')
+    },
+    {
+        label: "Transactions",
+        icon: "pi pi-dollar",
+        command: () => router.push('/pages/website/TransactionHistory')
+    },
+    {
+        separator: true
+    },
+
+    {
+        label: "Log Out",
+        icon: "pi pi-sign-out",
+        command: handleLogout
+    }
+]);
+
+// Get role severity for tag styling
+const getRoleSeverity = (role) => {
+    switch(role?.toLowerCase()) {
+        case 'system admin':
+            return 'danger';
+        case 'manager':
+            return 'warning';
+        case 'front desk':
+            return 'success';
+        case 'inventory':
+            return 'info';
+        case 'guest':
+        default:
+            return 'secondary';
+    }
+};
+
+function closeMenuOnScroll() {
+    if (menu.value) {
+        menu.value.hide();
+    }
+}
+
+// Check auth on mount and listen for changes
+onMounted(() => {
+    checkAuthStatus();
+    window.addEventListener('storage', checkAuthStatus);
+    window.addEventListener("scroll", closeMenuOnScroll, true);
+});
+
+onBeforeUnmount(() => {
+    window.removeEventListener('storage', checkAuthStatus);
+    window.removeEventListener("scroll", closeMenuOnScroll, true);
+});
 </script>
 
 <template>
@@ -52,6 +183,7 @@ const { toggleMenu, toggleDarkMode, isDarkTheme } = useLayout();
             </router-link>
         </div>
 
+        <!-- ACTIONS -->
         <div class="layout-topbar-actions">
             <div class="layout-config-menu">
                 <button
@@ -59,54 +191,133 @@ const { toggleMenu, toggleDarkMode, isDarkTheme } = useLayout();
                     class="layout-topbar-action"
                     @click="toggleDarkMode"
                 >
-                    <i
-                        :class="[
-                            'pi',
-                            { 'pi-moon': isDarkTheme, 'pi-sun': !isDarkTheme },
-                        ]"
-                    ></i>
+                    <i :class="[ 'pi', { 'pi-moon': isDarkTheme, 'pi-sun': !isDarkTheme } ]"></i>
                 </button>
-                <div class="relative">
-                    <button
-                        v-styleclass="{
-                            selector: '@next',
-                            enterFromClass: 'hidden',
-                            enterActiveClass: 'animate-scalein',
-                            leaveToClass: 'hidden',
-                            leaveActiveClass: 'animate-fadeout',
-                            hideOnOutsideClick: true,
-                        }"
-                        type="button"
-                        class="layout-topbar-action layout-topbar-action-highlight"
-                    >
-                        <i class="pi pi-palette"></i>
-                    </button>
-                    <WebsiteConfigurator />
-                </div>
-            </div>
 
+                
+            </div>
+        </div>
+
+        <!-- USER AVATAR MENU OR LOGIN BUTTON -->
+        <div class="relative">
+            <!-- Logged In User Avatar Menu -->
             <button
-                class="layout-topbar-menu-button layout-topbar-action"
-                v-styleclass="{
-                    selector: '@next',
-                    enterFromClass: 'hidden',
-                    enterActiveClass: 'animate-scalein',
-                    leaveToClass: 'hidden',
-                    leaveActiveClass: 'animate-fadeout',
-                    hideOnOutsideClick: true,
-                }"
+                v-if="isLoggedIn && user"
+                v-ripple
+                class="relative overflow-hidden border-0 bg-transparent flex items-center p-2 hover:bg-surface-100 dark:hover:bg-surface-800 rounded-lg cursor-pointer transition-all duration-200 min-w-fit shadow-sm hover:shadow-md"
+                @click="menu.toggle($event)"
+                aria-haspopup="true"
+                aria-controls="user_menu"
             >
-                <i class="pi pi-ellipsis-v"></i>
+                <Avatar
+                    :image="user.image_url ? `http://127.0.0.1:5000/uploads/users/${user.image_url}` : 'https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png'"
+                    class="mr-3 border-2 border-primary shadow-lg"
+                    shape="circle"
+                    size="large"
+                />
+                <div class="flex flex-col items-start text-left">
+                    <span class="font-semibold text-surface-900 dark:text-surface-0 text-sm leading-tight">
+                        {{ user.name || 'Guest User' }}
+                    </span>
+                    <Tag
+                        :value="user.role || 'Guest'"
+                        :severity="getRoleSeverity(user.role)"
+                        class="mt-1 text-xs px-2 py-1 rounded-full font-medium border-0"
+                    />
+                </div>
+                <i class="pi pi-chevron-down ml-3 text-surface-500 text-xs"></i>
             </button>
 
-            <div class="layout-topbar-menu hidden lg:block">
-                <div class="layout-topbar-menu-content">
-                    <button type="button" class="layout-topbar-action">
+            <!-- Not Logged In - Show Login Button -->
+            <div v-else class="flex items-center gap-2">
+                <Button
+                    label="Sign In"
+                    icon="pi pi-sign-in"
+                    class="p-button-outlined p-button-primary p-button-sm"
+                    @click="handleLogin"
+                />
+            </div>
+
+            <!-- User Menu -->
+            <Menu ref="menu" :model="userMenuItems" popup id="user_menu" appendTo="body"/>
+        </div>
+
+        <!-- Mobile Menu Button -->
+        <button
+            class="layout-topbar-menu-button layout-topbar-action lg:hidden"
+            v-styleclass="{
+                selector: '@next',
+                enterFromClass: 'hidden',
+                enterActiveClass: 'animate-scalein',
+                leaveToClass: 'hidden',
+                leaveActiveClass: 'animate-fadeout',
+                hideOnOutsideClick: true,
+            }"
+        >
+            <i class="pi pi-ellipsis-v"></i>
+        </button>
+
+        <!-- Mobile Menu Content -->
+        <div class="layout-topbar-menu hidden lg:hidden">
+            <div class="layout-topbar-menu-content">
+                <template v-if="isLoggedIn && user">
+                    <button type="button" class="layout-topbar-action" @click="$router.push('/pages/website/ProfilePage')">
+                        <i class="pi pi-user"></i>
+                        <span>Profile</span>
+                    </button>
+                    <button type="button" class="layout-topbar-action" @click="$router.push('/pages/website/BookedRooms')">
+                        <i class="pi pi-calendar-plus"></i>
+                        <span>My Bookings</span>
+                    </button>
+                    <button type="button" class="layout-topbar-action" @click="handleLogout">
                         <i class="pi pi-sign-out"></i>
                         <span>Log Out</span>
                     </button>
-                </div>
+                </template>
+                <template v-else>
+                    <button type="button" class="layout-topbar-action" @click="handleLogin">
+                        <i class="pi pi-sign-in"></i>
+                        <span>Sign In</span>
+                    </button>
+                </template>
             </div>
         </div>
     </div>
+    <Toast />
 </template>
+
+<style scoped>
+/* High-quality avatar styling */
+:deep(.p-avatar img) {
+  object-fit: cover;
+  object-position: center;
+  width: 100%;
+  height: 100%;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  image-rendering: optimize-quality;
+}
+
+/* Ensure avatars maintain proper sizing */
+:deep(.p-avatar.p-avatar-circle) {
+  overflow: hidden;
+}
+
+/* Large avatar in topbar */
+:deep(.p-avatar-lg) {
+  width: 3rem;
+  height: 3rem;
+}
+
+/* Improve image loading */
+:deep(.p-avatar img) {
+  transition: all 0.3s ease;
+  background-color: #f8fafc;
+}
+
+/* Hover effect for topbar avatar */
+.layout-topbar-actions .p-avatar:hover {
+  transform: scale(1.05);
+  transition: transform 0.2s ease;
+}
+</style>

@@ -471,3 +471,24 @@ export const getCategoryBreakdown = (period) => {
   });
 }
 
+export const getBookingChart = (weekOffset) => {
+  return axios.get(`${API_URL}/booking-chart`, {
+    params: { weekOffset }
+  });
+}
+
+export const getOccupancyChart = (weekOffset) => {
+  return axios.get(`${API_URL}/occupancy-chart`, {
+    params: { weekOffset }
+  });
+}
+
+// Guest API functions
+export const getUserBookings = (userId) => {
+  return axios.get(`${API_URL}/users/${userId}/bookings`);
+}
+
+export const getUserTransactions = (userId) => {
+  return axios.get(`${API_URL}/users/${userId}/transactions`);
+}
+

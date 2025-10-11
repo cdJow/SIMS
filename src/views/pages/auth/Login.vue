@@ -39,11 +39,31 @@ export default {
         const response = await login(this.form.email, this.form.password);
         const token = response.data.token;
         const userId = response.data.user?.id || response.data.user_id;
+        const userRole = response.data.user?.role;
+        const additionalRoles = response.data.user?.additional_roles || [];
 
         if (token && userId) {
           localStorage.setItem("token", token);
           localStorage.setItem("userId", userId);
 
+          // Get all user roles (primary + additional)
+          const allRoles = [userRole, ...additionalRoles];
+          
+          // Determine redirect route based on role priority
+          // Priority order: System Admin > Manager > Front Desk > Inventory > Guest
+          let redirectRoute = "/pages/website/HomePage"; // default fallback for guests
+          
+          if (allRoles.includes("System Admin")) {
+            redirectRoute = "/Rates/RatePage";
+          } else if (allRoles.includes("Manager")) {
+            redirectRoute = "/Dashboard";
+          } else if (allRoles.includes("Front Desk")) {
+            redirectRoute = "/Rooms/RoomList";
+          } else if (allRoles.includes("Inventory")) {
+            redirectRoute = "/Inventory/Additems/ConsumableForm";
+          } else if (userRole === "guest" || allRoles.includes("guest")) {
+            redirectRoute = "/pages/website/BookedRooms";
+          }
          
           this.toast.add({
             severity: "success",
@@ -52,7 +72,7 @@ export default {
             life: 3000,
           });
 
-          this.$router.push("/dashboard");
+          this.$router.push(redirectRoute);
         }
       } catch (error) {
         this.errors.form = "Invalid email or password.";

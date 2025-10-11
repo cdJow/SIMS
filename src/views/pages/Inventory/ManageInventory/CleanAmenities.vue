@@ -100,7 +100,7 @@ onMounted(() => {
                     Clean Bath & Bed Linens
                 </h2>
                 <p class="text-gray-600 dark:text-gray-400 mt-1">
-                    Click items to mark them as cleaned (in_stock)
+                    Click items to mark them as cleaned
                 </p>
             </div>
             <Button

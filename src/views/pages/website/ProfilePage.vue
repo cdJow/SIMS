@@ -1,381 +1,369 @@
 <template>
     <div class="profile-details-container">
-        <!-- Profile Header -->
-        <div class="flex items-center justify-between mb-8">
-            <h2 class="text-2xl font-bold text-gray-800">
-                Profile Information
-            </h2>
-            <Button
-                :label="editMode ? 'Cancel' : 'Edit Profile'"
-                icon="pi pi-pencil"
-                class="p-button-text"
-                @click="toggleEditMode"
-            />
+        <!-- Loading State -->
+        <div v-if="loading" class="flex justify-center items-center py-20">
+            <ProgressSpinner />
         </div>
 
-        <!-- Avatar Section -->
-        <div class="flex flex-col items-center mb-8">
-            <div class="relative group">
+        <!-- Profile Content -->
+        <div v-else>
+            <!-- Profile Header -->
+            <div class="flex items-center justify-between mb-8">
+                <h2 class="text-2xl font-bold text-gray-800">
+                    Profile Information
+                </h2>
+                
+            </div>
+
+            <!-- Avatar Section -->
+            <div class="flex flex-col items-center mb-8">
                 <Avatar
-                    :image="formData.avatar"
-                    class="w-32 h-32 mb-4"
+                    :image="getUserAvatarUrl()"
+                    class="w-32 h-32 mb-4 border-4 border-primary shadow-xl"
                     size="xlarge"
                     shape="circle"
                 />
-                <FileUpload
-                    v-if="editMode"
-                    mode="basic"
-                    accept="image/*"
-                    :maxFileSize="1000000"
-                    chooseLabel="Change Photo"
-                    class="absolute bottom-0 right-0"
-                    @select="handleFileUpload"
-                />
+                <h3 class="text-xl font-semibold text-gray-800">
+                    {{ user?.name || 'Guest User' }}
+                </h3>
+                <p class="text-gray-600 capitalize">{{ user?.role || 'Guest' }}</p>
             </div>
-            <h3 class="text-xl font-semibold text-gray-800">
-                {{ formData.firstName }} {{ formData.lastName }}
-            </h3>
-            <p class="text-gray-600">{{ formData.position }}</p>
-        </div>
 
-        <!-- Personal Information Form -->
-        <form @submit.prevent="handleSubmit">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Personal Details Card -->
+                <!-- Personal Information Card -->
                 <Card class="mb-6">
                     <template #title>Personal Information</template>
                     <template #content>
-                        <div class="grid grid-cols-1 gap-4">
+                        <div class="space-y-4">
                             <div class="field">
-                                <label class="block text-sm font-medium mb-2"
-                                    >First Name</label
-                                >
+                                <label class="block text-sm font-medium mb-2 text-gray-700">Full Name</label>
                                 <InputText
-                                    v-model="formData.firstName"
-                                    :disabled="!editMode"
-                                    class="w-full"
-                                    required
+                                    :value="user?.name || 'N/A'"
+                                    disabled
+                                    class="w-full bg-gray-50"
                                 />
+                                <small class="text-gray-500 mt-1 block">This field is read-only</small>
                             </div>
                             <div class="field">
-                                <label class="block text-sm font-medium mb-2"
-                                    >Last Name</label
-                                >
+                                <label class="block text-sm font-medium mb-2 text-gray-700">Email Address</label>
                                 <InputText
-                                    v-model="formData.lastName"
-                                    :disabled="!editMode"
-                                    class="w-full"
+                                    :value="user?.email || 'N/A'"
+                                    disabled
+                                    class="w-full bg-gray-50"
                                 />
+                                <small class="text-gray-500 mt-1 block">This field is read-only</small>
                             </div>
                             <div class="field">
-                                <label class="block text-sm font-medium mb-2"
-                                    >Date of Birth</label
-                                >
-                                <Datepicker
-                                    v-model="formData.dob"
-                                    :disabled="!editMode"
-                                    dateFormat="dd/mm/yy"
-                                    class="w-full"
-                                />
-                            </div>
-                        </div>
-                    </template>
-                </Card>
-
-                <!-- Contact Information Card -->
-                <Card>
-                    <template #title>Contact Information</template>
-                    <template #content>
-                        <div class="grid grid-cols-1 gap-4">
-                            <div class="field">
-                                <label class="block text-sm font-medium mb-2"
-                                    >Email</label
-                                >
+                                <label class="block text-sm font-medium mb-2 text-gray-700">Member Since</label>
                                 <InputText
-                                    v-model="formData.email"
-                                    type="email"
-                                    :disabled="!editMode"
-                                    class="w-full"
-                                    required
+                                    :value="formatDate(user?.created_at)"
+                                    disabled
+                                    class="w-full bg-gray-50"
                                 />
-                            </div>
-                            <div class="field">
-                                <label class="block text-sm font-medium mb-2"
-                                    >Phone Number</label
-                                >
-                                <InputMask
-                                    v-model="formData.phone"
-                                    mask="(999) 999-9999"
-                                    :disabled="!editMode"
-                                    class="w-full"
-                                />
-                            </div>
-                            <div class="field">
-                                <label class="block text-sm font-medium mb-2"
-                                    >Address</label
-                                >
-                                <Textarea
-                                    v-model="formData.address"
-                                    :disabled="!editMode"
-                                    class="w-full"
-                                    rows="2"
-                                    autoResize
-                                />
+                                <small class="text-gray-500 mt-1 block">Account creation date</small>
                             </div>
                         </div>
                     </template>
                 </Card>
 
                 <!-- Security Settings Card -->
-                <Card v-if="!editMode" class="md:col-span-2">
-                    <template #title>Security</template>
+                <Card>
+                    <template #title>
+                        <div class="flex items-center gap-2">
+                            <i class="pi pi-shield text-primary"></i>
+                            Security Settings
+                        </div>
+                    </template>
                     <template #content>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div
-                                class="flex items-center justify-between p-3 bg-gray-50 rounded"
-                            >
-                                <span class="font-medium">Password</span>
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg border">
+                                <div>
+                                    <span class="font-medium block">Password</span>
+                                    <small class="text-gray-600">Update your account password</small>
+                                </div>
                                 <Button
-                                    label="Change Password"
+                                    label="Change"
                                     icon="pi pi-lock"
-                                    class="p-button-text"
+                                    class="p-button-primary p-button-sm"
                                     @click="showPasswordDialog = true"
                                 />
                             </div>
-                            <div
-                                class="flex items-center justify-between p-3 bg-gray-50 rounded"
-                            >
-                                <span class="font-medium"
-                                    >Two-Factor Authentication</span
-                                >
-                                <ToggleButton
-                                    v-model="formData.twoFactorEnabled"
-                                    onLabel="ON"
-                                    offLabel="OFF"
-                                />
+                            <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                <div class="flex items-start gap-3">
+                                    <i class="pi pi-info-circle text-blue-600 mt-1"></i>
+                                    <div class="text-sm text-blue-800">
+                                        <strong>Profile Security:</strong> Only password can be changed. 
+                                        
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </template>
                 </Card>
             </div>
-
-            <!-- Form Actions -->
-            <div v-if="editMode" class="mt-6 flex justify-end gap-3">
-                <Button
-                    label="Discard Changes"
-                    icon="pi pi-times"
-                    class="p-button-outlined"
-                    @click="resetForm"
-                />
-                <Button
-                    type="submit"
-                    label="Save Changes"
-                    icon="pi pi-check"
-                    class="p-button-success"
-                />
-            </div>
-        </form>
+        </div>
 
         <!-- Change Password Dialog -->
         <Dialog
             v-model:visible="showPasswordDialog"
             header="Change Password"
             :modal="true"
+            :closable="true"
+            :style="{ width: '400px' }"
         >
-            <div class="grid gap-4">
+            <div class="space-y-4">
                 <div class="field">
-                    <label class="block text-sm font-medium mb-2"
-                        >Current Password</label
-                    >
-                    <Password
-                        v-model="password.current"
-                        toggleMask
-                        class="w-full"
-                        :feedback="false"
-                    />
-                </div>
-                <div class="field">
-                    <label class="block text-sm font-medium mb-2"
-                        >New Password</label
-                    >
+                    <label class="block text-sm font-medium mb-2">New Password</label>
                     <Password
                         v-model="password.new"
                         toggleMask
                         class="w-full"
+                        inputClass="w-full"
                         :feedback="true"
+                        placeholder="Enter new password"
                     />
                 </div>
                 <div class="field">
-                    <label class="block text-sm font-medium mb-2"
-                        >Confirm Password</label
-                    >
+                    <label class="block text-sm font-medium mb-2">Confirm New Password</label>
                     <Password
                         v-model="password.confirm"
                         toggleMask
                         class="w-full"
+                        inputClass="w-full"
                         :feedback="false"
+                        placeholder="Confirm new password"
                     />
+                    <small v-if="password.new && password.confirm && password.new !== password.confirm" 
+                           class="text-red-500 mt-1 block">
+                        Passwords do not match
+                    </small>
+                </div>
+                <div v-if="passwordError" class="p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+                    {{ passwordError }}
                 </div>
             </div>
             <template #footer>
-                <Button
-                    label="Cancel"
-                    icon="pi pi-times"
-                    @click="showPasswordDialog = false"
-                    class="p-button-text"
-                />
-                <Button
-                    label="Change Password"
-                    icon="pi pi-check"
-                    @click="handlePasswordChange"
-                    class="p-button-success"
-                />
+                <div class="flex justify-end gap-2">
+                    <Button
+                        label="Cancel"
+                        icon="pi pi-times"
+                        @click="closePasswordDialog"
+                        class="p-button-text"
+                    />
+                    <Button
+                        label="Update Password"
+                        icon="pi pi-check"
+                        @click="handlePasswordChange"
+                        class="p-button-success"
+                        :disabled="!isPasswordValid"
+                        :loading="passwordLoading"
+                    />
+                </div>
             </template>
         </Dialog>
     </div>
+    <Toast />
 </template>
 
 <script setup>
+import { ref, onMounted, computed } from "vue";
 import { useToast } from "primevue/usetoast";
-import { reactive, ref, watch } from "vue";
+import { getCurrentUser, resetUserPassword } from "@/api/auth";
+import Card from "primevue/card";
+import Avatar from "primevue/avatar";
+import InputText from "primevue/inputtext";
+import Button from "primevue/button";
+import Dialog from "primevue/dialog";
+import Password from "primevue/password";
+import Tag from "primevue/tag";
+import ProgressSpinner from "primevue/progressspinner";
+import Toast from "primevue/toast";
 
 const toast = useToast();
-const props = defineProps({
-    user: {
-        type: Object,
-        required: true,
-    },
-});
 
-const emit = defineEmits(["update-profile"]);
-
-// Form states
-const editMode = ref(false);
+// State
+const loading = ref(true);
+const user = ref(null);
 const showPasswordDialog = ref(false);
-const originalData = ref({});
+const passwordLoading = ref(false);
+const passwordError = ref("");
 
-const formData = reactive({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    dob: "",
-    address: "",
-    avatar: "/default-avatar.png",
-    position: "Hotel Manager",
-    twoFactorEnabled: false,
-});
-
-const password = reactive({
-    current: "",
+const password = ref({
     new: "",
     confirm: "",
 });
 
-// Initialize form with user data
-watch(
-    () => props.user,
-    (newUser) => {
-        Object.assign(formData, newUser);
-        originalData.value = { ...newUser };
-    },
-    { immediate: true }
-);
+// Computed
+const isPasswordValid = computed(() => {
+    return password.value.new && 
+           password.value.confirm && 
+           password.value.new === password.value.confirm &&
+           password.value.new.length >= 6;
+});
 
 // Methods
-const toggleEditMode = () => {
-    editMode.value = !editMode.value;
-    if (!editMode.value) resetForm();
-};
-
-const resetForm = () => {
-    Object.assign(formData, originalData.value);
-    editMode.value = false;
-};
-
-const handleSubmit = async () => {
+const fetchUserData = async () => {
     try {
-        // Simulate API call
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        loading.value = true;
+        const userId = localStorage.getItem('userId');
+        if (!userId) {
+            toast.add({
+                severity: 'error',
+                summary: 'Error',
+                detail: 'User not authenticated',
+                life: 3000
+            });
+            return;
+        }
 
-        emit("update-profile", formData);
-        originalData.value = { ...formData };
-        editMode.value = false;
-
-        toast.add({
-            severity: "success",
-            summary: "Profile Updated",
-            detail: "Your profile changes have been saved",
-            life: 3000,
-        });
+        const response = await getCurrentUser(userId);
+        user.value = response.data.user;
     } catch (error) {
+        console.error('Error fetching user data:', error);
         toast.add({
-            severity: "error",
-            summary: "Update Failed",
-            detail: error.message,
-            life: 5000,
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to load profile data',
+            life: 3000
         });
+    } finally {
+        loading.value = false;
     }
 };
 
-const handleFileUpload = (event) => {
-    const file = event.files[0];
-    if (file) {
-        formData.avatar = URL.createObjectURL(file);
+const getUserAvatarUrl = () => {
+    if (user.value?.image_url) {
+        return `http://127.0.0.1:5000/uploads/users/${user.value.image_url}`;
     }
+    return 'https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png';
+};
+
+const getRoleSeverity = (role) => {
+    switch(role?.toLowerCase()) {
+        case 'system admin':
+            return 'danger';
+        case 'manager':
+            return 'warning';
+        case 'front desk':
+            return 'success';
+        case 'inventory':
+            return 'info';
+        case 'guest':
+        default:
+            return 'secondary';
+    }
+};
+
+const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
 };
 
 const handlePasswordChange = async () => {
-    if (password.new !== password.confirm) {
-        toast.add({
-            severity: "error",
-            summary: "Password Mismatch",
-            detail: "New passwords do not match",
-            life: 5000,
-        });
+    if (!isPasswordValid.value) {
+        passwordError.value = "Please ensure passwords match and are at least 6 characters long";
         return;
     }
 
     try {
-        // Simulate password change API call
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        passwordLoading.value = true;
+        passwordError.value = "";
+        
+        const userId = localStorage.getItem('userId');
+        await resetUserPassword(userId, { 
+            new_password: password.value.new 
+        });
 
         showPasswordDialog.value = false;
         toast.add({
-            severity: "success",
-            summary: "Password Changed",
-            detail: "Your password has been updated successfully",
-            life: 3000,
+            severity: 'success',
+            summary: 'Password Updated',
+            detail: 'Your password has been changed successfully',
+            life: 3000
         });
+
+        // Reset password fields
+        password.value.new = "";
+        password.value.confirm = "";
+        
     } catch (error) {
+        console.error('Error changing password:', error);
+        passwordError.value = error.response?.data?.message || "Failed to update password";
         toast.add({
-            severity: "error",
-            summary: "Password Change Failed",
-            detail: error.message,
-            life: 5000,
+            severity: 'error',
+            summary: 'Password Update Failed',
+            detail: passwordError.value,
+            life: 5000
         });
+    } finally {
+        passwordLoading.value = false;
     }
 };
+
+const closePasswordDialog = () => {
+    showPasswordDialog.value = false;
+    password.value.new = "";
+    password.value.confirm = "";
+    passwordError.value = "";
+};
+
+// Initialize
+onMounted(() => {
+    fetchUserData();
+});
 </script>
 
 <style scoped>
 .profile-details-container {
-    @apply p-6 bg-white rounded-lg shadow;
+    padding: 1.5rem;
+    background-color: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
 }
 
 :deep(.p-card) {
-    @apply bg-white rounded-lg shadow;
+    background-color: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
 }
 
 :deep(.p-card-title) {
-    @apply text-lg font-semibold mb-4 text-gray-800;
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: #374151;
 }
 
 .field {
-    @apply mb-4;
+    margin-bottom: 1rem;
 }
 
 :deep(.p-password-input) {
-    @apply w-full;
+    width: 100%;
+}
+
+/* Avatar styling */
+:deep(.p-avatar img) {
+    object-fit: cover;
+    object-position: center;
+    width: 100%;
+    height: 100%;
+}
+
+/* Enhanced button hover effects */
+:deep(.p-button:hover) {
+    transform: translateY(-1px);
+    transition: transform 0.2s ease;
+}
+
+/* Tag styling */
+:deep(.p-tag) {
+    font-size: 0.875rem;
+    padding: 0.5rem 1rem;
 }
 </style>
