@@ -10,6 +10,14 @@ import axios from "axios";
 const roomRates = ref([]);
 const loadingRates = ref(false);
 
+// Google Reviews data
+const reviews = ref([]);
+const loadingReviews = ref(false);
+const reviewStats = ref({
+    averageRating: 4.1,
+    totalReviews: 61
+});
+
 // Fetch room rates from API
 const fetchRoomRates = async () => {
     try {
@@ -46,6 +54,53 @@ const fetchRoomRates = async () => {
     } finally {
         loadingRates.value = false;
     }
+};
+
+// Load static reviews data
+const loadStaticReviews = () => {
+    loadingReviews.value = true;
+    
+    // Static reviews data - Only 3 reviews as requested
+    reviews.value = [
+        {
+            author_name: 'Riezl Joy Gutierrez',
+            rating: 5,
+            text: 'A good place to stay after a long city ride right in the corner of the city proper where you can easily access other establishments around the perimeter and other local prides. Cozy space and accommodating staff. Highly recommended!',
+            time: '2 years ago'
+        },
+        {
+            author_name: 'Gerard June Fuentes',
+            rating: 5,
+            text: 'This is where we stayed overnight during Hazels cash for work with PWDs in Iligan City. The accomodations is fairly clean and it looks modern inside the rooms. I can only say the wifi is bad and the smart tv did not work because there is no cable and it only works with internet servers.',
+            time: '2 years ago'
+        },
+        {
+            author_name: 'Quirk Enoch Quilinguen',
+            rating: 4,
+            text: 'We stayed at New Woodland Suites and really liked the Queen Size bed room, especially the view of the road and Gaisano Mall. The room was clean, and the location is convenient. My girlfriend and I felt very comfortable during our stay. However, the TV didn’t work, and the internet was very slow, which is a big downside for those with online jobs or businesses.',
+            time: '8 months ago '
+        },
+        {
+            author_name: 'Biplab Roy',
+            rating: 4,
+            text: 'Hotel was good Staff co-operative Location is nice - middle of the city, accessible in terms of basic amenities - literally near the city proper. Charges can be made more flexible - especially if you are staying on monthly basis, paying 18k is  too costly. New monthly pricing plans should be rolled out. Comparatively, other than pricing, all were good. Hoping they read this and roll out the new pricing options for long stays Also, they should roll out online reservation model such as website or Facebook page (active).',
+            time: 'a year ago'
+        },
+        {
+            author_name: 'Sai Abbu',
+            rating: 5,
+            text: 'Cheapest in town very good rooms',
+            time: 'Edited 7 months ago'
+        }
+    ];
+    
+    // Use actual Google Maps data
+    reviewStats.value = {
+        averageRating: 4.1, // Matches Google Maps embedded data
+        totalReviews: 61 // Matches Google Maps embedded data
+    };
+    
+    loadingReviews.value = false;
 };
 
 
@@ -240,11 +295,18 @@ const toggleShowAll = () => {
     }
 };
 
+// Open Google Reviews page in new tab
+const openGoogleReviews = () => {
+    // Opens the actual Woodland Suites Google Maps reviews page
+    window.open('https://www.google.com/maps/place/Woodland+Suites/@8.2304465,124.2380444,17z/data=!4m8!3m7!1s0x3255758d3ab4ab77:0xf498dd27637f6b05!8m2!3d8.2304465!4d124.2406193!9m1!1b1!16s%2Fg%2F11h4kh6qdb?entry=ttu&g_ep=EgoyMDI1MTAwOC4wIKXMDSoASAFQAw%3D%3D', '_blank');
+};
+
 // Fetch rooms and rates when component mounts
 onMounted(() => {
     checkAuthStatus(); // Check authentication status
     fetchRooms();
     fetchRoomRates();
+    loadStaticReviews();
 });
 </script>
 
@@ -273,6 +335,11 @@ onMounted(() => {
                         href="#rates"
                         class="hover:text-accent text-white transition-colors p-2"
                         >Rates</a
+                    >
+                    <a
+                        href="#reviews"
+                        class="hover:text-accent text-white transition-colors p-2"
+                        >Reviews</a
                     >
                     <a
                         href="#location"
@@ -336,10 +403,8 @@ onMounted(() => {
             >
                 <div class="px-6 py-4 space-y-4">
                     <a href="#rooms" class="block hover:text-accent">Rooms</a>
-                    <a href="#amenities" class="block hover:text-accent"
-                        >Amenities</a
-                    >
                     <a href="#rates" class="block hover:text-accent">Rates</a>
+                    <a href="#reviews" class="block hover:text-accent">Reviews</a>
                     <a href="#location" class="block hover:text-accent"
                         >Location</a
                     >
@@ -744,7 +809,7 @@ onMounted(() => {
                     >
                         <template #item="slotProps">
                             <div class="m-2">
-                                <div class="group relative bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 border-b-4 border-red-500 overflow-hidden">
+                                <div class="group relative bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 border-b-4 border-red-500 overflow-hidden transform hover:-translate-y-2">
                                     <div
                                         class="absolute inset-0 bg-gradient-to-b from-red-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"
                                     ></div>
@@ -756,7 +821,7 @@ onMounted(() => {
                                                 class="bg-red-500 p-3 rounded-lg shadow-md"
                                             >
                                                 <i
-                                                    class="pi pi-star text-xl text-white"
+                                                    class="pi pi-bed text-xl text-white"
                                                 ></i>
                                             </div>
                                             <div class="ml-4">
@@ -777,7 +842,7 @@ onMounted(() => {
                                             <li
                                                 v-for="(duration, dIndex) in slotProps.data.durations"
                                                 :key="dIndex"
-                                                class="flex justify-between items-center p-3 bg-gray-50 rounded-lg hover:bg-white transition-colors"
+                                                class="flex justify-between items-center p-4 bg-gradient-to-r from-gray-50 to-red-50 rounded-lg hover:from-white hover:to-red-100 transition-all duration-300 border border-gray-200"
                                             >
                                                 <div class="flex items-center">
                                                     <i
@@ -825,6 +890,205 @@ onMounted(() => {
             </div>
         </section>
 
+        <!-- Google Reviews Section -->
+        <section 
+            id="reviews" 
+            class="py-16 md:py-24 bg-white px-4 sm:px-6"
+        >
+            <div class="container mx-auto max-w-7xl">
+                <div class="text-center mb-12 md:mb-16">
+                    <h2 
+                        class="text-3xl md:text-4xl font-bold text-gray-900 mb-4"
+                    >
+                        <span 
+                            class="bg-gradient-to-r from-red-500 to-orange-500 bg-clip-text text-transparent"
+                        >
+                            Guest Reviews
+                        </span>
+                    </h2>
+                    <p 
+                        class="text-lg md:text-xl text-gray-600 max-w-2xl mx-auto mb-6"
+                    >
+                        See what our guests are saying about their experience
+                    </p>
+                    
+                    <!-- Rating Summary -->
+                    <div class="flex items-center justify-center gap-6 mb-8">
+                        <div class="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
+                            <div class="flex items-center justify-center mb-3">
+                                <div class="bg-gradient-to-br from-red-500 to-orange-500 rounded-full p-3 mr-4">
+                                    <i class="pi pi-google text-white text-2xl"></i>
+                                </div>
+                                <div>
+                                    <div class="flex items-center mb-1">
+                                        <span class="text-4xl font-bold text-gray-900">
+                                            {{ reviewStats.averageRating }}
+                                        </span>
+                                        <div class="ml-3">
+                                            <div class="flex items-center">
+                                                <i 
+                                                    v-for="star in 5" 
+                                                    :key="star"
+                                                    class="text-yellow-400 text-lg"
+                                                    :class="{
+                                                        'pi pi-star-fill': star <= Math.floor(reviewStats.averageRating),
+                                                        'pi pi-star': star > Math.floor(reviewStats.averageRating)
+                                                    }"
+                                                ></i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p class="text-gray-600 text-sm">
+                                        Based on Google reviews
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <span v-if="loadingReviews" class="text-sm text-gray-500 ml-2">
+                        <i class="pi pi-spin pi-spinner"></i>
+                        Loading reviews...
+                    </span>
+                </div>
+
+                <!-- Loading State -->
+                <div v-if="loadingReviews" class="text-center py-12">
+                    <div class="inline-flex items-center space-x-2 text-gray-500">
+                        <i class="pi pi-spin pi-spinner text-2xl"></i>
+                        <span class="text-lg">Loading guest reviews...</span>
+                    </div>
+                </div>
+
+                <!-- Reviews Carousel -->
+                <div v-else-if="!loadingReviews && reviews.length > 0" class="p-2 sm:p-6 md:p-8">
+                    <Carousel
+                        :value="reviews"
+                        :numVisible="3"
+                        :numScroll="1"
+                        :responsiveOptions="[
+                            { breakpoint: '1200px', numVisible: 3, numScroll: 1 },
+                            { breakpoint: '1024px', numVisible: 2, numScroll: 1 },
+                            { breakpoint: '768px', numVisible: 1, numScroll: 1 },
+                            { breakpoint: '560px', numVisible: 1, numScroll: 1 }
+                        ]"
+                        circular
+                        :autoplayInterval="6000"
+                    >
+                        <template #item="slotProps">
+                            <div class="m-2">
+                                <div class="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 p-6 h-full">
+                                    <!-- Review Header -->
+                                    <div class="flex items-center mb-4">
+                                        <div 
+                                            v-if="slotProps.data.author_photo" 
+                                            class="w-12 h-12 rounded-full overflow-hidden mr-4"
+                                        >
+                                            <img 
+                                                :src="slotProps.data.author_photo" 
+                                                :alt="slotProps.data.author_name"
+                                                class="w-full h-full object-cover"
+                                                @error="$event.target.style.display='none'"
+                                            />
+                                        </div>
+                                        <div 
+                                            v-else 
+                                            class="w-12 h-12 rounded-full bg-red-500 flex items-center justify-center mr-4"
+                                        >
+                                            <i class="pi pi-user text-white text-lg"></i>
+                                        </div>
+                                        
+                                        <div class="flex-1">
+                                            <h4 class="font-semibold text-gray-900">
+                                                {{ slotProps.data.author_name }}
+                                            </h4>
+                                            <div class="flex items-center mt-1">
+                                                <div class="flex items-center mr-2">
+                                                    <i 
+                                                        v-for="star in 5" 
+                                                        :key="star"
+                                                        class="text-yellow-400 text-sm"
+                                                        :class="{
+                                                            'pi pi-star-fill': star <= slotProps.data.rating,
+                                                            'pi pi-star': star > slotProps.data.rating
+                                                        }"
+                                                    ></i>
+                                                </div>
+                                                <span class="text-gray-500 text-sm">
+                                                    {{ slotProps.data.time }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Review Text -->
+                                    <p class="text-gray-700 leading-relaxed mb-4">
+                                        "{{ slotProps.data.text }}"
+                                    </p>
+                                    
+                                    <!-- Google Badge -->
+                                    <div class="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
+                                        <div class="flex items-center text-gray-500 text-sm">
+                                            <i class="pi pi-google text-red-500 mr-2"></i>
+                                            <span>Google Review</span>
+                                        </div>
+                                        <div class="flex items-center">
+                                            <span class="text-red-600 font-semibold">
+                                                {{ slotProps.data.rating }}/5
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </Carousel>
+                </div>
+
+                <!-- No Reviews Available -->
+                <div v-else class="text-center py-12">
+                    <div class="text-gray-500">
+                        <i class="pi pi-star text-4xl mb-4"></i>
+                        <h3 class="text-xl font-semibold mb-2">No reviews available</h3>
+                        <p>Be the first to leave a review for Woodland Suites!</p>
+                        <Button 
+                            label="Leave a Review" 
+                            icon="pi pi-external-link" 
+                            class="mt-4 p-button-outlined"
+                            @click="openGoogleReviews"
+                        />
+                    </div>
+                </div>
+
+                <!-- Call to Action -->
+                <div class="bg-gradient-to-r from-red-50 to-orange-50 rounded-2xl p-8 text-center mt-12">
+                    <div class="max-w-2xl mx-auto">
+                        <div class="flex items-center justify-center mb-4">
+                            <i class="pi pi-google text-red-500 text-3xl mr-3"></i>
+                            <h3 class="text-2xl font-semibold text-gray-900">
+                                Share Your Experience
+                            </h3>
+                        </div>
+                        <p class="text-gray-600 mb-6 leading-relaxed">
+                            Your feedback helps us improve and assists other travelers in making their choice. 
+                            Share your stay experience on Google Maps.
+                        </p>
+                        <div class="flex flex-col sm:flex-row gap-4 items-center justify-center">
+                            <Button 
+                                label="Write a Google Review"
+                                icon="pi pi-external-link"
+                                class="bg-red-500 hover:bg-red-600 border-0 text-white px-8 py-3 shadow-lg"
+                                @click="openGoogleReviews"
+                            />
+                            <div class="flex items-center text-gray-600 text-sm">
+                                <i class="pi pi-star-fill text-yellow-400 mr-1"></i>
+                                <span>Join happy guests</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- Location Section -->
         <section
             id="location"
@@ -859,14 +1123,55 @@ onMounted(() => {
                                 src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d698.042618689094!2d124.24055174107627!3d8.23034940442809!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3255758d3ab4ab77%3A0xf498dd27637f6b05!2sWoodland%20Suites!5e0!3m2!1sen!2sph!4v1734363968355!5m2!1sen!2sph"
                                 class="w-full h-full filter grayscale group-hover:grayscale-0 transition-all duration-500"
                                 style="border: 0"
+                                allowfullscreen
                                 loading="lazy"
                                 referrerpolicy="no-referrer-when-downgrade"
                                 title="Woodland Suites Location Map"
                             ></iframe>
                         </div>
-                        <div
-                            class="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none"
-                        ></div>
+                        
+                        <!-- Map Overlay with Reviews Info -->
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none"></div>
+                        
+                        <!-- Reviews Badge Overlay -->
+                        <div class="absolute bottom-4 left-4 right-4 pointer-events-auto">
+                            <div class="bg-white/95 backdrop-blur-sm rounded-xl p-4 shadow-lg">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center">
+                                        <div class="flex items-center mr-3">
+                                            <i class="pi pi-google text-red-500 text-xl mr-2"></i>
+                                            <div>
+                                                <div class="flex items-center">
+                                                    <span class="font-bold text-lg text-gray-900 mr-2">
+                                                        {{ reviewStats.averageRating }}
+                                                    </span>
+                                                    <div class="flex items-center">
+                                                        <i 
+                                                            v-for="star in 5" 
+                                                            :key="star"
+                                                            class="text-yellow-400 text-sm"
+                                                            :class="{
+                                                                'pi pi-star-fill': star <= Math.floor(reviewStats.averageRating),
+                                                                'pi pi-star': star > Math.floor(reviewStats.averageRating)
+                                                            }"
+                                                        ></i>
+                                                    </div>
+                                                </div>
+                                                <p class="text-gray-600 text-sm">
+                                                    {{ reviewStats.totalReviews }} reviews
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <Button 
+                                        icon="pi pi-pencil"
+                                        label="Review"
+                                        class="p-button-sm bg-red-500 hover:bg-red-600 border-0 text-white"
+                                        @click="openGoogleReviews"
+                                    />
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Contact Info -->
@@ -968,6 +1273,16 @@ onMounted(() => {
                 </div>
             </div>
         </footer>
+
+        <!-- Floating Review Button -->
+        <div class="fixed bottom-6 right-6 z-50">
+            <Button 
+                icon="pi pi-star"
+                class="p-button-rounded p-button-lg bg-red-500 hover:bg-red-600 border-0 text-white shadow-2xl hover:shadow-3xl transition-all duration-300 animate-float animate-pulse-glow"
+                @click="openGoogleReviews"
+                v-tooltip.left="'Write a Google Review'"
+            />
+        </div>
     </div>
 
     <Toast />
@@ -1058,6 +1373,32 @@ onMounted(() => {
     }
 }
 
+@keyframes float {
+    0%, 100% {
+        transform: translateY(0px);
+    }
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+@keyframes pulse-glow {
+    0%, 100% {
+        box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 30px rgba(239, 68, 68, 0.5);
+    }
+}
+
+.animate-float {
+    animation: float 3s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+}
+
 .staggered-fade-enter-active,
 .staggered-fade-leave-active {
     transition: all 0.3s ease;
@@ -1066,5 +1407,24 @@ onMounted(() => {
 .staggered-fade-leave-to {
     opacity: 0;
     transform: translateY(20px);
+}
+
+/* Custom scrollbar for better UX */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #ef4444, #f97316);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #dc2626, #ea580c);
 }
 </style>
