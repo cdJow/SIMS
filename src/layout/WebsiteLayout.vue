@@ -60,6 +60,11 @@ function isOutsideClicked(event) {
         topbarEl.contains(event.target)
     );
 }
+
+const openGoogleReviews = () => {
+    // Opens the actual Woodland Suites Google Maps reviews page
+    window.open('https://www.google.com/maps/place/Woodland+Suites/@8.2304465,124.2380444,17z/data=!4m8!3m7!1s0x3255758d3ab4ab77:0xf498dd27637f6b05!8m2!3d8.2304465!4d124.2406193!9m1!1b1!16s%2Fg%2F11h4kh6qdb?entry=ttu&g_ep=EgoyMDI1MTAwOC4wIKXMDSoASAFQAw%3D%3D', '_blank');
+};
 </script>
 
 <template>
@@ -76,5 +81,33 @@ function isOutsideClicked(event) {
                 </div>
             </div>
         </div>
+        <!-- Floating Review Button -->
+        <div class="fixed bottom-6 right-6 z-50">
+            <Button 
+                icon="pi pi-star"
+                class="p-button-rounded p-button-lg bg-red-500 hover:bg-red-600 border-0 text-white shadow-2xl hover:shadow-3xl transition-all duration-300 animate-float animate-pulse-glow"
+                @click="openGoogleReviews"
+                v-tooltip.left="'Write a Google Review'"
+            />
+        </div>
     </div>
 </template>
+<style>
+
+@keyframes pulse-glow {
+    0%, 100% {
+        box-shadow: 0 0 20px rgba(38, 255, 0, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 30px rgba(0, 255, 76, 0.5);
+    }
+}
+
+.animate-float {
+    animation: float 3s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+}
+</style>

@@ -20,7 +20,7 @@
                     
                     <div class="space-y-4">
                         <Button
-                            @click="router.push('/auth/login')"
+                            @click="router.push('/pages/auth/login')"
                             class="w-full p-button-primary"
                             icon="pi pi-sign-in"
                             label="Login to Your Account"
@@ -29,7 +29,7 @@
                         <div class="text-sm text-gray-500 dark:text-gray-400">
                             Don't have an account?
                             <button 
-                                @click="router.push('/auth/signup')"
+                                @click="router.push('/auth/SignUp')"
                                 class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline"
                             >
                                 Sign up here

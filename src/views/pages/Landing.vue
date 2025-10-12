@@ -1253,8 +1253,8 @@ onMounted(() => {
                 <div>
                     <h3 class="font-semibold mb-4 text-white">Contact</h3>
                     <p class="text-gray-300">
-                         Roxas Ave <br />Iligan City<br /> Lanao del Norte <br/>Phone: (555)
-                        123-4567<br />Email: woodlandsuite@gmail.com
+                         Roxas Ave <br />Iligan City<br /> Lanao del Norte <br/>Phone: 0956 680 1497
+                        <br />Email: woodlandsuite@gmail.com
                     </p>
                 </div>
                 <div>
