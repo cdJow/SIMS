@@ -472,7 +472,7 @@ onMounted(() => {
                         >
                             <Button
                                 label="Book Your Stay"
-                                class="p-button-lg bg-amber-500 hover:bg-amber-600 border-0 text-white px-10 py-5 shadow-lg"
+                                class="p-button-lg bg-red hover:bg-red border-0 text-white px-10 py-5 shadow-lg"
                                 icon="pi pi-calendar"
                                 iconPos="right"
                                 @click="handleBookNow"
@@ -711,7 +711,7 @@ onMounted(() => {
                                                 class="flex flex-col sm:flex-row gap-3"
                                             >
                                                 <Button
-                                                    class="p-button-primary bg-gradient-to-r from-red-600 to-orange-500 text-white border-none"
+                                                    class="bg-red-500 hover:bg-red-600 text-white border-none"
                                                     @click="handleBookNow"
                                                 >
                                                     <i
@@ -913,38 +913,7 @@ onMounted(() => {
                     </p>
                     
                     <!-- Rating Summary -->
-                    <div class="flex items-center justify-center gap-6 mb-8">
-                        <div class="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
-                            <div class="flex items-center justify-center mb-3">
-                                <div class="bg-gradient-to-br from-red-500 to-orange-500 rounded-full p-3 mr-4">
-                                    <i class="pi pi-google text-white text-2xl"></i>
-                                </div>
-                                <div>
-                                    <div class="flex items-center mb-1">
-                                        <span class="text-4xl font-bold text-gray-900">
-                                            {{ reviewStats.averageRating }}
-                                        </span>
-                                        <div class="ml-3">
-                                            <div class="flex items-center">
-                                                <i 
-                                                    v-for="star in 5" 
-                                                    :key="star"
-                                                    class="text-yellow-400 text-lg"
-                                                    :class="{
-                                                        'pi pi-star-fill': star <= Math.floor(reviewStats.averageRating),
-                                                        'pi pi-star': star > Math.floor(reviewStats.averageRating)
-                                                    }"
-                                                ></i>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <p class="text-gray-600 text-sm">
-                                        Based on Google reviews
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                
                     
                     <span v-if="loadingReviews" class="text-sm text-gray-500 ml-2">
                         <i class="pi pi-spin pi-spinner"></i>
@@ -1239,7 +1208,7 @@ onMounted(() => {
             </div>
         </section>
         <!-- Footer -->
-        <footer class="bg-gray-600 text-white py-12 px-4 sm:px-6">
+        <footer class="text-white py-12 px-4 sm:px-6" style="background-color: #1C1C1D;">
             <div class="container mx-auto grid gap-8 md:grid-cols-4">
                 <div>
                     <div class="text-2xl font-bold mb-4">
@@ -1384,10 +1353,10 @@ onMounted(() => {
 
 @keyframes pulse-glow {
     0%, 100% {
-        box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+        box-shadow: 0 0 20px #EA4B1F;
     }
     50% {
-        box-shadow: 0 0 30px rgba(239, 68, 68, 0.5);
+        box-shadow: 0 0 30px #F76E18;
     }
 }
 

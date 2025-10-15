@@ -4,6 +4,7 @@ import CategoryBreakdownChart from "@/components/dashboard/CategoryBreakdownChar
 import OccupancyChart from "@/components/dashboard/OccupancyChart.vue";
 import RevenueBreakdownChart from "@/components/dashboard/RevenueBreakdownChart.vue";
 import RoomRevenueChart from "@/components/dashboard/RoomRevenueChart.vue";
+import PopularRoomChart from "@/components/dashboard/PopularRoomChart.vue";
 </script>
 
 <template>
@@ -40,6 +41,12 @@ import RoomRevenueChart from "@/components/dashboard/RoomRevenueChart.vue";
         <div class="col-span-12 md:col-span-6 lg:col-span-6">
             <div class="p-4 card rounded-lg shadow-sm">
                 <OccupancyChart />
+            </div>
+        </div>
+
+        <div class="col-span-12 md:col-span-6 lg:col-span-12">
+            <div class="p-4 card rounded-lg shadow-sm">
+                <PopularRoomChart />
             </div>
         </div>
 

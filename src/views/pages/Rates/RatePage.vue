@@ -226,7 +226,7 @@ async function confirmDelete() {
   } catch (err) {
     const detail =
       err?.response?.data?.error ||
-      `Cannot delete room type "${deleteType.value.name}" because it is used by existing rooms. Please delete or update those rooms first.`;
+      `Cannot delete room type "${deleteType.value.name}" because it is used by existing rooms. Update those rooms first.`;
     toast.add({
       severity: "warn",
       summary: "Cannot Delete Room Type",

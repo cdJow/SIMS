@@ -7,12 +7,18 @@ const model = ref([
         label: "Guest Menu",
         items: [
             {
+                label: "Profile",
+                icon: "pi pi-fw pi-user",
+                to: "/pages/website/ProfilePage",
+            },
+
+            {
                 label: "Book Rooms",
                 icon: "pi pi-fw pi-calendar-plus",
                 to: "/pages/website/BookedRooms",
             },
             {
-                label: "Transactions",
+                label: "Accommodations",
                 icon: "pi pi-fw pi-dollar",
                 to: "/pages/website/TransactionHistory",
             },

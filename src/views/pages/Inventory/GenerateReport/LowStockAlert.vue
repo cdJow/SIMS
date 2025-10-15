@@ -263,7 +263,7 @@ const clearFilters = () => {
 </script>
 
 <template>
-    <div class="card">
+    <div class="card overflow-hidden">
         <!-- Header -->
         <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-4 pb-3 border-b border-gray-200 dark:border-gray-700">
             <div class="flex-1">
@@ -416,36 +416,37 @@ const clearFilters = () => {
 
         <!-- Data Table -->
         <div v-else class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <DataTable
-                :value="filteredItems"
-                :rows="3"
-                :rowsPerPageOptions="[3, 5, 10, 15]"
-                paginator
-                responsiveLayout="scroll"
-                :globalFilterFields="['itemName', 'brand', 'category', 'supplier', 'stockStatus']"
-                sortMode="multiple"
-                stripedRows
-                class="border-0"
-                paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
-                currentPageReportTemplate="Showing {first} to {last} of {totalRecords} items"
-            >
+            <div class="overflow-x-auto">
+                <DataTable
+                    :value="filteredItems"
+                    :rows="3"
+                    paginator
+                    responsiveLayout="scroll"
+                    :globalFilterFields="['itemName', 'brand', 'category', 'supplier', 'stockStatus']"
+                    sortMode="multiple"
+                    stripedRows
+                    class="border-0 min-w-full"
+                    paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink"
+                    scrollable
+                    scrollHeight="400px"
+                >
             <!-- Item Details -->
-            <Column field="itemName" header="Item Details" sortable style="min-width: 200px">
+            <Column field="itemName" header="Item Details" sortable style="min-width: 180px; max-width: 250px;">
                 <template #body="slotProps">
                     <div class="py-1">
-                        <div class="font-bold text-gray-900 dark:text-gray-100 text-sm mb-1">
+                        <div class="font-bold text-gray-900 dark:text-gray-100 text-sm mb-1 truncate" :title="slotProps.data.itemName">
                             {{ slotProps.data.itemName }}
                         </div>
                         <div class="flex flex-wrap gap-1">
-                            <span v-if="slotProps.data.brand" class="inline-flex items-center px-1 py-0.5 text-[10px] font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded">
+                            <span v-if="slotProps.data.brand" class="inline-flex items-center px-1 py-0.5 text-[10px] font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded truncate max-w-20" :title="slotProps.data.brand">
                                 <i class="pi pi-tag mr-0.5 text-[8px]"></i>
                                 {{ slotProps.data.brand }}
                             </span>
-                            <span v-if="slotProps.data.category" class="inline-flex items-center px-1 py-0.5 text-[10px] font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded">
+                            <span v-if="slotProps.data.category" class="inline-flex items-center px-1 py-0.5 text-[10px] font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded truncate max-w-20" :title="slotProps.data.category">
                                 <i class="pi pi-bookmark mr-0.5 text-[8px]"></i>
                                 {{ slotProps.data.category }}
                             </span>
-                            <span v-if="slotProps.data.type" class="inline-flex items-center px-1 py-0.5 text-[10px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded">
+                            <span v-if="slotProps.data.type" class="inline-flex items-center px-1 py-0.5 text-[10px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded truncate max-w-16" :title="slotProps.data.type">
                                 {{ slotProps.data.type }}
                             </span>
                         </div>
@@ -454,7 +455,7 @@ const clearFilters = () => {
             </Column>
 
             <!-- Stock Status -->
-            <Column field="stockStatus" header="Status" sortable style="min-width: 110px">
+            <Column field="stockStatus" header="Status" sortable style="min-width: 100px; max-width: 120px;">
                 <template #body="slotProps">
                     <div class="flex items-center gap-1">
                         <div :class="{
@@ -467,14 +468,15 @@ const clearFilters = () => {
                         <Tag 
                             :value="slotProps.data.stockStatus" 
                             :severity="getStatusSeverity(slotProps.data.stockStatus)"
-                            class="font-medium px-2 py-0.5 text-xs"
+                            class="font-medium px-1 py-0.5 text-xs truncate"
+                            :title="slotProps.data.stockStatus"
                         />
                     </div>
                 </template>
             </Column>
 
             <!-- Stock Levels -->
-            <Column header="Stock Levels" style="min-width: 160px">
+            <Column header="Stock Levels" style="min-width: 140px; max-width: 180px;">
                 <template #body="slotProps">
                     <div class="py-1">
                         <!-- Current Stock -->
@@ -530,20 +532,20 @@ const clearFilters = () => {
             </Column>
 
             <!-- Supplier -->
-            <Column field="supplier" header="Supplier" sortable style="min-width: 140px">
+            <Column field="supplier" header="Supplier" sortable style="min-width: 120px; max-width: 160px;">
                 <template #body="slotProps">
                     <div class="py-1">
                         <div class="flex items-center gap-1 mb-1">
-                            <i class="pi pi-building text-blue-500 text-xs"></i>
-                            <span class="text-gray-800 dark:text-gray-200 font-medium text-sm">
+                            <i class="pi pi-building text-blue-500 text-xs flex-shrink-0"></i>
+                            <span class="text-gray-800 dark:text-gray-200 font-medium text-sm truncate" :title="slotProps.data.supplier || 'Not specified'">
                                 {{ slotProps.data.supplier || 'Not specified' }}
                             </span>
                         </div>
                         <div v-if="slotProps.data.lastRestocked" class="flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400">
-                            <i class="pi pi-calendar text-[8px]"></i>
-                            <span>{{ new Date(slotProps.data.lastRestocked).toLocaleDateString() }}</span>
+                            <i class="pi pi-calendar text-[8px] flex-shrink-0"></i>
+                            <span class="truncate">{{ new Date(slotProps.data.lastRestocked).toLocaleDateString() }}</span>
                         </div>
-                        <div v-else class="text-[10px] text-gray-400 dark:text-gray-500 italic">
+                        <div v-else class="text-[10px] text-gray-400 dark:text-gray-500 italic truncate">
                             <i class="pi pi-info-circle text-[8px] mr-1"></i>
                             No restock history
                         </div>
@@ -552,7 +554,7 @@ const clearFilters = () => {
             </Column>
 
             <!-- Additional Info -->
-            <Column header="Additional Info" style="min-width: 100px">
+            <Column header="Additional Info" style="min-width: 90px; max-width: 120px;">
                 <template #body="slotProps">
                     <div class="py-1 space-y-0.5">
                         <div v-if="slotProps.data.batchCount" class="flex items-center gap-1 text-[10px]">
@@ -574,6 +576,7 @@ const clearFilters = () => {
                 </template>
             </Column>
             </DataTable>
+            </div>
         </div>
         
         <!-- Toast for notifications -->

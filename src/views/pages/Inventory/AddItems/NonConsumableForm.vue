@@ -156,8 +156,8 @@ const fetchProducts = async () => {
   }
 };
 
-const onProductSelect = (selected) => {
-  selectedProduct.value = selected;
+const onProductSelect = (event) => {
+  selectedProduct.value = event.data;
   if (op2.value) op2.value.hide();
 };
 
@@ -166,7 +166,32 @@ const toggleDataTable = (event) => {
   if (op2.value) op2.value.toggle(event);
 };
 
+const formatDateTime = (dateString) => {
+  if (!dateString) return '';
+  
+  const date = new Date(dateString);
+  const options = {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true // This enables AM/PM format
+  };
+  
+  return date.toLocaleString('en-US', options);
+};
 
+const formatDateForBackend = (date) => {
+  if (!date) return null;
+  
+  // Convert Date object to YYYY-MM-DD format in local timezone
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  
+  return `${year}-${month}-${day}`;
+};
 
 const handleSubmit = async () => {
   if (!selectedProduct.value) {
@@ -205,8 +230,8 @@ const handleSubmit = async () => {
     (isNonConsumable.value && (!serialNumbers.value.trim()))
   ) {
     toast.add({
-      severity: "error",
-      summary: "Error",
+      severity: "warn",
+      summary: "Warn",
       detail: "Fill in all required fields.",
       life: 3000,
     });
@@ -281,9 +306,9 @@ const handleSubmit = async () => {
     quantity: quantity.value,
     purchase_price: purchasePrice.value,
     supplier: supplier.value,
-    arrival_date: arrivalDate.value,
+    arrival_date: formatDateForBackend(arrivalDate.value),
     unit_retail_price: isConsumable.value ? unitRetailPrice.value : null,
-    expiry_date: isConsumable.value ? expiryDate.value : null,
+    expiry_date: isConsumable.value ? formatDateForBackend(expiryDate.value) : null,
     unit_rental_price: isNonConsumable.value ? unitRentalPrice.value || null : null,
     warranty: isNonConsumable.value ? warranty.value || null : null,
     serial_numbers: isNonConsumable.value ? serialNumbers.value : null,
@@ -330,8 +355,38 @@ const handleSubmit = async () => {
   }
 };
 
+const handleSubmitWithToast = () => {
+  // Check if no product is selected
+  if (!selectedProduct.value) {
+    toast.add({
+      severity: "warn",
+      summary: "No Product Selected",
+      detail: "Please select a product first.",
+      life: 5000,
+    });
+    return;
+  }
+  
+  // Check if stock limit is reached
+  if (maxQuantity.value === 0) {
+    toast.add({
+      severity: "error",
+      summary: "Stock Limit Reached",
+      detail: "Cannot add more items. Stock limit has been reached.",
+      life: 5000,
+    });
+    return;
+  }
+  
+  // If all checks pass, proceed with normal submit
+  handleSubmit();
+};
 
-onMounted(fetchProducts);
+onMounted(() => {
+  fetchProducts();
+  // Set arrival date to today's date automatically (but user can edit it)
+  arrivalDate.value = new Date();
+});
 </script>
 
 <template>
@@ -341,21 +396,20 @@ onMounted(fetchProducts);
       <div class="flex flex-col grow basis-0 gap-2">
         <label>Select Product</label>
         <Button icon="pi pi-list" label="Choose Product" @click="toggleDataTable($event)" />
-        <popover ref="op2" id="overlay_panel" style="width: 70rem">
+        <Popover ref="op2" id="overlay_panel" style="width: 70rem">
           <DataTable v-model:selection="selectedProduct" :value="products" selectionMode="single" paginator :rows="5" @row-select="onProductSelect">
             <Column field="product_name" header="Product Name" sortable />
             <Column field="brand" header="Brand" sortable />
             <Column field="category" header="Category" sortable />
             <Column field="type" header="Type" sortable />
             <Column field="unit" header="Unit" sortable />
-            <Column field="created_at" header="Created At" sortable />
-            <Column header="Actions">
+            <Column field="created_at" header="Created At" sortable>
               <template #body="slotProps">
-                <Button label="Select" icon="pi pi-check" class="w-full" @click="onProductSelect(slotProps.data)" />
+                {{ formatDateTime(slotProps.data.created_at) }}
               </template>
             </Column>
           </DataTable>
-        </popover>
+        </Popover>
       </div>
       <div class="flex flex-col grow basis-0 gap-2">
         <label>Batch Number</label>
@@ -378,7 +432,16 @@ onMounted(fetchProducts);
       </div>
       <div class="flex flex-col grow basis-0 gap-2">
         <label>Purchase Price</label>
-        <InputText v-model="purchasePrice" type="number" placeholder="e.g., 50.00" />
+        <InputNumber 
+          v-model="purchasePrice" 
+          mode="currency" 
+          currency="PHP" 
+          :minFractionDigits="2" 
+          :maxFractionDigits="2"
+          placeholder="50.00" 
+          input-class="text-right"
+          class="w-full"
+        />
       </div>
     </div>
     <div class="flex flex-wrap gap-4">
@@ -394,7 +457,16 @@ onMounted(fetchProducts);
 
       <div class="flex flex-col grow basis-0 gap-2" v-if="isConsumable">
         <label>Unit Retail Price</label>
-        <InputText v-model="unitRetailPrice" type="number" placeholder="e.g., 10.00" />
+        <InputNumber 
+          v-model="unitRetailPrice" 
+          mode="currency" 
+          currency="PHP" 
+          :minFractionDigits="2" 
+          :maxFractionDigits="2"
+          placeholder="100.00" 
+          input-class="text-right"
+          class="w-full"
+        />
       </div>
       <div class="flex flex-col grow basis-0 gap-2" v-if="isConsumable">
         <label>Expiry Date</label>
@@ -402,7 +474,16 @@ onMounted(fetchProducts);
       </div>
       <div class="flex flex-col grow basis-0 gap-2" v-if="isNonConsumable">
         <label>Unit Rental Price <span style="color: #aaa;">(optional)</span></label>
-        <InputText v-model="unitRentalPrice" type="number" placeholder="e.g., 100.00" />
+        <InputNumber 
+          v-model="unitRentalPrice" 
+          mode="currency" 
+          currency="PHP" 
+          :minFractionDigits="2" 
+          :maxFractionDigits="2"
+          placeholder="20.00" 
+          input-class="text-right"
+          class="w-full"
+        />
       </div>
       <div class="flex flex-col grow basis-0 gap-2" v-if="isNonConsumable">
         <label>Warranty <span style="color: #aaa;">(optional)</span></label>
@@ -414,11 +495,11 @@ onMounted(fetchProducts);
         <small>Automatically generated, one per quantity</small>
       </div>
     </div>
-    <div class="flex gap-4">
-      <Button label="Submit" :disabled="maxQuantity === 0" class="w-1/2" @click="handleSubmit" />
-      <Button label="Clear" :fluid="false" class="w-1/2" @click="clearForm" />
+    <div class="flex gap-4 justify-end">
+      <Button label="Submit" :disabled="maxQuantity === 0 || !selectedProduct" class="px-32 py-4" @click="handleSubmitWithToast" />
+      <Button label="Clear" :fluid="false" class="px-32 py-4" @click="clearForm" />
     </div>
-    <span v-if="maxQuantity === 0" class="text-red-500">Stock limit reached. Cannot add more.</span>
+     <span v-if="maxQuantity === 0 && selectedProduct" class="text-red-500">Stock limit reached. Cannot add more.</span>
     <Toast />
   </div>
 </template>

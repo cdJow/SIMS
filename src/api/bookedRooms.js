@@ -101,17 +101,31 @@ export const createBooking = async (bookingData) => {
 }
 
 /**
- * Cancel a booking (follows RoomList.vue pattern)
+ * Cancel a booking
  * @param {number} bookingId - The ID of the booking to cancel
  * @returns {Promise<Object>} Cancellation confirmation
  */
 export const cancelBooking = async (bookingId) => {
     try {
-        const response = await api.delete(`/bookings/${bookingId}`)
+        const response = await api.put(`/cancel-booking/${bookingId}`)
         return response.data
     } catch (error) {
         console.error('Error canceling booking:', error)
         throw new Error(error.response?.data?.error || 'Failed to cancel booking')
+    }
+}
+
+/**
+ * Check and automatically cancel expired bookings
+ * @returns {Promise<Object>} Expiration check results
+ */
+export const checkExpiredBookings = async () => {
+    try {
+        const response = await api.post('/check-expired-bookings')
+        return response.data
+    } catch (error) {
+        console.error('Error checking expired bookings:', error)
+        throw new Error(error.response?.data?.error || 'Failed to check expired bookings')
     }
 }
 
@@ -135,5 +149,6 @@ export default {
     fetchUserBookings,
     createBooking,
     cancelBooking,
+    checkExpiredBookings,
     fetchGuestBookings
 }

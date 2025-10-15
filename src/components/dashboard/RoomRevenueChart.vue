@@ -5,7 +5,7 @@ const selectedPeriod = ref("month");
 const periods = ref([
     { label: "Last Week", value: "week" },
     { label: "Last Month", value: "month" },
-    { label: "Last Year", value: "year" },
+    { label: "This Year", value: "year" },
 ]);
 
 // Initialize revenue data structure
@@ -18,15 +18,20 @@ const revenueData = ref({
 // Fetch revenue data from backend
 const fetchRevenueData = async (period) => {
     try {
-        const response = await fetch(`http://localhost:5000/api/room-revenue/${period}`);
+        const response = await fetch(`http://127.0.0.1:5000/api/room-revenue/${period}`);
         const data = await response.json();
         if (response.ok) {
             revenueData.value[period] = data;
+            console.log(`✅ Room revenue data loaded for ${period}:`, data);
         } else {
             console.error('Error fetching revenue data:', data.error);
+            // Set empty data on error
+            revenueData.value[period] = { labels: [], data: [], total: 0 };
         }
     } catch (error) {
         console.error('Error fetching revenue data:', error);
+        // Set empty data on error
+        revenueData.value[period] = { labels: [], data: [], total: 0 };
     }
 };
 
@@ -107,23 +112,45 @@ const getDateRange = (period) => {
         date.toLocaleDateString("en-US", {
             month: "short",
             day: "numeric",
+            year: "numeric"
         });
 
     switch (period) {
         case "week": {
-            const lastWeek = new Date(now);
-            lastWeek.setDate(now.getDate() - 7);
-            return `${format(lastWeek)} - ${format(now)}`;
+            // Last complete week (Monday to Sunday)
+            const today = new Date(now);
+            const daysSinceMonday = today.getDay() === 0 ? 6 : today.getDay() - 1; // Convert Sunday=0 to 6
+            const currentWeekStart = new Date(today);
+            currentWeekStart.setDate(today.getDate() - daysSinceMonday);
+            
+            const lastWeekStart = new Date(currentWeekStart);
+            lastWeekStart.setDate(currentWeekStart.getDate() - 7);
+            
+            const lastWeekEnd = new Date(currentWeekStart);
+            lastWeekEnd.setDate(currentWeekStart.getDate() - 1);
+            
+            return `Last Week (${format(lastWeekStart)} - ${format(lastWeekEnd)})`;
         }
         case "month": {
+            // Last complete month
             const lastMonth = new Date(now);
-            lastMonth.setMonth(now.getMonth() - 1);
-            return `${format(lastMonth)} - ${format(now)}`;
+            if (now.getMonth() === 0) {
+                // If current month is January, last month is December of previous year
+                lastMonth.setFullYear(now.getFullYear() - 1);
+                lastMonth.setMonth(11); // December
+            } else {
+                lastMonth.setMonth(now.getMonth() - 1);
+            }
+            
+            const monthStart = new Date(lastMonth.getFullYear(), lastMonth.getMonth(), 1);
+            const monthEnd = new Date(lastMonth.getFullYear(), lastMonth.getMonth() + 1, 0); // Last day of month
+            
+            return `Last Month - ${lastMonth.toLocaleDateString("en-US", { month: "short", year: "numeric" })} (${format(monthStart)} - ${format(monthEnd)})`;
         }
         case "year": {
-            const lastYear = new Date(now);
-            lastYear.setFullYear(now.getFullYear() - 1);
-            return `${lastYear.toLocaleDateString("en-US", { year: "numeric" })} - ${now.toLocaleDateString("en-US", { year: "numeric" })}`;
+            const startOfYear = new Date(now.getFullYear(), 0, 1);
+            const endOfYear = new Date(now.getFullYear(), 11, 31);
+            return `Year ${now.getFullYear()} (${format(startOfYear)} - ${format(endOfYear)})`;
         }
         default:
             return "Last 30 Days";
@@ -160,39 +187,103 @@ const getDateRange = (period) => {
             class="min-h-[415px] mb-4"
         />
 
-        <!-- Category Breakdown -->
-        <div class="grid grid-cols-3 gap-4 text-center">
-            <div
-                v-for="(label, index) in roomSizeData.labels"
-                :key="label"
-                class="p-2"
+        <!-- Category Breakdown Carousel -->
+        <div class="relative">
+            <Carousel 
+                :value="roomSizeData.labels.map((label, index) => ({
+                    label,
+                    value: roomSizeData.datasets[0].data[index],
+                    color: roomSizeData.datasets[0].backgroundColor[index],
+                    percentage: ((roomSizeData.datasets[0].data[index] / totalRevenue) * 100).toFixed(1)
+                }))"
+                :numVisible="3"
+                :numScroll="1"
+                :showIndicators="false"
+                :showNavigators="true"
+                class="category-carousel"
             >
-                <div class="text-sm font-medium mb-1">
-                    {{ label }}
-                </div>
-                <div
-                    class="text-lg font-semibold"
-                    :style="{
-                        color: roomSizeData.datasets[0].backgroundColor[index],
-                    }"
-                >
-                    ₱{{ roomSizeData.datasets[0].data[index].toLocaleString() }}
-                </div>
-                <div class="text-sm text-gray-500">
-                    ({{
-                        (
-                            (roomSizeData.datasets[0].data[index] /
-                                totalRevenue) *
-                            100
-                        ).toFixed(1)
-                    }}%)
-                </div>
-            </div>
+                <template #item="{ data }">
+                    <div class="p-4 text-center bg-surface-50 dark:bg-surface-800 rounded-lg mx-2">
+                        <div class="text-sm font-medium mb-2 text-surface-600 dark:text-surface-300">
+                            {{ data.label }}
+                        </div>
+                        <div
+                            class="text-xl font-bold mb-1"
+                            :style="{ color: data.color }"
+                        >
+                            ₱{{ data.value.toLocaleString() }}
+                        </div>
+                        <div class="text-sm text-surface-500 dark:text-surface-400">
+                            ({{ data.percentage }}%)
+                        </div>
+                    </div>
+                </template>
+            </Carousel>
         </div>
 
         <!-- Total Summary -->
-        <div class="text-center font-semibold">
-            Total: ₱{{ totalRevenue.toLocaleString() }}
+        <div class="text-center font-semibold mt-4 p-3 bg-surface-100 dark:bg-surface-700 rounded-lg">
+            Total Revenue: ₱{{ totalRevenue.toLocaleString() }}
         </div>
     </div>
 </template>
+
+<style scoped>
+.category-carousel :deep(.p-carousel-content) {
+    padding: 0.5rem 0;
+}
+
+.category-carousel :deep(.p-carousel-prev),
+.category-carousel :deep(.p-carousel-next) {
+    background: rgba(59, 130, 246, 0.1);
+    color: #3B82F6;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 50%;
+    width: 2.5rem;
+    height: 2.5rem;
+    margin: 0 0.5rem;
+    transition: all 0.3s ease;
+}
+
+.category-carousel :deep(.p-carousel-prev):hover,
+.category-carousel :deep(.p-carousel-next):hover {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: #3B82F6;
+    transform: scale(1.05);
+}
+
+.category-carousel :deep(.p-carousel-prev:disabled),
+.category-carousel :deep(.p-carousel-next:disabled) {
+    background: rgba(156, 163, 175, 0.1);
+    color: #9CA3AF;
+    border-color: rgba(156, 163, 175, 0.2);
+    cursor: not-allowed;
+    transform: none;
+}
+
+.category-carousel :deep(.p-carousel-item) {
+    padding: 0.25rem;
+}
+
+/* Dark mode adjustments */
+.dark .category-carousel :deep(.p-carousel-prev),
+.dark .category-carousel :deep(.p-carousel-next) {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: rgba(59, 130, 246, 0.3);
+}
+
+.dark .category-carousel :deep(.p-carousel-prev):hover,
+.dark .category-carousel :deep(.p-carousel-next):hover {
+    background: rgba(59, 130, 246, 0.3);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .category-carousel :deep(.p-carousel-prev),
+    .category-carousel :deep(.p-carousel-next) {
+        width: 2rem;
+        height: 2rem;
+        margin: 0 0.25rem;
+    }
+}
+</style>

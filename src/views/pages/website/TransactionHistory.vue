@@ -1,7 +1,7 @@
 
 <template>
     <div class="card">
-        <div class="font-semibold text-xl mb-4 text-gray-900 dark:text-gray-100">Transaction History</div>
+        <div class="font-semibold text-xl mb-4 text-gray-900 dark:text-gray-100">Accommodation</div>
 
         <!-- Search -->
         <div class="flex gap-2 mb-3 items-center">

@@ -308,21 +308,13 @@ const clearFilters = () => {
             
             <!-- Action Buttons -->
             <div class="flex gap-3 mt-4 lg:mt-0">
-                <Button
-                    icon="pi pi-refresh"
-                    label="Refresh"
-                    severity="secondary"
-                    outlined
-                    @click="fetchLowStockItems"
-                    :loading="isLoading"
-                    class="px-4 py-2"
-                />
+                
                 <Button
                     icon="pi pi-download"
-                    label="Export CSV"
+                    label="Export"
                     @click="exportReport"
                     :loading="isExporting"
-                    class="px-4 py-2"
+                    class="p-button-sm p-button-primary"
                 />
             </div>
         </div>

@@ -1467,7 +1467,7 @@ function hideSerialDialog() {
     console.log("Dialog closed and form reset.");
 }
 
-function saveBatchDetails() {
+async function saveBatchDetails() {
     // Mark form as submitted to trigger validation messages
     submitted.value = true;
 
@@ -1478,61 +1478,80 @@ function saveBatchDetails() {
         !selectedBatch.value.purchaseDate ||
         !selectedBatch.value.purchasePrice ||
         !selectedBatch.value.unit ||
-        !selectedBatch.value.supplier ||
         !selectedBatch.value.expDate
     ) {
         console.error("Validation failed: All required fields must be filled.");
         return;
     }
 
-    // Find the product containing the batch
-    const productIndex = products.value.findIndex((product) =>
-        product.batches?.some(
-            (batch) => batch.batchId === selectedBatch.value.batchId
-        )
-    );
+    try {
+        // Prepare data for API call - map frontend fields to backend schema
+        const updateData = {
+            batchNumber: selectedBatch.value.batchNumber,
+            quantity: selectedBatch.value.quantity,
+            arrivalDate: selectedBatch.value.purchaseDate, // Map purchaseDate to arrivalDate
+            purchasePrice: selectedBatch.value.purchasePrice,
+            unitRetailPrice: selectedBatch.value.srp,
+            supplier: selectedBatch.value.supplier || null,
+            unit: selectedBatch.value.unit,
+            expiryDate: selectedBatch.value.expDate
+        };
 
-    if (productIndex !== -1) {
-        // Find the batch within the product's batches
-        const batchIndex = products.value[productIndex].batches.findIndex(
-            (batch) => batch.batchId === selectedBatch.value.batchId
+        // Make API call to update the batch in the database
+        await updateBatch(selectedBatch.value.batchId, updateData);
+
+        // Update local state only if API call succeeds
+        const productIndex = products.value.findIndex((product) =>
+            product.batches?.some(
+                (batch) => batch.batchId === selectedBatch.value.batchId
+            )
         );
 
-        if (batchIndex !== -1) {
-            // Update the existing batch
-            products.value[productIndex].batches[batchIndex] = {
-                ...selectedBatch.value,
-            };
-            console.log(
-                "Batch updated successfully:",
-                products.value[productIndex].batches[batchIndex]
+        if (productIndex !== -1) {
+            // Find the batch within the product's batches
+            const batchIndex = products.value[productIndex].batches.findIndex(
+                (batch) => batch.batchId === selectedBatch.value.batchId
             );
+
+            if (batchIndex !== -1) {
+                // Update the existing batch
+                products.value[productIndex].batches[batchIndex] = {
+                    ...selectedBatch.value,
+                };
+                console.log("Batch updated successfully in database and UI");
+            } else {
+                // Add a new batch to the product's batches
+                selectedBatch.value.batchId = createId(); // Generate a new ID for the batch
+                products.value[productIndex].batches.push({
+                    ...selectedBatch.value,
+                });
+                console.log("New batch added to product");
+            }
         } else {
-            // Add a new batch to the product's batches
-            selectedBatch.value.batchId = createId(); // Generate a new ID for the batch
-            products.value[productIndex].batches.push({
-                ...selectedBatch.value,
-            });
-            console.log(
-                "New batch added to product:",
-                products.value[productIndex]
-            );
+            console.warn("Product containing this batch was not found.");
         }
-    } else {
-        console.warn("Product containing this batch was not found.");
+
+        showSuccess();
+        // Close the dialog after successful save
+        batchDialog.value = false;
+
+        // Reset form state
+        submitted.value = false;
+        Object.keys(selectedBatch.value).forEach((key) => {
+            selectedBatch.value[key] = null;
+        });
+
+        console.log("Batch updated successfully in database");
+        
+    } catch (error) {
+        console.error("Error updating batch:", error);
+        toast.add({
+            severity: "error",
+            summary: "Error",
+            detail: "Failed to update batch details",
+            life: 3000,
+        });
     }
-
-    showSuccess();
-    // Close the dialog after successful save
-    batchDialog.value = false;
-
-    // Reset form state
-    submitted.value = false;
-    Object.keys(selectedBatch.value).forEach((key) => {
-        selectedBatch.value[key] = null;
-    });
-
-    console.log("Form closed and reset.");
 }
 
 function createId() {
@@ -2041,14 +2060,7 @@ async function deleteBatch() {
     showError();
 }
 
-function showError() {
-    toast.value.add({
-        severity: "error",
-        summary: "Deleted",
-        detail: "Deleted Successfuly",
-        life: 3000,
-    });
-}
+
 
 function formatCurrency(value) {
     if (value == null || value === '' || isNaN(parseFloat(value))) return "₱0.00"; // Default if invalid or null
@@ -2283,7 +2295,7 @@ function formatPrice(value) {
             <!---not expand actions column----->
             <Column
                 field="Actions"
-                header="Actions"
+                header="Action"
                 :exportable="false"
                 style="min-width: 12rem"
             >
@@ -2295,13 +2307,7 @@ function formatPrice(value) {
                         class="mr-2"
                         @click="editProduct(slotProps.data)"
                     />
-                    <Button
-                        icon="pi pi-trash"
-                        outlined
-                        rounded
-                        severity="danger"
-                        @click="confirmDeleteProduct(slotProps.data)"
-                    />
+                    
                 </template>
             </Column>
 
@@ -2391,7 +2397,7 @@ function formatPrice(value) {
 
                     <Column field="expDate" header="Exp Date" sortable>
                         <template #body="slotProps">
-                            <span style="color: red">{{
+                            <span :class="{ 'text-red-500': slotProps.data.status === 'EXPIRED' }">{{
                                 formatDate(slotProps.data.expDate)
                             }}</span>
                         </template>
@@ -2406,27 +2412,23 @@ function formatPrice(value) {
                     </Column>
                     <Column
                         field="Actions"
-                        header="Actions"
+                        header="Action"
                         :exportable="false"
                         style="min-width: 3rem"
                         class="gap-2"
                     >
                         <template #body="slotProps">
                             <div class="flex">
-                                <Button
-                                    icon="pi pi-pencil"
-                                    outlined
-                                    rounded
-                                    class="mb-1 mr-2"
-                                    @click="editbatch(slotProps.data)"
-                                />
-                                <Button
-                                    icon="pi pi-trash"
-                                    outlined
-                                    rounded
-                                    severity="danger"
-                                    @click="confirmDeleteBatch(slotProps.data)"
-                                />
+                                <template v-if="slotProps.data.status !== 'EXPIRED'">
+                                    <Button
+                                        icon="pi pi-pencil"
+                                        outlined
+                                        rounded
+                                        class="mb-1 mr-2"
+                                        @click="editbatch(slotProps.data)"
+                                    />
+                                
+                                </template>
                             </div>
                         </template>
                     </Column>
@@ -2533,7 +2535,7 @@ function formatPrice(value) {
                     </Column>
                     <Column
                         field="Actions"
-                        header="Actions"
+                        header="Action"
                         :exportable="false"
                         style="min-width: 3rem"
                     >
@@ -2550,13 +2552,7 @@ function formatPrice(value) {
                                         )
                                     "
                                 />
-                                <Button
-                                    icon="pi pi-trash"
-                                    outlined
-                                    rounded
-                                    severity="danger"
-                                    @click="confirmDeleteBatch(slotProps.data)"
-                                />
+                                
                             </div>
                         </template>
                     </Column>
@@ -2960,14 +2956,8 @@ function formatPrice(value) {
                 <InputText
                     id="supplier"
                     v-model="selectedBatch.supplier"
-                    required="true"
                     fluid
                 />
-                <small
-                    v-if="submitted && !selectedBatch.supplier"
-                    class="text-red-500"
-                    >Supplier is required.</small
-                >
             </div>
 
             <!-- Expiration Date -->

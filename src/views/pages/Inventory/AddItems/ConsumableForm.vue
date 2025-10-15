@@ -34,7 +34,8 @@ const fetchProducts = async () => {
   }
 };
 
-const onProductSelect = (selected) => {
+const onProductSelect = (event) => {
+  const selected = event.data;
   if (selected) {
     productName.value = selected.product_name || "";
     brand.value = selected.brand || "";
@@ -50,6 +51,23 @@ const onProductSelect = (selected) => {
 const toggleDataTable = (event) => {
   fetchProducts();
   if (op2.value) op2.value.toggle(event);
+};
+
+const formatDateTime = (dateString) => {
+  if (!dateString) return '';
+  
+  const date = new Date(dateString);
+  const options = {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true, // This enables AM/PM format
+    timeZone: 'Asia/Manila' // Philippines timezone
+  };
+  
+  return date.toLocaleString('en-PH', options);
 };
 
 const clearForm = () => {
@@ -167,15 +185,9 @@ onMounted(() => {
                   <Column field="category" header="Category" sortable />
                   <Column field="type" header="Type" sortable />
                   <Column field="unit" header="Unit" sortable />
-                  <Column field="created_at" header="Created At" sortable />
-                  <Column header="Actions">
+                  <Column field="created_at" header="Created At" sortable>
                     <template #body="slotProps">
-                      <Button
-                        label="Select"
-                        icon="pi pi-check"
-                        class="w-full"
-                        @click="onProductSelect(slotProps.data)"
-                      />
+                      {{ formatDateTime(slotProps.data.created_at) }}
                     </template>
                   </Column>
                 </DataTable>
@@ -262,11 +274,12 @@ onMounted(() => {
   />
 </div>
 </div>
+        <div class="flex gap-4 justify-end">
+          <Button label="Submit" :fluid="false" class="px-32 py-4" @click="handleSubmit" />
+          <Button label="Clear" :fluid="false" class="px-32 py-4" @click="clearForm" />
         </div>
-        <div class="flex gap-4">
-          <Button label="Submit" :fluid="false" class="w-1/2" @click="handleSubmit" />
-          <Button label="Clear" :fluid="false" class="w-1/2" @click="clearForm" />
-        </div>
+</div>
+        
       
     </div>
     <Toast />

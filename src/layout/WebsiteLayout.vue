@@ -96,10 +96,10 @@ const openGoogleReviews = () => {
 
 @keyframes pulse-glow {
     0%, 100% {
-        box-shadow: 0 0 20px rgba(38, 255, 0, 0.3);
+        box-shadow: 0 0 20px #EA4B1F;
     }
     50% {
-        box-shadow: 0 0 30px rgba(0, 255, 76, 0.5);
+        box-shadow: 0 0 30px #F76E18;
     }
 }
 

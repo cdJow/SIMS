@@ -41,24 +41,44 @@
         </div>
 
         <!-- Authenticated Content -->
-        <div v-else>
-        <!-- User Bookings Section (only show if there are visible bookings or loading/error states) -->
-        <div v-if="loadingBookings || bookingError || visibleBookings.length > 0" class="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-700 py-6">
-            <div class="container mx-auto px-4">
+        <div v-else class="relative">
+        
+        <!-- Toggle Button for Bookings Section -->
+        <div v-if="loadingBookings || bookingError || visibleBookings.length > 0" class="fixed top-32 right-4 z-50">
+            <div class="relative">
+                <Button
+                    :icon="showBookingsSection ? 'pi pi-envelope' : 'pi pi-envelope'"
+                    :label="showBookingsSection ? 'Hide Booking' : 'Show Booking'"
+                    class="p-button-sm bg-red-600 hover:bg-red-700 text-white border-0 shadow-lg"
+                    @click="showBookingsSection = !showBookingsSection"
+                />
+                <!-- Notification Badge -->
+                <div class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow-lg border-2 border-white">
+                    1
+                </div>
+            </div>
+        </div>
+
+        <!-- User Bookings Section (floating right panel) -->
+        <div 
+            v-if="(loadingBookings || bookingError || visibleBookings.length > 0) && showBookingsSection" 
+            class="fixed top-40 right-4 w-96 max-h-[calc(100vh-10rem)] overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-40"
+        >
+            <div class="p-4">
                 <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-bold text-blue-900 dark:text-blue-100">
+                    <h2 class="text-lg font-bold text-blue-900 dark:text-blue-100">
                         <i class="pi pi-calendar mr-2"></i>
                         Your Bookings
                     </h2>
-                    <div class="text-sm text-blue-700 dark:text-blue-300">
+                    <div class="text-xs text-blue-700 dark:text-blue-300">
                         <i class="pi pi-user mr-1"></i>
-                        {{ currentUser?.name }} ({{ currentUser?.email }})
+                        {{ currentUser?.name }}
                     </div>
                 </div>
                 
                 <!-- Booking Limits Info -->
                 <div class="mb-4 p-3 bg-blue-100 dark:bg-blue-800/30 rounded-lg">
-                    <div class="flex flex-col sm:flex-row gap-4 text-sm text-blue-800 dark:text-blue-200">
+                    <div class="flex flex-col gap-2 text-sm text-blue-800 dark:text-blue-200">
                         <div class="flex items-center gap-2">
                             <i class="pi pi-info-circle text-blue-600 dark:text-blue-400"></i>
                             <span>Active Bookings: {{ activeBookingsCount }}/1</span>
@@ -68,113 +88,107 @@
                             <span class="text-green-700 dark:text-green-400">You can make a new booking</span>
                         </div>
                     </div>
-                    <div class="mt-2 text-xs text-blue-600 dark:text-blue-400">
-                        <i class="pi pi-clock mr-1"></i>
-                        <span>Note: You have 1 hour to check in after booking, or it will automatically expire.</span>
+                </div>
+
+                <!-- Check-in Notice -->
+                <div v-if="!visibleBookings.some(booking => booking.status === 'Occupied')" class="mb-4 p-3 bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-700 rounded-lg">
+                    <div class="flex items-center gap-2 text-orange-800 dark:text-orange-200">
+                        <i class="pi pi-clock text-orange-600 dark:text-orange-400"></i>
+                        <div>
+                            <div class="font-semibold text-sm">Important Notice</div>
+                            <div class="text-xs mt-1">You have 1 hour to check in after booking, or it will automatically expire.</div>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Loading State -->
-                <div v-if="loadingBookings" class="text-center py-8">
-                    <i class="pi pi-spin pi-spinner text-2xl text-blue-600 dark:text-blue-400 mb-2"></i>
-                    <p class="text-blue-600 dark:text-blue-400">Loading your bookings...</p>
+                <div v-if="loadingBookings" class="text-center py-4">
+                    <i class="pi pi-spin pi-spinner text-lg text-blue-600 dark:text-blue-400 mb-1"></i>
+                    <p class="text-xs text-blue-600 dark:text-blue-400">Loading bookings...</p>
                 </div>
 
                 <!-- Error State -->
-                <div v-else-if="bookingError" class="text-center py-8">
-                    <i class="pi pi-exclamation-triangle text-2xl text-red-600 dark:text-red-400 mb-2"></i>
-                    <p class="text-red-600 dark:text-red-400 mb-2">{{ bookingError }}</p>
-                    <Button @click="fetchBookings" class="p-button-outlined dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
-                        <i class="pi pi-refresh mr-2"></i>
-                        Try Again
+                <div v-else-if="bookingError" class="text-center py-4">
+                    <i class="pi pi-exclamation-triangle text-lg text-red-600 dark:text-red-400 mb-1"></i>
+                    <p class="text-xs text-red-600 dark:text-red-400 mb-2">{{ bookingError }}</p>
+                    <Button @click="fetchBookings" class="p-button-outlined p-button-sm dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
+                        <i class="pi pi-refresh mr-1"></i>
+                        Retry
                     </Button>
                 </div>
 
                 <!-- No Bookings State -->
-                <div v-else-if="visibleBookings.length === 0" class="text-center py-8">
-                    <i class="pi pi-calendar text-4xl text-gray-400 mb-4"></i>
-                    <h3 class="text-lg font-semibold text-gray-600 dark:text-gray-400 mb-2">No Active Bookings</h3>
-                    <p class="text-gray-500 dark:text-gray-400">You have no active bookings. Browse available rooms below to make a new booking!</p>
+                <div v-else-if="visibleBookings.length === 0" class="text-center py-4">
+                    <i class="pi pi-calendar text-2xl text-gray-400 mb-2"></i>
+                    <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1">No Active Bookings</h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Browse rooms below to book!</p>
                 </div>
 
-                <!-- Bookings List (only show non-cancelled bookings) -->
-                <div v-else class="grid gap-4">
+                <!-- Bookings List (compact for floating panel) -->
+                <div v-else class="space-y-3">
                     <div
                         v-for="booking in visibleBookings"
                         :key="booking.id"
-                        class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 border border-gray-200 dark:border-gray-700"
+                        class="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 border border-gray-200 dark:border-gray-600"
                     >
-                        <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                            <div class="flex-1">
-                                <div class="flex items-center gap-3 mb-2">
-                                    <h4 class="text-lg font-semibold text-gray-800 dark:text-gray-200">
-                                        Room {{ booking.room_number || booking.room_id }}
-                                    </h4>
-                                    <Tag 
-                                        :value="getBookingStatusLabel(booking.status)" 
-                                        :severity="getBookingStatusSeverity(booking.status)" 
-                                        class="font-medium"
-                                    />
-                                </div>
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-600 dark:text-gray-400">
-                                    <div class="flex items-center gap-1">
-                                        <i class="pi pi-user"></i>
-                                        <span>{{ booking.guest_name }}</span>
-                                    </div>
-                                    <div class="flex items-center gap-1">
-                                        <i class="pi pi-clock"></i>
-                                        <span>{{ booking.selected_hours }} hours</span>
-                                    </div>
-                                    <div class="flex items-center gap-1">
-                                        <i class="pi pi-calendar"></i>
-                                        <span>{{ formatBookingDate(booking.created_at) }}</span>
-                                    </div>
-                                    <div class="flex items-center gap-1">
-                                       
-                                        <span>₱{{ formatPrice(booking.selected_rate) }}</span>
-                                    </div>
-                                    <!-- Time remaining display (only for occupied rooms) -->
-                                    <div v-if="getTimeRemaining(booking)" class="flex items-center gap-1 col-span-2">
-                                        <i :class="[
-                                            'pi',
-                                            getTimeRemaining(booking).color === 'red' ? 'pi-exclamation-triangle text-red-500' : 
-                                            getTimeRemaining(booking).color === 'orange' ? 'pi-clock text-orange-500' : 
-                                            'pi-hourglass text-green-500'
-                                        ]"></i>
-                                        <span :class="[
-                                            'font-medium',
-                                            getTimeRemaining(booking).color === 'red' ? 'text-red-600 dark:text-red-400' : 
-                                            getTimeRemaining(booking).color === 'orange' ? 'text-orange-600 dark:text-orange-400' : 
-                                            'text-green-600 dark:text-green-400'
-                                        ]">
-                                            {{ getTimeRemaining(booking).text }}
-                                        </span>
-                                    </div>
-                                </div>
+                        <div class="flex items-center justify-between mb-2">
+                            <h4 class="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                                Room {{ booking.room_number || booking.room_id }}
+                            </h4>
+                            <Tag 
+                                :value="getBookingStatusLabel(booking.status)" 
+                                :severity="getBookingStatusSeverity(booking.status)" 
+                                class="text-xs"
+                            />
+                        </div>
+                        
+                        <div class="space-y-1 text-xs text-gray-600 dark:text-gray-400">
+                            <div class="flex items-center gap-1">
+                                <i class="pi pi-user"></i>
+                                <span>{{ booking.guest_name }}</span>
                             </div>
-                            <div class="flex gap-2">
-                                <Button
-                                    v-if="booking.status === 'Booked'"
-                                    @click="openCancelDialog(booking)"
-                                    class="p-button-outlined p-button-danger p-button-sm"
-                                    icon="pi pi-times"
-                                    label="Cancel"
-                                />
-                                <Button
-                                    v-else-if="booking.status === 'Occupied'"
-                                    disabled
-                                    class="p-button-outlined p-button-sm"
-                                    icon="pi pi-clock"
-                                    label="In Use"
-                                />
+                            <div class="flex items-center gap-1">
+                                <i class="pi pi-clock"></i>
+                                <span>{{ booking.selected_hours }}hrs • ₱{{ formatPrice(booking.selected_rate) }}</span>
                             </div>
+                            <div class="flex items-center gap-1">
+                                <i class="pi pi-calendar"></i>
+                                <span>{{ formatBookingDate(booking.created_at) }}</span>
+                            </div>
+                            
+                            <!-- Time remaining display -->
+                            <div v-if="getTimeRemaining(booking)" class="flex items-center gap-1">
+                                <i :class="[
+                                    'pi',
+                                    getTimeRemaining(booking).color === 'red' ? 'pi-exclamation-triangle text-red-500' : 
+                                    getTimeRemaining(booking).color === 'orange' ? 'pi-clock text-orange-500' : 
+                                    'pi-hourglass text-green-500'
+                                ]"></i>
+                                <span :class="[
+                                    'font-medium text-xs',
+                                    getTimeRemaining(booking).color === 'red' ? 'text-red-600 dark:text-red-400' : 
+                                    getTimeRemaining(booking).color === 'orange' ? 'text-orange-600 dark:text-orange-400' : 
+                                    'text-green-600 dark:text-green-400'
+                                ]">
+                                    {{ getTimeRemaining(booking).text }}
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div class="flex gap-2 mt-3" v-if="booking.status === 'Booked'">
+                            <Button
+                                @click="openCancelDialog(booking)"
+                                class="p-button-outlined p-button-danger p-button-sm text-xs w-full"
+                                icon="pi pi-times"
+                                label="Cancel"
+                            />
                         </div>
                     </div>
                 </div>
             </div>
         </div>
         <!-- Page Header -->
-        <div class="bg-gradient-to-r from-green-600 to-green-700 dark:from-green-700 dark:to-green-800 py-12">
+        <div class="py-12" style="background-color: #3F4142;">
             <div class="container mx-auto px-4 text-center">
                 <h1 class="text-2xl md:text-4xl font-bold mb-3 text-white">Available Rooms</h1>
                 <p class="text-base md:text-lg opacity-90 text-white">
@@ -193,7 +207,7 @@
                     <!-- Search Input -->
                     <div class="flex-1 max-w-md">
                         <div class="relative">
-                            <i class="pi pi-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500"></i>
+                            <i class=" absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500"></i>
                             <InputText
                                 v-model="searchQuery"
                                 placeholder="Search rooms..."
@@ -700,7 +714,7 @@ import InputText from 'primevue/inputtext'
 import Dropdown from 'primevue/dropdown'
 import Calendar from 'primevue/calendar'
 import Textarea from 'primevue/textarea'
-import { fetchAvailableRooms, createBooking, cancelBooking, fetchUserBookings } from '@/api/bookedRooms'
+import { fetchAvailableRooms, createBooking, cancelBooking, fetchUserBookings, checkExpiredBookings } from '@/api/bookedRooms'
 import { getCurrentUser } from '@/api/auth'
 
 const router = useRouter()
@@ -758,6 +772,9 @@ const loadingBookings = ref(false)
 const bookingError = ref(null)
 const cancelDialogVisible = ref(false)
 const selectedBookingToCancel = ref(null)
+
+// Toggle for showing/hiding bookings section
+const showBookingsSection = ref(false)
 
 // Local storage key for guest bookings (legacy - now use database)
 const GUEST_BOOKINGS_KEY = 'guest_bookings'
@@ -1387,14 +1404,38 @@ const formatBookingDate = (dateString) => {
     })
 }
 
-// Calculate time remaining for bookings - only show when less than 1 hour remains (with seconds)
+// Calculate time remaining for bookings - always show countdown with proper persistence
 const getTimeRemaining = (booking) => {
     const now = new Date()
     
     if (booking.status === 'Booked') {
         // For booked rooms, show time remaining until check-in expires (1 hour window)
-        const bookingTime = new Date(booking.created_at)
-        const checkInExpiryTime = new Date(bookingTime.getTime() + (60 * 60 * 1000)) // 1 hour to check in
+        // Handle different date formats and ensure proper parsing
+        let bookingTime
+        
+        try {
+            // Backend now sends dates in ISO format, so this should work reliably
+            bookingTime = new Date(booking.created_at)
+        } catch (error) {
+            console.error('Error parsing date:', booking.created_at, error)
+            bookingTime = new Date() // Fallback to now
+        }
+        
+        // Validate the parsed date
+        if (isNaN(bookingTime.getTime())) {
+            console.error('Invalid booking date after all attempts:', booking.created_at)
+            // Fallback: assume booking was made now
+            bookingTime = new Date()
+        }
+        
+        const oneHourInMs = 60 * 60 * 1000 // 1 hour in milliseconds
+        const checkInExpiryTime = new Date(bookingTime.getTime() + oneHourInMs)
+        
+        // Debug logging
+        console.log('Raw created_at:', booking.created_at)
+        console.log('Parsed Booking Time:', bookingTime.toLocaleString())
+        console.log('Current Time:', now.toLocaleString())
+        console.log('Expiry Time:', checkInExpiryTime.toLocaleString())
         
         if (now >= checkInExpiryTime) {
             return { expired: true, text: 'Booking Expired', color: 'red' }
@@ -1402,16 +1443,14 @@ const getTimeRemaining = (booking) => {
         
         const timeLeft = checkInExpiryTime.getTime() - now.getTime()
         const totalSeconds = Math.floor(timeLeft / 1000)
-        const hoursLeft = Math.floor(totalSeconds / 3600)
-        const minutesLeft = Math.floor((totalSeconds % 3600) / 60)
-        const secondsLeft = totalSeconds % 60
         
-        // Only show countdown when less than 1 hour remains
-        if (hoursLeft >= 1) {
-            return null // Don't show anything if 1+ hours remain
+        if (totalSeconds <= 0) {
+            return { expired: true, text: 'Booking Expired', color: 'red' }
         }
         
-        // Less than 1 hour remaining - show with seconds
+        const minutesLeft = Math.floor(totalSeconds / 60)
+        const secondsLeft = totalSeconds % 60
+        
         if (minutesLeft > 0) {
             return { 
                 expired: false, 
@@ -1419,15 +1458,13 @@ const getTimeRemaining = (booking) => {
                 urgent: true,
                 color: 'orange'
             }
-        } else if (secondsLeft > 0) {
+        } else {
             return { 
                 expired: false, 
                 text: `${secondsLeft}s to check in`,
                 urgent: true,
-                color: 'red'
+                color: 'orange'
             }
-        } else {
-            return { expired: true, text: 'Booking Expired', color: 'red' }
         }
     } else if (booking.status === 'Occupied') {
         // For occupied rooms, calculate time remaining from check-in time + booked duration
@@ -1445,13 +1482,19 @@ const getTimeRemaining = (booking) => {
         const minutesLeft = Math.floor((totalSeconds % 3600) / 60)
         const secondsLeft = totalSeconds % 60
         
-        // Only show countdown when less than 1 hour remains
-        if (hoursLeft >= 1) {
-            return null // Don't show anything if 1+ hours remain
+        // Show time remaining for occupied room
+        if (totalSeconds <= 0) {
+            return { expired: true, text: 'Stay Expired', color: 'red' }
         }
         
-        // Less than 1 hour remaining - show with seconds
-        if (minutesLeft > 0) {
+        if (hoursLeft > 0) {
+            return { 
+                expired: false, 
+                text: `${hoursLeft}h ${minutesLeft}m ${secondsLeft}s left`,
+                urgent: hoursLeft < 1,
+                color: 'orange'
+            }
+        } else if (minutesLeft > 0) {
             return { 
                 expired: false, 
                 text: `${minutesLeft}m ${secondsLeft}s left`,
@@ -1463,7 +1506,7 @@ const getTimeRemaining = (booking) => {
                 expired: false, 
                 text: `${secondsLeft}s left`,
                 urgent: true,
-                color: 'red'
+                color: 'orange'
             }
         } else {
             return { expired: true, text: 'Stay Expired', color: 'red' }
@@ -1477,40 +1520,59 @@ const getTimeRemaining = (booking) => {
 // Timer for updating time remaining
 let timeUpdateInterval = null
 
-// Clean up expired bookings automatically
-const cleanupExpiredBookings = () => {
-    const now = new Date()
-    let hasChanges = false
-    
-    userBookings.value = userBookings.value.map(booking => {
-        // Only process bookings that are still in 'Booked' status
-        if (booking.status === 'Booked') {
-            const bookingTime = new Date(booking.created_at)
-            const checkInExpiryTime = new Date(bookingTime.getTime() + (60 * 60 * 1000)) // 1 hour to check in
+// Clean up expired bookings automatically (call backend)
+const cleanupExpiredBookings = async () => {
+    try {
+        // Call backend to check and automatically cancel expired bookings
+        const response = await checkExpiredBookings()
+        
+        if (response.expired_count > 0) {
+            // Show notification about expired bookings
+            toast.add({
+                severity: 'warn',
+                summary: 'Booking Expired',
+                detail: `${response.expired_count} booking(s) have expired due to the 1-hour check-in window.`,
+                life: 5000
+            })
             
-            if (now >= checkInExpiryTime) {
-                // Mark as expired/cancelled locally
-                hasChanges = true
-                return {
-                    ...booking,
-                    status: 'Expired',
-                    expired_at: new Date().toISOString()
+            // Refresh bookings to get updated status from database
+            await fetchBookings()
+            
+            // Refresh available rooms to show expired rooms as available again
+            await fetchRooms()
+        }
+        
+    } catch (error) {
+        console.error('Error checking expired bookings:', error)
+        // Fallback to local cleanup if backend fails
+        const now = new Date()
+        let hasChanges = false
+        
+        userBookings.value = userBookings.value.filter(booking => {
+            // Only process bookings that are still in 'Booked' status
+            if (booking.status === 'Booked') {
+                const bookingTime = new Date(booking.created_at)
+                const checkInExpiryTime = new Date(bookingTime.getTime() + (60 * 60 * 1000)) // 1 hour to check in
+                
+                if (now >= checkInExpiryTime) {
+                    // Remove expired booking from local state
+                    hasChanges = true
+                    return false // Remove this booking
                 }
             }
-        }
-        return booking
-    })
-    
-    if (hasChanges) {
-        saveBookingsToStorage()
-        
-        // Show notification about expired bookings
-        toast.add({
-            severity: 'warn',
-            summary: 'Booking Expired',
-            detail: 'One or more bookings have expired due to the 1-hour check-in window.',
-            life: 5000
+            return true // Keep this booking
         })
+        
+        if (hasChanges) {
+            saveBookingsToStorage()
+            
+            toast.add({
+                severity: 'warn',
+                summary: 'Booking Expired',
+                detail: 'One or more bookings have expired due to the 1-hour check-in window.',
+                life: 5000
+            })
+        }
     }
 }
 
@@ -1528,16 +1590,20 @@ onMounted(async () => {
         cleanupExpiredBookings()
         
         // Start timer to update time remaining every second (for real-time countdown with seconds)
-        timeUpdateInterval = setInterval(() => {
-            // Clean up expired bookings every minute (60 seconds)
-            if (Date.now() % 60000 < 1000) {
-                cleanupExpiredBookings()
+        timeUpdateInterval = setInterval(async () => {
+            // Check for expired bookings every 30 seconds
+            const secondsElapsed = Math.floor(Date.now() / 1000)
+            if (secondsElapsed % 30 === 0) {
+                await cleanupExpiredBookings()
             }
             
             // Force reactive update by triggering a re-render
             // This will update the time remaining displays with seconds precision
             userBookings.value = [...userBookings.value]
         }, 1000) // Update every 1 second
+        
+        // Initial cleanup check on load
+        await cleanupExpiredBookings()
     }
 })
 

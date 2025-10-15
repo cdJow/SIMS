@@ -1761,7 +1761,7 @@ onUnmounted(() => {
     // Payment Details
     const paymentDetails = ref({
         amountReceived: "",
-        deposit: "",
+        deposit: "200",
         note: "",
     });
 
@@ -2395,7 +2395,7 @@ const discountHighlightClass = computed(() => {
 function resetPaymentForm() {
     paymentDetails.value = {
         amountReceived: "",
-        deposit: "",
+        deposit: "200",
         note: "",
     };
     selectedAmenityIds.value = [];
@@ -2470,7 +2470,7 @@ const discountBadgeText = computed(() => selectedDiscount.value ? `${selectedDis
 
     // Open Payment Dialog
 async function openPaymentDialog(room) {
-paymentDetails.value = { amountReceived: "", deposit: "", note: "" };
+paymentDetails.value = { amountReceived: "", deposit: "200", note: "" };
 selectedAmenityIds.value = [];
 selectedDiscountId.value = null; // reset promo selection each time
 
@@ -4301,13 +4301,30 @@ if (idx !== -1) {
           <div class="text-sm font-bold">Total: {{ formatCurrency(totalAmountDue) }}</div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <InputText
-            v-model="paymentDetails.amountReceived"
-            placeholder="Amount received (cash)"
-            type="number"
-            :class="['w-full', { 'p-invalid': isAmountInsufficient }]"
-          />
-          <InputText v-model="paymentDetails.deposit" placeholder="Deposit" type="number" />
+          <div class="space-y-1">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Deposit Amount</label>
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">₱</span>
+              <InputText 
+                v-model="paymentDetails.deposit" 
+                placeholder="0.00" 
+                type="number" 
+                class="w-full pl-8 text-right"
+              />
+            </div>
+          </div>
+          <div class="space-y-1">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Payment Amount</label>
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">₱</span>
+              <InputText
+                v-model="paymentDetails.amountReceived"
+                placeholder="0.00"
+                type="number"
+                :class="['w-full pl-8 text-right', { 'p-invalid': isAmountInsufficient }]"
+              />
+            </div>
+          </div>
         </div>
         <div v-if="isAmountInsufficient" class="text-xs text-red-700 mt-1">Insufficient amount received.</div>
       </div>

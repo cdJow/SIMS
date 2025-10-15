@@ -2,7 +2,7 @@ import { computed, reactive } from "vue";
 
 const layoutConfig = reactive({
     preset: "Aura",
-    primary: "emerald",
+    primary: "custom-dark",
     surface: null,
     darkTheme: JSON.parse(localStorage.getItem("darkTheme")) || false, // Load saved state
     menuMode: "static",

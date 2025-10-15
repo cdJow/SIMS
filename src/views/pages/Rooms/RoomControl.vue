@@ -396,8 +396,25 @@ const confirmDeleteRoom = async () => {
     await loadRooms();
     // Notify other views
     window.dispatchEvent(new CustomEvent("rooms:changed", { detail: { reason: "room-deleted", roomId: roomToDelete.value.id } }));
-  } catch {
-    toast.add({ severity: "error", summary: "Error", detail: "Failed to delete room.", life: 3000 });
+  } catch (err) {
+    // Check if error is related to existing payments
+    const errorMessage = err?.response?.data?.error || err?.message || "Failed to delete room.";
+    
+    if (errorMessage.toLowerCase().includes('payment') || errorMessage.toLowerCase().includes('booking') || errorMessage.toLowerCase().includes('used') || errorMessage === "Failed to delete room.") {
+      toast.add({ 
+        severity: "error", 
+        summary: "Cannot Delete Room", 
+        detail: `Room "${roomToDelete.value.room_number}" cannot be deleted because it is currently being used by existing payments or bookings. Please complete or cancel all related transactions first.`, 
+        life: 6000 
+      });
+    } else {
+      toast.add({ 
+        severity: "error", 
+        summary: "Error", 
+        detail: errorMessage, 
+        life: 3000 
+      });
+    }
   }
 };
 const cancelDelete = () => {

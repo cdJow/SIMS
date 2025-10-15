@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useToast } from "primevue/usetoast";
 import axios from 'axios';
 
@@ -11,65 +11,18 @@ const isLoading = ref(true);
 const errorMessage = ref("");
 const searchQuery = ref(""); // Reactive search query
 const stockSummary = ref([]);
-const autoRefreshInterval = ref(null);
-const lastRefreshTime = ref(null);
-const isAutoRefresh = ref(true);
-const isUpdating = ref(false);
 const isExporting = ref(false);
 
 // Fetch stock movements data
 onMounted(() => {
     fetchStockMovements();
     fetchStockSummary();
-    startAutoRefresh();
 });
-
-// Cleanup on unmount
-onUnmounted(() => {
-    stopAutoRefresh();
-});
-
-// Auto-refresh functionality
-function startAutoRefresh() {
-    if (autoRefreshInterval.value) return;
-    
-    // Refresh every 60 seconds to prevent flickering
-    autoRefreshInterval.value = setInterval(() => {
-        if (isAutoRefresh.value) {
-            fetchStockMovements(true); // true = silent refresh
-        }
-    }, 60000);
-}
-
-function stopAutoRefresh() {
-    if (autoRefreshInterval.value) {
-        clearInterval(autoRefreshInterval.value);
-        autoRefreshInterval.value = null;
-    }
-}
-
-function toggleAutoRefresh() {
-    isAutoRefresh.value = !isAutoRefresh.value;
-    if (isAutoRefresh.value) {
-        startAutoRefresh();
-    } else {
-        stopAutoRefresh();
-    }
-} 
 
 // Fetch function with error handling - directly from backend API
-async function fetchStockMovements(silentRefresh = false) {
-    // Prevent overlapping requests
-    if (silentRefresh && isUpdating.value) {
-        return;
-    }
-    
-    if (!silentRefresh) {
-        isLoading.value = true;
-        errorMessage.value = "";
-    } else {
-        isUpdating.value = true;
-    }
+async function fetchStockMovements() {
+    isLoading.value = true;
+    errorMessage.value = "";
     
     try {
         // Add timestamp to avoid cache and get latest data
@@ -82,83 +35,39 @@ async function fetchStockMovements(silentRefresh = false) {
         
         if (response.data && Array.isArray(response.data)) {
             const newData = response.data;
-            const previousCount = stockMovements.value.length;
-            
-            // For silent refresh, only update if there's actually new data
-            if (silentRefresh) {
-                // Check if data actually changed by comparing first and last item IDs (much faster than JSON.stringify)
-                const dataChanged = newData.length !== previousCount || 
-                                  (newData.length > 0 && stockMovements.value.length > 0 && 
-                                   (newData[0].id !== stockMovements.value[0].id || 
-                                    newData[newData.length-1].id !== stockMovements.value[stockMovements.value.length-1].id));
-                
-                if (dataChanged) {
-                    stockMovements.value = newData;
-                    filteredStockMovements.value = newData;
-                    lastRefreshTime.value = new Date();
-                } else {
-                    // No changes detected, keeping existing data
-                }
-            } else {
-                // For manual refresh, always update
-                stockMovements.value = newData;
-                filteredStockMovements.value = newData;
-                lastRefreshTime.value = new Date();
-                // Stock movements fetched successfully
-            }
+            stockMovements.value = newData;
+            filteredStockMovements.value = newData;
         } else {
-            // No stock movement data received
-            // Only clear data for manual refresh, keep existing data for silent refresh
-            if (!silentRefresh) {
-                stockMovements.value = [];
-                filteredStockMovements.value = [];
-            }
-        }
-        
-        // Clear error message on successful fetch
-        if (errorMessage.value && !silentRefresh) {
-            errorMessage.value = "";
+            stockMovements.value = [];
+            filteredStockMovements.value = [];
         }
         
     } catch (error) {
-        // Error fetching stock movements (console output removed)
+        if (error.code === 'ECONNABORTED') {
+            errorMessage.value = "Connection timeout. Please check if the backend server is running.";
+        } else if (error.response?.status === 401) {
+            errorMessage.value = "Authentication failed. Please log in again or check your session.";
+            toast.add({
+                severity: 'warn',
+                summary: 'Authentication Required',
+                detail: 'Please log in to view stock movements.',
+                life: 5000
+            });
+        } else if (error.response?.status === 403) {
+            errorMessage.value = "Access denied. You don't have permission to view this data.";
+        } else if (error.response?.status === 500) {
+            errorMessage.value = `Server error: ${error.response?.data?.error || 'Internal server error'}`;
+        } else if (error.code === 'ECONNREFUSED') {
+            errorMessage.value = "Cannot connect to server. Please check if the backend is running on port 5000.";
+        } else {
+            errorMessage.value = error.response?.data?.error || error.message || "Failed to load stock movements data.";
+        }
         
-        if (!silentRefresh) {
-            if (error.code === 'ECONNABORTED') {
-                errorMessage.value = "Connection timeout. Please check if the backend server is running.";
-            } else if (error.response?.status === 401) {
-                errorMessage.value = "Authentication failed. Please log in again or check your session.";
-                // Show toast notification for auth error
-                toast.add({
-                    severity: 'warn',
-                    summary: 'Authentication Required',
-                    detail: 'Please log in to view stock movements.',
-                    life: 5000
-                });
-            } else if (error.response?.status === 403) {
-                errorMessage.value = "Access denied. You don't have permission to view this data.";
-            } else if (error.response?.status === 500) {
-                errorMessage.value = `Server error: ${error.response?.data?.error || 'Internal server error'}`;
-            } else if (error.code === 'ECONNREFUSED') {
-                errorMessage.value = "Cannot connect to server. Please check if the backend is running on port 5000.";
-            } else {
-                errorMessage.value = error.response?.data?.error || error.message || "Failed to load stock movements data.";
-            }
-            
-
-            
-            // Fallback to empty array on error
-            stockMovements.value = [];
-            filteredStockMovements.value = [];
-        } else {
-            // Silent refresh failed, keeping existing data
-        }
+        // Fallback to empty array on error
+        stockMovements.value = [];
+        filteredStockMovements.value = [];
     } finally {
-        if (!silentRefresh) {
-            isLoading.value = false;
-        } else {
-            isUpdating.value = false;
-        }
+        isLoading.value = false;
     }
 }
 
@@ -176,8 +85,6 @@ async function fetchStockSummary() {
         // Error fetching stock summary (console output removed)
     }
 }
-
-// Note: fetchTodaysActivities removed - all data is already included in main stock-movements endpoint
 
 // Watch search input and filter stock movements
 const filteredData = computed(() => {
@@ -256,8 +163,6 @@ function exportStockMovements() {
         });
         
     } catch (error) {
-        // Error exporting stock movements (console output removed)
-        
         // Show error toast
         toast.add({
             severity: 'error',
@@ -345,23 +250,6 @@ function downloadCSV(csvContent, filename) {
     }
 }
 
-// Refresh data
-function refreshData() {
-    fetchStockMovements(false); // Force full refresh
-    fetchStockSummary();
-}
-
-// Force refresh (bypass cache)
-function forceRefresh() {
-    // Clear existing data first
-    stockMovements.value = [];
-    filteredStockMovements.value = [];
-    errorMessage.value = "";
-    
-    fetchStockMovements(false);
-    fetchStockSummary();
-}
-
 // Format date and time utility
 function formatDateTime(dateTime) {
     if (!dateTime) return "N/A";
@@ -377,19 +265,6 @@ function formatDateTime(dateTime) {
     return new Date(dateTime).toLocaleString("en-US", options);
 }
 
-// Navigate to login page
-function goToLogin() {
-    // You might need to adjust this path based on your routing setup
-    window.location.href = '/login';
-    // Or if using Vue Router: this.$router.push('/login');
-}
-
-// Manual refresh
-function checkAuthToken() {
-    fetchStockMovements(false);
-    fetchStockSummary();
-}
-
 // Get action type color class
 function getActionTypeColor(actionType) {
     switch (actionType) {
@@ -399,7 +274,6 @@ function getActionTypeColor(actionType) {
         case 'Stock Out': return 'text-red-600 dark:text-red-400';
         case 'Resolve': return 'text-emerald-600 dark:text-emerald-400';
         case 'Damage': return 'text-orange-600 dark:text-orange-400';
-        case 'Damage': return 'text-orange-600 dark:text-orange-400'; // Updated terminology
         case 'Rental Charge': return 'text-purple-600 dark:text-purple-400';
         case 'Assigned': return 'text-blue-600 dark:text-blue-400';
         case 'Adjustment': return 'text-yellow-600 dark:text-yellow-400';
@@ -413,48 +287,14 @@ function getActionTypeColor(actionType) {
         <!-- Header -->
         <div class="flex justify-between items-center mb-4">
             <div>
-                <div class="flex items-center gap-2">
-                    <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-100">
-                        Stock Movement History
-                    </h3>
-                    <div class="flex items-center gap-1">
-                        <div 
-                            class="w-2 h-2 rounded-full" 
-                            :class="isAutoRefresh ? 'bg-green-500 animate-pulse' : 'bg-gray-400'"
-                        ></div>
-                        <span class="text-xs text-gray-500 dark:text-gray-400">
-                            {{ isAutoRefresh ? 'Live' : 'Paused' }}
-                        </span>
-                    </div>
-                </div>
-            
+                <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-100">
+                    Stock Movement History
+                </h3>
             </div>
             <div class="flex gap-2">
                 <Button
-                    :icon="isAutoRefresh ? 'pi pi-pause' : 'pi pi-play'"
-                    :label="isAutoRefresh ? 'Pause' : 'Auto'"
-                    class="p-button-sm"
-                    :class="isAutoRefresh ? 'p-button-warning' : 'p-button-success'"
-                    @click="toggleAutoRefresh"
-                />
-                <Button
-                    icon="pi pi-refresh"
-                    label="Refresh"
-                    class="p-button-sm p-button-secondary"
-                    @click="refreshData"
-                    :loading="isLoading"
-                />
-                <Button
-                    icon="pi pi-sync"
-                    label="Force"
-                    class="p-button-sm p-button-help"
-                    @click="forceRefresh"
-                    :loading="isLoading"
-                    title="Force refresh - clears cache and reloads all data"
-                />
-                <Button
                     icon="pi pi-download"
-                    label="Export CSV"
+                    label="Export"
                     class="p-button-sm p-button-primary"
                     @click="exportStockMovements"
                     :loading="isExporting"
@@ -478,8 +318,6 @@ function getActionTypeColor(actionType) {
                 <span class="text-red-700 dark:text-red-300">{{ errorMessage }}</span>
             </div>
         </div>
-        
-
         
         <!-- Stats Cards -->
         <div v-if="!isLoading && stockMovements.length > 0" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
@@ -561,6 +399,7 @@ function getActionTypeColor(actionType) {
                 </div>
             </div>
         </div>
+        
         <!-- Search and Filters -->
         <div v-if="!isLoading" class="flex flex-wrap items-center gap-4 mb-4">
             <!-- Clear Button -->
@@ -725,12 +564,6 @@ function getActionTypeColor(actionType) {
                 • When serial numbers are assigned or sold<br><br>
                 Start adding inventory to see movements here!
             </p>
-            <Button
-                icon="pi pi-refresh"
-                label="Check Again"
-                class="p-button-primary"
-                @click="refreshData"
-            />
         </div>
         
         <!-- Toast for notifications -->

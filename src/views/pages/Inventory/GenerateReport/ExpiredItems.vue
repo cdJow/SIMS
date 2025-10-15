@@ -1,10 +1,13 @@
 <script setup>
 import { InventoryService } from "@/service/InventoryService"; // Inventory service
 import { computed, onMounted, ref } from "vue";
+import { useToast } from "primevue/usetoast";
 
+const toast = useToast();
 const expiredItems = ref([]); // Reactive variable for expired items
 const nearExpireItems = ref([]); // Reactive variable for near expire items (within 1 month)
 const isLoading = ref(true); // Loading state
+const isExporting = ref(false); // Export loading state
 const errorMessage = ref(""); // Error state for API call
 const nearExpireSearchQuery = ref(""); // Search input for near expire items
 const expiredSearchQuery = ref(""); // Search input for expired items
@@ -52,34 +55,44 @@ async function fetchNearExpireItems() {
     }
 }
 
-// Computed property to filter expired items based on search query
+// Computed property to filter and sort expired items based on search query
 const filteredExpiredItems = computed(() => {
-    if (!expiredSearchQuery.value) {
-        return expiredItems.value;
+    let items = expiredItems.value;
+    
+    // Apply search filter if query exists
+    if (expiredSearchQuery.value) {
+        const query = expiredSearchQuery.value.toLowerCase();
+        items = items.filter(
+            (item) =>
+                item.itemName.toLowerCase().includes(query) ||
+                item.batchNumber.toLowerCase().includes(query) ||
+                item.supplier.toLowerCase().includes(query) ||
+                (item.retailPrice && item.retailPrice.toString().includes(query))
+        );
     }
-    const query = expiredSearchQuery.value.toLowerCase();
-    return expiredItems.value.filter(
-        (item) =>
-            item.itemName.toLowerCase().includes(query) ||
-            item.batchNumber.toLowerCase().includes(query) ||
-            item.supplier.toLowerCase().includes(query) ||
-            (item.retailPrice && item.retailPrice.toString().includes(query))
-    );
+    
+    // Sort by expiration date (oldest first)
+    return items.sort((a, b) => new Date(a.expirationDate) - new Date(b.expirationDate));
 });
 
-// Computed property to filter near expire items based on search query
+// Computed property to filter and sort near expire items based on search query
 const filteredNearExpireItems = computed(() => {
-    if (!nearExpireSearchQuery.value) {
-        return nearExpireItems.value;
+    let items = nearExpireItems.value;
+    
+    // Apply search filter if query exists
+    if (nearExpireSearchQuery.value) {
+        const query = nearExpireSearchQuery.value.toLowerCase();
+        items = items.filter(
+            (item) =>
+                item.itemName.toLowerCase().includes(query) ||
+                item.batchNumber.toLowerCase().includes(query) ||
+                item.supplier.toLowerCase().includes(query) ||
+                (item.retailPrice && item.retailPrice.toString().includes(query))
+        );
     }
-    const query = nearExpireSearchQuery.value.toLowerCase();
-    return nearExpireItems.value.filter(
-        (item) =>
-            item.itemName.toLowerCase().includes(query) ||
-            item.batchNumber.toLowerCase().includes(query) ||
-            item.supplier.toLowerCase().includes(query) ||
-            (item.retailPrice && item.retailPrice.toString().includes(query))
-    );
+    
+    // Sort by expiration date (soonest first)
+    return items.sort((a, b) => new Date(a.expirationDate) - new Date(b.expirationDate));
 });
 
 // Function to clear both search inputs
@@ -116,6 +129,125 @@ function calculateDaysUntilExpiration(expirationDate) {
     const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return days > 0 ? days : 0;
 }
+
+// Export report function
+function exportReport() {
+    isExporting.value = true;
+    
+    try {
+        // Get both expired and near expire items
+        const allItems = [...filteredExpiredItems.value, ...filteredNearExpireItems.value];
+        
+        // Check if we have data to export
+        if (!allItems || allItems.length === 0) {
+            toast.add({
+                severity: 'warn',
+                summary: 'No Data',
+                detail: 'No items to export.',
+                life: 3000
+            });
+            return;
+        }
+        
+        // Prepare data for CSV export
+        const exportData = allItems.map(item => ({
+            'Item Name': item.itemName || '',
+            'Batch Number': item.batchNumber || '',
+            'Quantity': item.quantity || 0,
+            'Retail Price': item.retailPrice ? `₱${item.retailPrice.toFixed(2)}` : 'N/A',
+            'Expiration Date': item.expirationDate ? new Date(item.expirationDate).toLocaleDateString() : 'N/A',
+            'Status': new Date(item.expirationDate) > new Date() ? 'Near Expiry' : 'Expired',
+            'Days Until/Past Expiry': new Date(item.expirationDate) > new Date() ? 
+                `${calculateDaysUntilExpiration(item.expirationDate)} days until expiry` :
+                `${calculateDaysExpired(item.expirationDate)} days expired`,
+            'Supplier': item.supplier || ''
+        }));
+        
+        // Convert to CSV format
+        const csvContent = convertToCSV(exportData);
+        
+        // Generate filename with current date
+        const currentDate = new Date().toISOString().split('T')[0];
+        const filename = `expiry_report_${currentDate}.csv`;
+        
+        // Download the file
+        downloadCSV(csvContent, filename);
+        
+        // Show success message
+        toast.add({
+            severity: 'success',
+            summary: 'Export Successful',
+            detail: `${exportData.length} records exported successfully.`,
+            life: 3000
+        });
+        
+    } catch (error) {
+        console.error('Export error:', error);
+        toast.add({
+            severity: 'error',
+            summary: 'Export Failed',
+            detail: 'Failed to export report. Please try again.',
+            life: 5000
+        });
+    } finally {
+        isExporting.value = false;
+    }
+}
+
+// Convert data to CSV format
+function convertToCSV(data) {
+    if (!data || data.length === 0) return '';
+    
+    try {
+        const headers = Object.keys(data[0]);
+        const csvHeaders = headers.join(',');
+        
+        const csvRows = data.map(row => {
+            return headers.map(header => {
+                let value = row[header];
+                if (value === null || value === undefined) value = '';
+                value = String(value);
+                if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+                    value = `"${value.replace(/"/g, '""')}"`;
+                }
+                return value;
+            }).join(',');
+        });
+        
+        return [csvHeaders, ...csvRows].join('\n');
+    } catch (error) {
+        console.error('Error converting to CSV:', error);
+        throw new Error('Failed to convert data to CSV format');
+    }
+}
+
+// Download CSV file
+function downloadCSV(csvContent, filename) {
+    try {
+        const BOM = '\uFEFF';
+        const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 100);
+    } catch (error) {
+        console.error('Error downloading CSV:', error);
+        throw new Error('Failed to download CSV file');
+    }
+}
+
+// Function to format date for export
+function formatDateForExport(date) {
+    if (!date) return "N/A";
+    return new Date(date).toLocaleDateString();
+}
+
+
 </script>
 <template>
     <div class="card">
@@ -128,6 +260,9 @@ function calculateDaysUntilExpiration(expirationDate) {
                 icon="pi pi-download"
                 label="Export"
                 class="p-button-sm p-button-primary"
+                @click="exportReport"
+                :loading="isExporting"
+                :disabled="isLoading || (filteredExpiredItems.length === 0 && filteredNearExpireItems.length === 0)"
             />
         </div>
 

@@ -441,6 +441,11 @@ export const getLowStockRentals = () => {
   return axios.get(`${API_URL}/low-stock-rentals`);
 }
 
+// Consumables Summary APIs
+export const getConsumablesSummary = () => {
+  return axios.get(`${API_URL}/consumables-summary`);
+}
+
 // Stock Movement APIs (using StockTable endpoints)
 export const getStockMovements = () => {
   return axios.get(`${API_URL}/stock-movements`);

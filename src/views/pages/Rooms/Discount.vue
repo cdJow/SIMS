@@ -1,10 +1,12 @@
 <script setup>
 import { ref, computed, onMounted } from "vue";
 import { useToast } from "primevue/usetoast";
+import { useConfirm } from "primevue/useconfirm";
 import { getDiscounts, addDiscount, updateDiscount, deleteDiscount } from "@/api/auth";
 
 /* ---------------- State ---------------- */
 const toast = useToast();
+const confirm = useConfirm();
 const promos = ref([]);
 const loading = ref(false);
 const search = ref("");
@@ -105,15 +107,47 @@ async function saveEditPromo() {
     toast.add({ severity: "error", summary: "Error", detail: err?.response?.data?.error || "Could not update promo.", life: 4000 });
   }
 }
-async function removePromo(promo) {
-  if (!confirm(`Delete promo "${promo.name}"?`)) return;
-  try {
-    await deleteDiscount(promo.id);
-    toast.add({ severity: "warn", summary: "Promo deleted", detail: promo.name, life: 3000 });
-    await loadPromos();
-  } catch (err) {
-    toast.add({ severity: "error", summary: "Error", detail: err?.response?.data?.error || "Could not delete promo.", life: 4000 });
-  }
+function removePromo(promo) {
+  confirm.require({
+    message: `Are you sure you want to delete the promo "${promo.name}"? This action cannot be undone.`,
+    header: 'Delete Confirmation',
+    icon: 'pi pi-exclamation-triangle',
+    rejectProps: {
+      label: 'Cancel',
+      severity: 'secondary',
+      outlined: true
+    },
+    acceptProps: {
+      label: 'Delete',
+      severity: 'danger'
+    },
+    accept: async () => {
+      try {
+        await deleteDiscount(promo.id);
+        toast.add({ severity: "warn", summary: "Promo deleted", detail: promo.name, life: 3000 });
+        await loadPromos();
+      } catch (err) {
+        // Check if error is related to existing room usage
+        const errorMessage = err?.response?.data?.error || err?.message || "Could not delete promo.";
+        
+        if (errorMessage === "Failed to delete promo." || errorMessage.toLowerCase().includes('room') || errorMessage.toLowerCase().includes('used') || errorMessage.toLowerCase().includes('referenced')) {
+          toast.add({ 
+            severity: "error", 
+            summary: "Cannot Delete Promo", 
+            detail: `"${promo.name}" cannot be deleted because it is currently being used by existing rooms. Please remove this discount from all rooms first.`, 
+            life: 6000 
+          });
+        } else {
+          toast.add({ 
+            severity: "error", 
+            summary: "Error", 
+            detail: errorMessage, 
+            life: 4000 
+          });
+        }
+      }
+    }
+  });
 }
 
 /* ----------------- Filtering ------------------ */
@@ -242,6 +276,7 @@ const filteredPromos = computed(() => {
       </div>
     </Dialog>
 
+    <ConfirmDialog />
     <Toast />
   </div>
 </template>

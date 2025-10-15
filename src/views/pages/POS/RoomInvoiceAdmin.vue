@@ -254,53 +254,7 @@ const handlePrint = (invoice) => {
         printWindow.close();
     }, 100);
 };
-const downloadInvoice = (invoice) => {
-    // Format dates and currency
-    const checkInDate = formatDate(invoice.checkIn);
-    const checkOutDate = formatDate(invoice.checkOut);
-    const totalAmount = formatCurrency(invoice.totalAmount);
 
-    // Create text content
-    const textContent = `
-WOODLAND SUITE INVOICE
-=============================
-
-Guest Name: ${invoice.guestName}
-Room Number: ${invoice.roomNumber}
-Status: ${invoice.status}
-
-Check-In Date: ${checkInDate}
-Check-Out Date: ${checkOutDate}
-
------------------------------
-          CHARGES
------------------------------
-Room Booking:
-  - Duration: ${calculateHours(invoice.checkIn, invoice.checkOut)} hours
-  - Rate: ${formatCurrency(invoice.hourlyRate)}/hr
-  - Total: ${totalAmount}
-
------------------------------
-TOTAL AMOUNT: ${totalAmount}
-=============================
-`;
-
-    // Create and trigger download
-    const blob = new Blob([textContent], { type: "text/plain;charset=utf-8;" });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-
-    link.setAttribute("href", url);
-    link.setAttribute(
-        "download",
-        `Invoice_${invoice.roomNumber}_${invoice.guestName}.txt`
-    );
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-};
 
 // Add this helper function
 const calculateHours = (checkIn, checkOut) => {
@@ -457,22 +411,8 @@ const showDetails = (event, room) => {
                                 v-tooltip.top="'Print Invoice'"
                             />
 
-                            <Button
-                                icon="pi pi-download"
-                                class="p-button-success"
-                                @click="downloadInvoice(data)"
-                                outlined
-                                rounded
-                                v-tooltip.top="'Download invoice'"
-                            />
-                            <Button
-                                icon="pi pi-trash"
-                                class="p-button-danger"
-                                @click="confirmDelete(data)"
-                                outlined
-                                rounded
-                                v-tooltip.top="'Delete invoice'"
-                            />
+                        
+                            
                         </div>
                     </template>
                 </Column>

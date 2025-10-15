@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted } from "vue";
-import { getRentalSummary, getLowStockRentals } from "@/api/auth";
+import { getRentalSummary, getLowStockRentals, getConsumablesSummary } from "@/api/auth";
 import { useToast } from "primevue/usetoast";
 
 const toast = useToast();
@@ -12,6 +12,15 @@ const rentalSummary = ref({
     total_revenue: 0,
     total_damage_charges: 0
 });
+const consumablesSummary = ref({
+    total_stock: 0,
+    low_stock_count: 0,
+    out_of_stock_count: 0,
+    total_value: 0,
+    total_selling_price: 0,
+    expiring_items: 0,
+    expired_items: 0
+});
 const lowStockCount = ref(0);
 const lowStockItems = ref([]);
 const showLowStockDialog = ref(false);
@@ -20,14 +29,16 @@ const loadRentalSummary = async () => {
     try {
         loading.value = true;
         
-        // Make both API calls in parallel for faster loading
-        const [summaryResponse, lowStockResponse] = await Promise.all([
+        // Make all API calls in parallel for faster loading
+        const [summaryResponse, lowStockResponse, consumablesResponse] = await Promise.all([
             getRentalSummary(),
-            getLowStockRentals()
+            getLowStockRentals(),
+            getConsumablesSummary()
         ]);
         
         // Update data
         rentalSummary.value = summaryResponse.data;
+        consumablesSummary.value = consumablesResponse.data;
         lowStockItems.value = lowStockResponse.data;
         lowStockCount.value = lowStockResponse.data.length;
         
@@ -35,7 +46,7 @@ const loadRentalSummary = async () => {
         toast.add({
             severity: "error",
             summary: "Error",
-            detail: "Failed to load rental summary data",
+            detail: "Failed to load summary data",
             life: 3000,
         });
     } finally {
@@ -202,6 +213,110 @@ onMounted(() => {
             <div class="text-sm">
                 <span class="text-red-600 font-semibold">Total charges</span>
                 <span class="text-gray-500 ml-1">for damages</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Consumables Summary Section -->
+    <div class="mb-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2">
+            <!-- Card 1: Total Stock -->
+            <div class="card h-full p-6 transition-all hover:shadow-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <span class="block text-gray-600 text-sm font-medium mb-1">Total Stock</span>
+                        <div class="text-2xl font-bold text-gray-900 dark:text-white">
+                            <ProgressSpinner v-if="loading" size="small" />
+                            <span v-else>{{ consumablesSummary.total_stock }}</span>
+                        </div>
+                    </div>
+                    <div class="w-12 h-12 bg-cyan-100 dark:bg-cyan-500/10 rounded-lg flex items-center justify-center">
+                        <i class="pi pi-box text-cyan-500 text-xl"></i>
+                    </div>
+                </div>
+                <div class="text-sm">
+                    <span class="text-cyan-500 font-semibold">Total Stock Consumables</span>
+                    <span class="text-gray-500 ml-1">in inventory</span>
+                </div>
+            </div>
+
+            <!-- Card 2: Cost Price -->
+            <div class="card h-full p-6 transition-all hover:shadow-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <span class="block text-gray-600 text-sm font-medium mb-1">Total Cost Price</span>
+                        <div class="text-2xl font-bold text-gray-900 dark:text-white">
+                            <ProgressSpinner v-if="loading" size="small" />
+                            <span v-else>{{ formatCurrency(consumablesSummary.total_value) }}</span>
+                        </div>
+                    </div>
+                    <div class="w-12 h-12 bg-emerald-100 dark:bg-emerald-500/10 rounded-lg flex items-center justify-center">
+                        <i class="pi pi-wallet text-emerald-500 text-xl"></i>
+                    </div>
+                </div>
+                <div class="text-sm">
+                    <span class="text-emerald-600 font-semibold">Total Cost Price</span>
+                </div>
+            </div>
+
+            <!-- Card 3: Total Selling Price -->
+            <div class="card h-full p-6 transition-all hover:shadow-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <span class="block text-gray-600 text-sm font-medium mb-1">Total Selling Price</span>
+                        <div class="text-2xl font-bold text-gray-900 dark:text-white">
+                            <ProgressSpinner v-if="loading" size="small" />
+                            <span v-else>{{ formatCurrency(consumablesSummary.total_selling_price) }}</span>
+                        </div>
+                    </div>
+                    <div class="w-12 h-12 bg-indigo-100 dark:bg-indigo-500/10 rounded-lg flex items-center justify-center">
+                        <i class="pi pi-chart-line text-indigo-500 text-xl"></i>
+                    </div>
+                </div>
+                <div class="text-sm">
+                    <span class="text-indigo-600 font-semibold">Total Retail Selling Price</span>
+                   
+                </div>
+            </div>
+
+            <!-- Card 4: Expiring Soon -->
+            <div class="card h-full p-6 transition-all hover:shadow-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <span class="block text-gray-600 text-sm font-medium mb-1">Expiring Soon</span>
+                        <div class="text-2xl font-bold text-gray-900 dark:text-white">
+                            <ProgressSpinner v-if="loading" size="small" />
+                            <span v-else>{{ consumablesSummary.expiring_items }}</span>
+                        </div>
+                    </div>
+                    <div class="w-12 h-12 bg-amber-100 dark:bg-amber-500/10 rounded-lg flex items-center justify-center">
+                        <i class="pi pi-clock text-amber-500 text-xl"></i>
+                    </div>
+                </div>
+                <div class="text-sm">
+                    <span class="text-amber-600 font-semibold">Within 30 days</span>
+                    <span class="text-gray-500 ml-1">of expiry</span>
+                </div>
+            </div>
+
+            <!-- Card 5: Expired Batches -->
+            <div class="card h-full p-6 transition-all hover:shadow-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <span class="block text-gray-600 text-sm font-medium mb-1">Expired Batches</span>
+                        <div class="text-2xl font-bold text-gray-900 dark:text-white">
+                            <ProgressSpinner v-if="loading" size="small" />
+                            <span v-else>{{ consumablesSummary.expired_items }}</span>
+                        </div>
+                    </div>
+                    <div class="w-12 h-12 bg-rose-100 dark:bg-rose-500/10 rounded-lg flex items-center justify-center">
+                        <i class="pi pi-ban text-rose-500 text-xl"></i>
+                    </div>
+                </div>
+                <div class="text-sm">
+                    <span class="text-rose-600 font-semibold">Batches past</span>
+                    <span class="text-gray-500 ml-1">expiry date</span>
+                </div>
             </div>
         </div>
     </div>
