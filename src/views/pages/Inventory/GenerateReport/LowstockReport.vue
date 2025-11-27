@@ -572,7 +572,5 @@ const clearFilters = () => {
             </DataTable>
         </div>
         
-        <!-- Toast for notifications -->
-        <Toast position="top-right" />
-    </div>
+        <!-- Toast for notifications --></div>
 </template>

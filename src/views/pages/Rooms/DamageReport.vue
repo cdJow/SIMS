@@ -339,9 +339,9 @@ const exportRoomReports = async (roomId, roomNumber) => {
     <div class="">
         <div class="flex flex-col md:flex-row gap-4 p-2 md:p-4">
             <!-- Room Grid -->
-            <div class="card flex-1">
-                <div class="room-grid">
-                    <div class="flex justify-between items-center mb-6">
+            <div class="card flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex flex-col max-h-[calc(100vh-8rem)]">
+                <div class="room-grid flex flex-col h-full">
+                    <div class="flex justify-between items-center mb-6 flex-shrink-0">
                         <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Rooms Status</h2>
                         <div class="flex gap-2">
                             <Button
@@ -393,7 +393,7 @@ const exportRoomReports = async (roomId, roomNumber) => {
                     
                     <div
                         v-else
-                        class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
+                        class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 overflow-y-auto flex-1 pr-2"
                     >
                         <div
                             v-for="room in filteredRooms"
@@ -440,7 +440,7 @@ const exportRoomReports = async (roomId, roomNumber) => {
             </div>
 
             <div class="w-full md:w-1/3 lg:w-1/4 xl:w-1/5 space-y-4">
-                <div class="card rounded-lg p-4">
+                <div class="card rounded-lg p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
                     <h3 class="text-base md:text-lg font-bold mb-4 text-gray-900 dark:text-gray-100">Filters</h3>
                     <div class="space-y-4">
                         <div class="space-y-2">
@@ -455,13 +455,13 @@ const exportRoomReports = async (roomId, roomNumber) => {
                             <IconField>
                                 <InputIcon>
                                     <i
-                                        class="pi pi-search text-sm md:text-base"
+                                        class="pi pi-search text-sm md:text-base dark:text-gray-400"
                                     />
                                 </InputIcon>
                                 <InputText
                                     v-model="searchQuery"
                                     placeholder="Search Room Number"
-                                    class="w-full text-sm md:text-base"
+                                    class="w-full text-sm md:text-base dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
                                 />
                             </IconField>
                         </div>
@@ -472,7 +472,7 @@ const exportRoomReports = async (roomId, roomNumber) => {
                                 v-model="selectedRoomType"
                                 :options="roomTypes"
                                 placeholder="Select Room Type"
-                                class="w-full text-sm md:text-base"
+                                class="w-full text-sm md:text-base dark:bg-gray-700 dark:border-gray-600"
                             />
                         </div>
 
@@ -552,10 +552,10 @@ const exportRoomReports = async (roomId, roomNumber) => {
                         :value="selectedRoom.amenities"
                         class="p-datatable-sm"
                     >
-                        <Column field="item_name" header="Item Name"></Column>
-                        <Column field="serial_number" header="Serial Number"></Column>
-                        <Column field="brand" header="Brand"></Column>
-                        <Column header="Status">
+                        <Column field="item_name" header="Item Name" headerClass="dark:bg-gray-800 dark:text-gray-100" bodyClass="dark:text-gray-100"></Column>
+                        <Column field="serial_number" header="Serial Number" headerClass="dark:bg-gray-800 dark:text-gray-100" bodyClass="dark:text-gray-300"></Column>
+                        <Column field="brand" header="Brand" headerClass="dark:bg-gray-800 dark:text-gray-100" bodyClass="dark:text-gray-300"></Column>
+                        <Column header="Status" headerClass="dark:bg-gray-800 dark:text-gray-100">
                             <template #body="{ data }">
                                 <Tag
                                     :value="data.is_damaged ? 'Damaged' : 'Good'"
@@ -563,7 +563,7 @@ const exportRoomReports = async (roomId, roomNumber) => {
                                 />
                             </template>
                         </Column>
-                        <Column header="Actions">
+                        <Column header="Actions" headerClass="dark:bg-gray-800 dark:text-gray-100">
                             <template #body="{ data }">
                                 <Button
                                     icon="pi pi-exclamation-triangle"
@@ -660,7 +660,7 @@ const exportRoomReports = async (roomId, roomNumber) => {
                         v-model="damageReport.damage_description"
                         rows="3"
                         placeholder="Describe the damage..."
-                        class="w-full"
+                        class="w-full dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
                     />
                 </div>
 
@@ -670,7 +670,7 @@ const exportRoomReports = async (roomId, roomNumber) => {
                         v-model="damageReport.notes"
                         rows="3"
                         placeholder="Any additional notes..."
-                        class="w-full"
+                        class="w-full dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
                     />
                 </div>
             </div>
@@ -689,8 +689,5 @@ const exportRoomReports = async (roomId, roomNumber) => {
                     />
                 </div>
             </template>
-        </Dialog>
-        
-        <Toast />
-    </div>
+        </Dialog></div>
 </template>

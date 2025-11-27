@@ -11,6 +11,8 @@ const toast = ref(null);
 const selectedBatch = ref({});
 const selectedItem = ref(null);
 const isDialogVisible = ref(false);
+const showProductDialog = ref(false);
+const selectedProductData = ref(null);
 
 const products = ref([]); // Products for the DataTable
 const selectedProduct = ref(null); // Selected product from the DataTable
@@ -29,8 +31,6 @@ const safeProducts = computed(() => {
         return [];
     }
 });
-
-
 
 // Add filter function with proper error handling
 const ConsumableBatchSearch = ref("");
@@ -58,8 +58,6 @@ const filterConsumableBatches = (batches) => {
         return Array.isArray(batches) ? batches : [];
     }
 };
-
-
 
 onMounted(async () => {
     try {
@@ -136,58 +134,29 @@ const clearNonConsumableBatchFilter = () => {
     NonConsumableBatchSearch.value = "";
 };
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // State management
 const isDialog2Visible = ref(false); // Controls the dialog visibility
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 function getOrderSeverity(order) {
-    switch (order.status) {
-        case "DELIVERED":
+    const status = order.status?.toLowerCase();
+    switch (status) {
+        case "delivered":
+        case "in_stock":
             return "success";
 
-        case "IN_STOCK":
-            return "success";
-
-        case "CANCELLED":
+        case "cancelled":
+        case "out_of_stock":
+        case "expired":
+        case "damaged":
+        case "lost":
+        case "retired":
             return "danger";
 
-        case "OUT_OF_STOCK":
-            return "danger";
-
-        case "EXPIRED":
-            return "danger";
-
-        case "PENDING":
+        case "pending":
+        case "assigned":
             return "warn";
 
-        case "RETURNED":
+        case "returned":
             return "info";
 
         default:
@@ -293,10 +262,6 @@ const filters = ref({
     inventoryStatus: { value: null, matchMode: FilterMatchMode.EQUALS },
 });
 
-
-
-
-
 function initFilters() {
     filters.value = {
         global: { value: null, matchMode: FilterMatchMode.CONTAINS },
@@ -389,25 +354,14 @@ function toggleRowExpansion(event) {
             return;
         }
         
-        // Debug: Log current state
-        console.log("Current products count:", products.value?.length || 0);
-        console.log("Current safeProducts count:", safeProducts.value?.length || 0);
+        // Open dialog instead of expanding row
+        selectedProductData.value = rowData;
+        showProductDialog.value = true;
         
-        // Toggle expansion state
-        if (expandedRows.value[rowData.id]) {
-            delete expandedRows.value[rowData.id];
-        } else {
-            expandedRows.value[rowData.id] = true;
-        }
-        
-        console.log("Toggled row expansion for:", rowData.id, expandedRows.value[rowData.id] ? 'expanded' : 'collapsed');
-        
-        // Debug: Log state after toggle
-        console.log("Products after toggle:", products.value?.length || 0);
-        console.log("SafeProducts after toggle:", safeProducts.value?.length || 0);
+        console.log("Opening dialog for product:", rowData.name);
         
     } catch (error) {
-        console.error("Error toggling row expansion:", error);
+        console.error("Error opening product dialog:", error);
     }
 }
 
@@ -439,12 +393,6 @@ function toggleBatchRowExpansion(event) {
     }
 }
 
-
-
-
-
-
-
 function formatCurrency(value) {
     if (value == null || value === '' || isNaN(parseFloat(value))) return "₱0.00"; // Default if invalid or null
     return new Intl.NumberFormat("en-PH", {
@@ -458,13 +406,22 @@ function getStatusTextColor(status) {
         case "rented":
             return "text-yellow-600"; // Yellow for rented
         case "available":
-            return "text-green-600"; // Green for available
         case "in_stock":
-            return "text-green-600"; // Green for in_stock
-        case "damaged":
-            return "text-red-600"; // Red for damaged
+            return "text-green-600"; // Green for available/in_stock
         case "assigned":
             return "text-blue-600"; // Blue for assigned
+        case "damaged":
+        case "lost":
+        case "out_of_stock":
+            return "text-red-600"; // Red for damaged/lost/out_of_stock
+        case "retired":
+            return "text-gray-500"; // Gray for retired
+        case "pending":
+            return "text-yellow-500"; // Yellow for pending
+        case "returned":
+            return "text-purple-600"; // Purple for returned
+        case "expired":
+            return "text-red-700"; // Dark red for expired
         default:
             return "text-gray-600"; // Default gray
     }
@@ -474,7 +431,6 @@ function formatPrice(value) {
     if (value == null || isNaN(value)) return "₱0.00"; // Handle null or invalid value
     return `₱${parseFloat(value).toFixed(2).toLocaleString()}`; // Format to 2 decimal places with commas
 }
-
 
 </script>
 
@@ -493,15 +449,25 @@ function formatPrice(value) {
     position: relative;
     z-index: 10;
 }
+
+/* Add indent to product table cells for better readability */
+:deep(.p-datatable-tbody > tr > td) {
+    padding-left: 1.5rem !important;
+}
+
+/* Keep header cells normal */
+:deep(.p-datatable-thead > tr > th) {
+    padding-left: 1rem !important;
+}
 </style>
 
 <template>
     <div class="card">
-        <div class="font-semibold text-xl mb-4">View Items</div>
+        <div class="font-semibold text-xl mb-4">View Inventory</div>
         <DataTable
-            v-model:expandedRows="expandedRows"
             :value="safeProducts"
             dataKey="id"
+             stripedRows
             v-model:filters="filters"
             filterDisplay="menu"
             :globalFilterFields="[
@@ -516,9 +482,13 @@ function formatPrice(value) {
             ]"
             tableStyle="min-width: 60rem"
             paginator
-            :rows="10"
+            :rows="5"
             @row-click="toggleRowExpansion"
             :rowClass="() => 'cursor-pointer'"
+            :pt="{
+                bodyCell: { style: 'padding: 0.75rem 1rem;' },
+                headerCell: { style: 'padding: 0.75rem 1rem;' }
+            }"
         >
             <template #header>
                 <div class="flex justify-between items-center">
@@ -544,23 +514,11 @@ function formatPrice(value) {
 
                     <!-- Expand/Collapse Buttons -->
                     <div class="flex flex-wrap justify-end gap-2">
-                        <Button
-                            text
-                            icon="pi pi-plus"
-                            label="Expand All"
-                            @click="expandAll"
-                        />
-                        <Button
-                            text
-                            icon="pi pi-minus"
-                            label="Collapse All"
-                            @click="collapseAll"
-                        />
+                        <!-- Removed expand/collapse buttons since we're using dialogs now -->
                     </div>
                 </div>
             </template>
 
-            <Column expander style="width: 2rem" />
             <Column
                 field="name"
                 header="Item Name"
@@ -624,53 +582,76 @@ function formatPrice(value) {
                 </template>
             </Column>
 
+            <!-- Remove the expansion template, we'll use dialog instead -->
+        </DataTable>
 
-
-            <template #expansion="slotProps">
+        <!-- Product Details Dialog -->
+        <Dialog
+            v-model:visible="showProductDialog"
+            :header="`${selectedProductForDialog?.category === 'Non-Consumable' ? 'Serial Numbers' : 'Batch Numbers'} - ${selectedProductForDialog?.name || 'Product'}`"
+            :style="{ width: '95vw', maxWidth: '1400px' }"
+            :modal="true"
+            :dismissableMask="true"
+        >
+            <div v-if="selectedProductData">
                 <!--Consumable Batch Table-->
                 <DataTable
-                    class="p-datatable-sm"
+                    class="p-datatable-sm mb-5 mt-5 ml-5"
                     :paginator="true"
-                    :rows="10"
+                    :rows="5"
                     v-model:expandedRows="batchExpandedRows"
                     :value="
-                        filterConsumableBatches(slotProps.data?.batches || [])
+                        filterConsumableBatches(selectedProductData?.batches || [])
                     "
                     dataKey="batchId"
-                    v-if="slotProps.data?.category === 'Consumable'"
+                    v-if="selectedProductData?.category === 'Consumable'"
                     @row-click="toggleBatchRowExpansion"
                     :rowClass="() => 'cursor-pointer'"
+                    stripedRows
+                    :pt="{
+                        bodyRow: { style: 'height: 3.5rem;' }
+                    }"
                 >
-                    <div class="flex items-center gap-2 mb-4">
-                        <h5>Batch List for {{ slotProps.data.name }}</h5>
-                        <Button
-                            type="button"
-                            icon="pi pi-filter-slash"
-                            label="Clear"
-                            outlined
-                            @click="clearConsumableFilter"
-                        />
-                        <IconField>
-                            <InputIcon>
-                                <i class="pi pi-search" />
-                            </InputIcon>
-                            <InputText
-                                v-model="ConsumableBatchSearch"
-                                placeholder="Search consumable batches..."
-                                class="w-full"
+                    <template #header>
+                        <div class="flex items-center gap-2 mb-5">
+                            <h5>Batch List for {{ selectedProductData.name }}</h5>
+                            <Button
+                                type="button"
+                                icon="pi pi-filter-slash"
+                                label="Clear"
+                                outlined
+                                @click="clearConsumableFilter"
                             />
-                        </IconField>
-                    </div>
+                            <IconField>
+                                <InputIcon>
+                                    <i class="pi pi-search" />
+                                </InputIcon>
+                                <InputText
+                                    v-model="ConsumableBatchSearch"
+                                    placeholder="Search consumable batches..."
+                                    class="w-full"
+                                />
+                            </IconField>
+                        </div>
+                    </template>
                     <Column
                         field="batchNumber"
                         header="Batch Number"
                         sortable
-                    ></Column>
+                    >
+                        <template #body="slotProps">
+                            <span>{{ slotProps.data.batchNumber }}</span>
+                        </template>
+                    </Column>
                     <Column
                         field="quantity"
                         header="Quantity"
                         sortable
-                    ></Column>
+                    >
+                        <template #body="slotProps">
+                            <span>{{ slotProps.data.quantity }}</span>
+                        </template>
+                    </Column>
                     <Column
                         field="purchaseDate"
                         header="Arrival Date"
@@ -703,12 +684,20 @@ function formatPrice(value) {
                             }}</span>
                         </template>
                     </Column>
-                    <Column field="unit" header="Unit" sortable></Column>
+                    <Column field="unit" header="Unit" sortable>
+                        <template #body="slotProps">
+                            <span>{{ slotProps.data.unit }}</span>
+                        </template>
+                    </Column>
                     <Column
                         field="supplier"
                         header="Supplier"
                         sortable
-                    ></Column>
+                    >
+                        <template #body="slotProps">
+                            <span>{{ slotProps.data.supplier }}</span>
+                        </template>
+                    </Column>
 
                     <Column field="expDate" header="Exp Date" sortable>
                         <template #body="slotProps">
@@ -730,46 +719,56 @@ function formatPrice(value) {
 
                 <!--Non-Consumable Batch Table-->
                 <DataTable
-                    class="p-datatable-sm"
+                    class="p-datatable-sm mb-5 mt-5 ml-5"
                     :paginator="true"
-                    :rows="10"
+                    :rows="5"
                     v-model:expandedRows="batchExpandedRows"
                     :value="
                         filterNonConsumableBatches(
-                            slotProps.data?.batches || []
+                            selectedProductData?.batches || []
                         )
                     "
                     dataKey="batchId"
-                    v-if="slotProps.data?.category === 'Non-Consumable'"
+                    v-if="selectedProductData?.category === 'Non-Consumable'"
                     @row-click="toggleBatchRowExpansion"
                     :rowClass="() => 'cursor-pointer'"
+                    stripedRows
+                    :pt="{
+                        bodyRow: { style: 'height: 3.5rem;' }
+                    }"
                 >
-                    <div class="flex items-center gap-2 mb-4">
-                        <h5>Batch List for {{ slotProps.data.name }}</h5>
-                        <Button
-                            type="button"
-                            icon="pi pi-filter-slash"
-                            label="Clear"
-                            outlined
-                            @click="clearNonConsumableBatchFilter"
-                        />
-                        <IconField>
-                            <InputIcon>
-                                <i class="pi pi-search" />
-                            </InputIcon>
-                            <InputText
-                                v-model="NonConsumableBatchSearch"
-                                placeholder="Search non-consumable items..."
-                                class="w-full"
+                    <template #header>
+                        <div class="flex items-center gap-2 mb-5">
+                            <h5>Serial Number List for {{ selectedProductData.name }}</h5>
+                            <Button
+                                type="button"
+                                icon="pi pi-filter-slash"
+                                label="Clear"
+                                outlined
+                                @click="clearNonConsumableBatchFilter"
                             />
-                        </IconField>
-                    </div>
+                            <IconField>
+                                <InputIcon>
+                                    <i class="pi pi-search" />
+                                </InputIcon>
+                                <InputText
+                                    v-model="NonConsumableBatchSearch"
+                                    placeholder="Search non-consumable items..."
+                                    class="w-full"
+                                />
+                            </IconField>
+                        </div>
+                    </template>
 
                     <Column
                         field="batchNumber"
                         header="Serial Number"
                         sortable
-                    ></Column>
+                    >
+                        <template #body="slotProps">
+                            <span>{{ slotProps.data.batchNumber }}</span>
+                        </template>
+                    </Column>
                     <Column
                         field="purchaseDate"
                         header="Arrival Date"
@@ -797,27 +796,37 @@ function formatPrice(value) {
                         field="supplier"
                         header="Supplier"
                         sortable
-                    ></Column>
+                    >
+                        <template #body="slotProps">
+                            <span>{{ slotProps.data.supplier }}</span>
+                        </template>
+                    </Column>
 
                     <Column
                         field="rentalprice"
                         header="Rental Price"
                         sortable
-                    ></Column>
+                    >
+                        <template #body="slotProps">
+                            <span>{{ slotProps.data.rentalprice }}</span>
+                        </template>
+                    </Column>
 
                     <Column field="warranty" header="Warranty" sortable>
                         <template #body="slotProps">
-                            <span
-                                >{{ slotProps.data.warrantyValue }}
-                                {{ slotProps.data.warrantyUnit }}</span
-                            >
+                            <span>{{ slotProps.data.warrantyValue }}
+                                {{ slotProps.data.warrantyUnit }}</span>
                         </template>
                     </Column>
                     <Column
                         field="quantity"
                         header="Quantity"
                         sortable
-                    ></Column>
+                    >
+                        <template #body="slotProps">
+                            <span>{{ slotProps.data.quantity }}</span>
+                        </template>
+                    </Column>
 
                     <Column field="status" header="Status" sortable>
                         <template #body="slotProps">
@@ -827,7 +836,6 @@ function formatPrice(value) {
                             />
                         </template>
                     </Column>
-
 
                     <column header="Items">
                         <template #body="slotProps">
@@ -903,13 +911,9 @@ function formatPrice(value) {
                         </template>
                     </column>
                 </DataTable>
-            </template>
-        </DataTable>
+            </div>
+        </Dialog>
     </div>
 
-
-
-    <template>
-        <Toast ref="toast" />
-    </template>
+    <template></template>
 </template>

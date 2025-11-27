@@ -8,7 +8,7 @@ const defaultChartData = {
         labels: [],
         datasets: [{
             data: [],
-            backgroundColor: ['#4F46E5', '#10B981', '#F59E0B'],
+            backgroundColor: ['#4F46E5', '#10B981', '#F59E0B', '#EF4444'],
             borderWidth: 0
         }],
         percentages: []
@@ -31,7 +31,7 @@ async function loadCategoryData() {
                     labels: response.data.current?.labels || [],
                     datasets: [{
                         data: response.data.current?.datasets?.[0]?.data || [],
-                        backgroundColor: ['#4F46E5', '#10B981', '#F59E0B'],
+                        backgroundColor: ['#4F46E5', '#10B981', '#F59E0B', '#EF4444'],
                         borderWidth: 0
                     }],
                     percentages: response.data.current?.percentages || []
@@ -80,7 +80,7 @@ const pieChartData = computed(() => ({
     labels: chartData.value.current.labels || [],
     datasets: chartData.value.current.datasets || [{
         data: [],
-        backgroundColor: ['#4F46E5', '#10B981', '#F59E0B'],
+        backgroundColor: ['#4F46E5', '#10B981', '#F59E0B', '#EF4444'],
         borderWidth: 0
     }]
 }));
@@ -166,7 +166,7 @@ const chartConfig = {
             </div>
         </div>
 
-        <div v-if="chartData.value?.current?.labels?.length > 0" class="mt-6 grid grid-cols-3 gap-4">
+        <div v-if="chartData.value?.current?.labels?.length > 0" class="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
             <div v-for="(label, index) in chartData.value.current.labels" 
                  :key="label" 
                  class="card p-4 text-center">

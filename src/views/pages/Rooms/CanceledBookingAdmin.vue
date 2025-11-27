@@ -6,7 +6,7 @@ import { fetchCancelledBookings, deleteCancelledBooking } from "@/api/auth";
 // Filters
 const filters = ref({
     searchQuery: "",
-    dateRange: [null, null],
+    searchDate: null,
     roomType: null,
 });
 
@@ -63,23 +63,22 @@ const filteredBookings = computed(() => {
         const q = (filters.value.searchQuery || "").toLowerCase();
         const searchMatches =
             String(booking.BookingCode || "").toLowerCase().includes(q) ||
-            String(booking.guestName || "").toLowerCase().includes(q);
+            String(booking.guestName || "").toLowerCase().includes(q) ||
+            String(booking.roomNumber || "").toLowerCase().includes(q);
 
-        const [start, end] = filters.value.dateRange || [];
-        const startDate = start ? new Date(start) : null;
-        const endDate = end ? new Date(end) : null;
-        const cDate = booking.cancellationDate instanceof Date ? booking.cancellationDate : (booking.cancellationDate ? new Date(booking.cancellationDate) : null);
-        const dateMatches = !startDate || (!cDate ? false : (cDate >= startDate && (!endDate || cDate <= endDate)));
+        const matchesDate = !filters.value.searchDate || 
+            (booking.cancellationDate && 
+             new Date(booking.cancellationDate).toDateString() === new Date(filters.value.searchDate).toDateString());
 
         const roomTypeMatches = !filters.value.roomType || booking.roomType === filters.value.roomType;
 
-        return searchMatches && dateMatches && roomTypeMatches;
+        return searchMatches && matchesDate && roomTypeMatches;
     });
 });
 
 // Clear filters
 const clearFilters = () => {
-    filters.value = { searchQuery: "", dateRange: [null, null], roomType: null };
+    filters.value = { searchQuery: "", searchDate: null, roomType: null };
 };
 
 const toast = useToast();
@@ -125,34 +124,39 @@ const handleClick = (event, bookingData) => {
         <div class="text-xl font-semibold mb-4">Canceled Bookings</div>
 
         <!-- Enhanced Filter Section -->
-        <div>
-            <div class="mb-6">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                    <!-- Search -->
-                    <div>
-                        <div class="flex gap-2">
-                            <Button
-                                type="button"
-                                icon="pi pi-filter-slash"
-                                label="Clear"
-                                outlined
-                                class="whitespace-nowrap"
-                                @click="clearFilters"
-                            />
-                            <InputText
-                                placeholder="Enter Booking Code"
-                                class="flex-1 p-3 border rounded-lg"
-                                v-model="filters.searchQuery"
-                            />
-                        </div>
-                    </div>
-                    <!-- Date Range -->
-                </div>
+        <div class="mb-6">
+            <div class="flex flex-row gap-4 items-center">
+                <Button
+                    type="button"
+                    icon="pi pi-filter-slash"
+                    label="Clear"
+                    outlined
+                    @click="clearFilters"
+                />
+                <IconField>
+                    <InputIcon>
+                        <i class="pi pi-search" />
+                    </InputIcon>
+                    <InputText
+                        placeholder="Booking Code, Guest Name, or Room Number"
+                        class="w-96"
+                        v-model="filters.searchQuery"
+                    />
+                </IconField>
+                
+                <!-- Single Date Filter -->
+                <DatePicker
+                    v-model="filters.searchDate"
+                    :manualInput="false"
+                    dateFormat="mm/dd/yy"
+                    placeholder="Search by Cancellation Date"
+                    :showIcon="true"
+                    iconDisplay="input"
+                    class="w-64"
+                />
             </div>
-
-            <!-- DataTable and other content -->
         </div>
-        
+    
         <!-- Empty State -->
         <div v-if="!loading && (!filteredBookings || filteredBookings.length === 0)" 
              class="text-center py-12 mt-6">
@@ -179,9 +183,10 @@ const handleClick = (event, bookingData) => {
         <DataTable
             v-if="!loading && filteredBookings && filteredBookings.length > 0"
             :value="filteredBookings"
-            scrollable
-            scrollHeight="600px"
             class="mt-6"
+            :loading="loading"
+            :paginator="true"
+            :rows="10"
         >
             <!-- Booking Code -->
             <Column
@@ -293,5 +298,4 @@ const handleClick = (event, bookingData) => {
             />
         </template>
     </Dialog>
-    <toast />
 </template>

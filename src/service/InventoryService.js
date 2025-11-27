@@ -232,6 +232,34 @@ export const InventoryService = {
         }
     },
 
+    // Fetch items for a specific category
+    async getCategoryItems(category) {
+        try {
+            console.log('📦 Fetching items for category:', category);
+
+            const response = await fetch(`http://localhost:5000/category-items/${category}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            console.log('📡 Response status:', response.status);
+
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status} - ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            console.log('📦 Category Items API Response:', result);
+            
+            return result;
+        } catch (error) {
+            console.error('❌ Error fetching category items:', error);
+            throw error;
+        }
+    },
+
     // Fetch revenue breakdown for category chart
     async getRevenueBreakdown(period = 'month') {
         try {

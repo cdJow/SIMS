@@ -2,7 +2,7 @@
 import Avatar from "primevue/avatar";
 import Menu from "primevue/menu";
 import { useToast } from "primevue/usetoast";
-import { computed, ref, onMounted } from "vue";
+import { computed, ref, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router"; // Add these imports
 import axios from "axios";
 
@@ -103,14 +103,17 @@ const loadStaticReviews = () => {
     loadingReviews.value = false;
 };
 
-
-
 // Add mobile menu state
 const showMobileMenu = ref(false);
 const showProfileMenu = ref(false);
 const profileMenu = ref();
 // Check actual authentication status
 const isLoggedIn = ref(false);
+
+// Google Review Reminder State
+const showReviewReminder = ref(false);
+let reminderInterval = null;
+let autoCloseTimeout = null;
 
 // Check if user is authenticated
 const checkAuthStatus = () => {
@@ -158,8 +161,6 @@ const handleLogout = () => {
     router.push("/");
 };
 
-
-
 const responsiveOptions = ref([
     {
         breakpoint: "1200px", // Large screens (>=1200px)
@@ -182,7 +183,6 @@ const responsiveOptions = ref([
         numScroll: 2,
     },
 ]);
-
 
 const showBookingDialog = ref(false);
 
@@ -225,12 +225,13 @@ const loading = ref(false);
 const fetchRooms = async () => {
     try {
         loading.value = true;
-        const response = await axios.get('http://127.0.0.1:5000/api/landing/rooms');
+        // Use trending rooms endpoint instead of all rooms
+        const response = await axios.get('http://127.0.0.1:5000/api/landing/trending-rooms');
         
         console.log('API Response:', response.data);
         
         if (response.data && response.data.rooms) {
-            console.log('Transforming rooms data:', response.data.rooms);
+            console.log('Transforming trending rooms data:', response.data.rooms);
             // Transform API data to match UI expectations  
             rooms.value = response.data.rooms.map(room => {
                 console.log('Processing room:', room);
@@ -248,12 +249,16 @@ const fetchRooms = async () => {
                         { duration: 6, price: 200, hours: 6 },
                         { duration: 12, price: 400, hours: 12 },
                         { duration: 24, price: 800, hours: 24 }
-                    ]
+                    ],
+                    booking_count: room.booking_count || 0,
+                    trending_score: room.trending_score || 0
                 };
             });
+            
+            console.log(`Loaded ${rooms.value.length} trending rooms`);
         }
     } catch (error) {
-        console.error('Error fetching rooms:', error);
+        console.error('Error fetching trending rooms:', error);
         toast.add({
             severity: 'error',
             summary: 'Error',
@@ -301,12 +306,57 @@ const openGoogleReviews = () => {
     window.open('https://www.google.com/maps/place/Woodland+Suites/@8.2304465,124.2380444,17z/data=!4m8!3m7!1s0x3255758d3ab4ab77:0xf498dd27637f6b05!8m2!3d8.2304465!4d124.2406193!9m1!1b1!16s%2Fg%2F11h4kh6qdb?entry=ttu&g_ep=EgoyMDI1MTAwOC4wIKXMDSoASAFQAw%3D%3D', '_blank');
 };
 
+// Show review reminder
+const showReminderPopup = () => {
+    showReviewReminder.value = true;
+    
+    // Auto-close after 10 seconds (10000ms)
+    autoCloseTimeout = setTimeout(() => {
+        closeReviewReminder();
+    }, 20000);
+};
+
+// Close review reminder
+const closeReviewReminder = () => {
+    showReviewReminder.value = false;
+    if (autoCloseTimeout) {
+        clearTimeout(autoCloseTimeout);
+        autoCloseTimeout = null;
+    }
+};
+
+// Handle review button click
+const handleWriteReview = () => {
+    closeReviewReminder();
+    openGoogleReviews();
+};
+
 // Fetch rooms and rates when component mounts
 onMounted(() => {
     checkAuthStatus(); // Check authentication status
     fetchRooms();
     fetchRoomRates();
     loadStaticReviews();
+    
+    // Show reminder every 5 minutes (300000ms)
+    reminderInterval = setInterval(() => {
+        showReminderPopup();
+    }, 5000);
+    
+    // Show first reminder after 30 seconds
+    setTimeout(() => {
+        showReminderPopup();
+    }, 5000);
+});
+
+// Cleanup on component unmount
+onUnmounted(() => {
+    if (reminderInterval) {
+        clearInterval(reminderInterval);
+    }
+    if (autoCloseTimeout) {
+        clearTimeout(autoCloseTimeout);
+    }
 });
 </script>
 
@@ -364,19 +414,12 @@ onMounted(() => {
                         />
                     </div>
 
-                    
                 </div>
 
                 <!-- Mobile Controls -->
                 <div class="flex items-center space-x-4 md:hidden">
                     <!-- Profile Icon with Mobile Dropdown -->
-                    <Avatar
-                        icon="pi pi-user"
-                        class="cursor-pointer bg-primary hover:bg-primary-dark transition-colors"
-                        size="large"
-                        shape="circle"
-                        @click="toggleProfileMenu"
-                    />
+                
 
                     <!-- Mobile Menu Toggle -->
                     <Button
@@ -385,14 +428,7 @@ onMounted(() => {
                         @click="toggleMobileMenu"
                     />
 
-                    <!-- Mobile Profile Dropdown (Only shows on mobile) -->
-                    <Menu
-                        ref="profileMenu"
-                        :model="menuItems"
-                        :popup="true"
-                        class="w-48 md:hidden"
-                        v-model:visible="showProfileMenu"
-                    />
+                    
                 </div>
             </div>
 
@@ -462,8 +498,7 @@ onMounted(() => {
                         <p
                             class="text-xl md:text-2xl text-orange-600 font-light max-w-lg mx-auto lg:mx-0"
                         >
-                            Experience contemporary elegance in our urban
-                            sanctuary
+                            Experience luxury redefined in the heart of the city.
                         </p>
 
                         <!-- Action Buttons -->
@@ -515,7 +550,7 @@ onMounted(() => {
                                         ></i>
                                         <span
                                             class="text-white text-sm sm:text-base"
-                                            >Smart Room Control</span
+                                            >Full Air-Condition Room</span
                                         >
                                     </div>
                                     <div
@@ -526,7 +561,7 @@ onMounted(() => {
                                         ></i>
                                         <span
                                             class="text-white text-sm sm:text-base"
-                                            >24/7 Concierge</span
+                                            >Complimentary Wifi Access</span
                                         >
                                     </div>
                                     <div
@@ -537,7 +572,7 @@ onMounted(() => {
                                         ></i>
                                         <span
                                             class="text-white text-sm sm:text-base"
-                                            >Premium Bath Amenities</span
+                                            >Business Center</span
                                         >
                                     </div>
                                     <div
@@ -548,9 +583,32 @@ onMounted(() => {
                                         ></i>
                                         <span
                                             class="text-white text-sm sm:text-base"
-                                            >Private Balcony</span
+                                            >Fiesta Function Rooms (Max 25 Pax)</span
                                         >
                                     </div>
+                                    <div
+                                        class="flex items-center space-x-1 sm:space-x-2"
+                                    >
+                                        <i
+                                            class="pi pi-check-circle text-amber-400 text-sm sm:text-base"
+                                        ></i>
+                                        <span
+                                            class="text-white text-sm sm:text-base"
+                                            >24/7 CCTV System</span
+                                        >
+                                    </div>
+                                    <div
+                                        class="flex items-center space-x-1 sm:space-x-2"
+                                    >
+                                        <i
+                                            class="pi pi-check-circle text-amber-400 text-sm sm:text-base"
+                                        ></i>
+                                        <span
+                                            class="text-white text-sm sm:text-base"
+                                            >Fully Equip  With Fire Protection System</span
+                                        >
+                                    </div>
+                                    
                                 </div>
                             </div>
                         </div>
@@ -577,25 +635,37 @@ onMounted(() => {
         <section id="rooms" class="py-12 px-4 sm:px-6 lg:px-8">
             <div class="mx-auto max-w-9xl">
                 <h2 class="text-3xl md:text-4xl font-bold mb-10 text-center">
-                    Our Accommodations
+                    <span class="bg-gradient-to-r from-red-500 to-orange-500 bg-clip-text text-transparent">
+                        Our Accommodations
+
+
+
+
+
+
+                    </span>
                     <span v-if="loading" class="text-sm text-gray-500 ml-2">
                         <i class="pi pi-spin pi-spinner"></i>
                         Loading...
                     </span>
                 </h2>
+                <p class="text-center text-gray-600 mb-8 max-w-2xl mx-auto">
+                    Discover our most popular rooms
+                </p>
 
                 <div class="p-6 md:p-8" v-if="!loading && rooms.length > 0">
                     <Carousel
                         :value="rooms"
                         :numVisible="2"
-                        :numScroll="2"
+                        :numScroll="1"
                         :responsiveOptions="[
-                            { breakpoint: '1200px', numVisible: 2, numScroll: 1 },
+                            { breakpoint: '1400px', numVisible: 2, numScroll: 1 },
+                            { breakpoint: '1024px', numVisible: 2, numScroll: 1 },
                             { breakpoint: '768px', numVisible: 1, numScroll: 1 },
                             { breakpoint: '560px', numVisible: 1, numScroll: 1 }
                         ]"
                         circular
-                        :autoplayInterval="4000"
+                        :autoplayInterval="5000"
                     >
                         <template #item="slotProps">
                             <div
@@ -619,6 +689,14 @@ onMounted(() => {
                                             <div
                                                 class="absolute inset-0 bg-gradient-to-t from-black/40 via-black/20 to-transparent"
                                             ></div>
+                                            
+                                            <!-- Trending Badge (ALL rooms) -->
+                                            <div 
+                                                class="absolute top-2 left-2 sm:top-4 sm:left-4 px-3 py-1 rounded-full text-xs font-bold shadow-lg bg-gradient-to-r from-orange-400 to-red-500 text-white flex items-center gap-1"
+                                            >
+                                                <i class="pi pi-star-fill"></i>
+                                                <span>TRENDING</span>
+                                            </div>
                                             
                                             <!-- Status Badge -->
                                             <div 
@@ -913,8 +991,7 @@ onMounted(() => {
                     </p>
                     
                     <!-- Rating Summary -->
-                
-                    
+
                     <span v-if="loadingReviews" class="text-sm text-gray-500 ml-2">
                         <i class="pi pi-spin pi-spinner"></i>
                         Loading reviews...
@@ -1184,10 +1261,10 @@ onMounted(() => {
                                         href="tel:+631234567890"
                                         class="hover:text-red-500 transition-colors"
                                     >
-                                       0956 680 1497</a
+                                       0956 680 1497 / 0945 492 5609</a
                                     ><br />
                                     <a
-                                        href="mailto:info@woodlandsuites.com"
+                                        href="mailto:woodlandsuites@gmail.com"
                                         class="hover:text-red-500 transition-colors"
                                     >
                                         info@woodlandsuites.com
@@ -1222,7 +1299,7 @@ onMounted(() => {
                 <div>
                     <h3 class="font-semibold mb-4 text-white">Contact</h3>
                     <p class="text-gray-300">
-                         Roxas Ave <br />Iligan City<br /> Lanao del Norte <br/>Phone: 0956 680 1497
+                         Roxas Ave <br />Iligan City<br /> Lanao del Norte <br/>Phone: 0956 680 1497 / 0945 492 5609
                         <br />Email: woodlandsuite@gmail.com
                     </p>
                 </div>
@@ -1244,17 +1321,58 @@ onMounted(() => {
         </footer>
 
         <!-- Floating Review Button -->
-        <div class="fixed bottom-6 right-6 z-50">
+        <div class="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-50">
             <Button 
                 icon="pi pi-star"
-                class="p-button-rounded p-button-lg bg-red-500 hover:bg-red-600 border-0 text-white shadow-2xl hover:shadow-3xl transition-all duration-300 animate-float animate-pulse-glow"
+                class="p-button-rounded p-button-lg bg-red-500 hover:bg-red-600 border-0 text-white shadow-lg md:shadow-2xl hover:shadow-xl md:hover:shadow-3xl transition-all duration-300 animate-float animate-pulse-glow scale-75 md:scale-100"
                 @click="openGoogleReviews"
                 v-tooltip.left="'Write a Google Review'"
             />
         </div>
-    </div>
 
-    <Toast />
+        <!-- Floating Google Review Reminder - Thinking Cloud -->
+        <Transition name="slide-up">
+            <div
+                v-if="showReviewReminder"
+                class="fixed bottom-20 right-6 z-50 animate-float-smooth"
+            >
+                <!-- Thinking Cloud Bubble -->
+                <div class="relative max-w-xs bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-5 thought-bubble">
+                    <!-- Close Button -->
+                    <button
+                        @click="closeReviewReminder"
+                        class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors z-10"
+                    >
+                        <i class="pi pi-times text-sm"></i>
+                    </button>
+
+                    <!-- Content -->
+                    <div class="pr-4">
+                        <!-- Title with Icon -->
+                        <div class="flex items-center gap-2 mb-2">
+                            <i class="pi pi-star-fill text-red-500 text-lg"></i>
+                            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                                Rate Your Experience
+                            </h3>
+                        </div>
+
+                        <!-- Message -->
+                        <p class="text-gray-600 dark:text-gray-300 text-xs mb-3">
+                            Share your feedback on Google!
+                        </p>
+
+                        <!-- Action Button -->
+                       
+                    </div>
+
+                    <!-- Cloud Tail (Small circles) -->
+                    <div class="absolute -bottom-3 right-8 w-4 h-4 bg-white dark:bg-gray-800 rounded-full shadow-lg"></div>
+                    <div class="absolute -bottom-6 right-6 w-2.5 h-2.5 bg-white dark:bg-gray-800 rounded-full shadow-lg"></div>
+                    <div class="absolute -bottom-8 right-5 w-1.5 h-1.5 bg-white dark:bg-gray-800 rounded-full shadow-md"></div>
+                </div>
+            </div>
+        </Transition>
+    </div>
 </template>
 
 <style scoped>
@@ -1395,5 +1513,78 @@ onMounted(() => {
 
 ::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(180deg, #dc2626, #ea580c);
+}
+
+/* Slide up transition for review reminder */
+.slide-up-enter-active,
+.slide-up-leave-active {
+    transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.slide-up-enter-from {
+    opacity: 0;
+    transform: translateY(100px) scale(0.8);
+}
+
+.slide-up-leave-to {
+    opacity: 0;
+    transform: translateY(100px) scale(0.8);
+}
+
+/* Bounce animation for reminder */
+@keyframes bounce-once {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    25% {
+        transform: translateY(-15px);
+    }
+    50% {
+        transform: translateY(-7px);
+    }
+    75% {
+        transform: translateY(-10px);
+    }
+}
+
+.animate-bounce-once {
+    animation: bounce-once 0.8s ease-out;
+}
+
+/* Smooth floating animation for thought bubble */
+@keyframes float-smooth {
+    0%, 100% {
+        transform: translateY(0px);
+    }
+    50% {
+        transform: translateY(-12px);
+    }
+}
+
+.animate-float-smooth {
+    animation: float-smooth 3s ease-in-out infinite;
+}
+
+/* Thinking cloud bubble styling */
+.thought-bubble {
+    position: relative;
+    border: 2px solid rgba(239, 68, 68, 0.3);
+    background: linear-gradient(135deg, #ffffff 0%, #fef2f2 100%);
+}
+
+.dark .thought-bubble {
+    background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+    border-color: rgba(239, 68, 68, 0.4);
+}
+
+.thought-bubble::before {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    right: 7rem;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    pointer-events: none;
 }
 </style>

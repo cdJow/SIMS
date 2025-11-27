@@ -14,6 +14,8 @@ export default {
       errorMessage: "",
       successMessage: "",
       isLoading: false,
+      showTermsDialog: false,
+      showPrivacyDialog: false,
     };
   },
   setup() {
@@ -46,13 +48,19 @@ export default {
         this.isLoading = false;
       }
     },
+    openTermsDialog() {
+      this.showTermsDialog = true;
+    },
+    openPrivacyDialog() {
+      this.showPrivacyDialog = true;
+    },
   },
 };
 </script>
 
 
 <template>
-    <FloatingConfigurator />
+    
     <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
         <div class="w-full max-w-md">
             <!-- Logo and Header -->
@@ -199,12 +207,157 @@ export default {
             <div class="text-center mt-8">
                 <p class="text-sm text-gray-500 dark:text-gray-400">
                     By creating an account, you agree to our 
-                    <a href="#" class="text-primary-600 hover:text-primary-500 dark:text-primary-400">Terms of Service</a>
+                    <a 
+                        href="#" 
+                        @click.prevent="openTermsDialog"
+                        class="text-primary-600 hover:text-primary-500 dark:text-primary-400 hover:underline"
+                    >
+                        Terms of Service
+                    </a>
                     and 
-                    <a href="#" class="text-primary-600 hover:text-primary-500 dark:text-primary-400">Privacy Policy</a>
+                    <a 
+                        href="#" 
+                        @click.prevent="openPrivacyDialog"
+                        class="text-primary-600 hover:text-primary-500 dark:text-primary-400 hover:underline"
+                    >
+                        Privacy Policy
+                    </a>
                 </p>
             </div>
         </div>
+
+        <!-- Terms of Service Dialog -->
+        <Dialog 
+            v-model:visible="showTermsDialog" 
+            modal 
+            header="Terms of Service" 
+            :style="{ width: '50rem', maxHeight: '80vh' }"
+            :breakpoints="{ '1199px': '75vw', '575px': '90vw' }"
+            :dismissableMask="true"
+        >
+            <div class="space-y-4 text-gray-700 dark:text-gray-300 overflow-y-auto max-h-[60vh]">
+                <section>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">1. Acceptance of Terms</h3>
+                    <p class="text-sm">
+                        By using Woodland Suite Hotel's booking system, you agree to these Terms of Service.
+                    </p>
+                </section>
+
+                <section>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">2. Booking and Payment</h3>
+                    <ul class="list-disc list-inside text-sm space-y-1">
+                        <li>All bookings are subject to availability</li>
+                        <li>Payment must be made at check-in</li>
+                        <li>Check-in time: 2:00 PM | Check-out time: 12:00 PM</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">3. Cancellation</h3>
+                    <p class="text-sm">
+                        Cancel at least 24 hours before check-in to avoid charges.
+                    </p>
+                </section>
+
+                <section>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">4. Guest Responsibilities</h3>
+                    <ul class="list-disc list-inside text-sm space-y-1">
+                        <li>Provide valid ID at check-in</li>
+                        <li>You are responsible for any damage to hotel property</li>
+                        <li>No smoking in rooms</li>
+                        <li>Respect other guests (no excessive noise)</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">5. Contact Us</h3>
+                    <p class="text-sm">
+                        Email: info@woodlandsuites.com<br>
+                        Phone: 0956 680 1497
+                    </p>
+                </section>
+
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-6">
+                    Last Updated: October 18, 2025
+                </p>
+            </div>
+            
+            <template #footer>
+                <Button 
+                    label="Close" 
+                    @click="showTermsDialog = false" 
+                    class="p-button-text"
+                />
+            </template>
+        </Dialog>
+
+        <!-- Privacy Policy Dialog -->
+        <Dialog 
+            v-model:visible="showPrivacyDialog" 
+            modal 
+            header="Privacy Policy" 
+            :style="{ width: '50rem', maxHeight: '80vh' }"
+            :breakpoints="{ '1199px': '75vw', '575px': '90vw' }"
+            :dismissableMask="true"
+        >
+            <div class="space-y-4 text-gray-700 dark:text-gray-300 overflow-y-auto max-h-[60vh]">
+                <section>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">1. Information We Collect</h3>
+                    <ul class="list-disc list-inside text-sm space-y-1">
+                        <li>Personal information: Name, email, phone number</li>
+                        <li>Booking details: Check-in/check-out dates, room preferences</li>
+                        <li>Payment information: Cash payment records only</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">2. How We Use Your Information</h3>
+                    <ul class="list-disc list-inside text-sm space-y-1">
+                        <li>Process your bookings and reservations</li>
+                        <li>Communicate about your stay</li>
+                        <li>Improve our services</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">3. Information Protection</h3>
+                    <p class="text-sm">
+                        We do not sell or share your personal information with third parties. 
+                        Your data is kept secure and used only for hotel operations.
+                    </p>
+                </section>
+
+                <section>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">4. Your Rights</h3>
+                    <ul class="list-disc list-inside text-sm space-y-1">
+                        <li>Access your personal information</li>
+                        <li>Request correction of your data</li>
+                        <li>Request deletion of your account</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">5. Contact Us</h3>
+                    <p class="text-sm">
+                        If you have questions about your privacy, contact us at:<br>
+                        Email: info@woodlandsuites.com<br>
+                        Phone: 0956 680 1497
+                    </p>
+                </section>
+
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-6">
+                    Last Updated: October 18, 2025
+                </p>
+            </div>
+            
+            <template #footer>
+                <Button 
+                    label="Close" 
+                    @click="showPrivacyDialog = false" 
+                    class="p-button-text"
+                />
+            </template>
+        </Dialog>
     </div>
 </template>
 

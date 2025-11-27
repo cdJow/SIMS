@@ -251,13 +251,13 @@ onMounted(async () => {
 
     <!-- Password change -->
     <div>
-      <label class="block mb-1 text-sm font-medium text-gray-700">New Password</label>
-      <Password v-model="settingsForm.password" toggleMask class="w-full" inputClass="w-full" />
+      <label class="block mb-1 text-sm font-medium text-gray-700 mt-10">New Password</label>
+      <Password v-model="settingsForm.password" toggleMask class="w-full mb-10" inputClass="w-full" />
     </div>
 
     <div>
-      <label class="block mb-1 text-sm font-medium text-gray-700">Confirm Password</label>
-      <Password v-model="confirmPassword" toggleMask class="w-full" inputClass="w-full" />
+      <label class="block mb-1 text-sm font-medium text-gray-700 mt-10">Confirm Password</label>
+      <Password v-model="confirmPassword" toggleMask class="w-full mb-12" inputClass="w-full" />
       <div
         v-if="settingsForm.password && confirmPassword && settingsForm.password !== confirmPassword"
         class="text-red-500 text-xs mt-1"
@@ -281,7 +281,6 @@ onMounted(async () => {
 
 
     </div>
-    <Toast />
 
 </template>
 

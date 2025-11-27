@@ -47,17 +47,17 @@ const formatDateTime = (dateString) => {
 const getActionTypeColor = (actionType) => {
     switch(actionType?.toLowerCase()) {
         case 'stock in':
-            return 'text-green-600 bg-green-100';
+            return 'text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30';
         case 'sale':
-            return 'text-red-600 bg-red-100';
+            return 'text-red-700 dark:text-red-400 bg-red-100 dark:bg-red-900/30';
         case 'assigned':
-            return 'text-blue-600 bg-blue-100';
+            return 'text-blue-700 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30';
         case 'damage':
-            return 'text-orange-600 bg-orange-100';
+            return 'text-orange-700 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/30';
         case 'rental charge':
-            return 'text-purple-600 bg-purple-100';
+            return 'text-purple-700 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/30';
         default:
-            return 'text-gray-600 bg-gray-100';
+            return 'text-gray-700 dark:text-gray-400 bg-gray-100 dark:bg-gray-800/50';
     }
 };
 
@@ -102,10 +102,10 @@ onMounted(() => {
 <template>
         <div class="card">
             <!-- Header with Icon -->
-            <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3">
-                    <i class="pi pi-list text-xl text-blue-600"></i>
-                    <h2 class="text-xl font-semibold text-gray-900">Stock Movements</h2>
+                    <i class="pi pi-list text-xl text-blue-600 dark:text-blue-400"></i>
+                    <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">Stock Movements</h2>
                 </div>
                 <Button 
                     icon="pi pi-refresh" 
@@ -193,7 +193,7 @@ onMounted(() => {
                 style="width: 18%"
             >
                 <template #body="slotProps">
-                    <div class="text-sm text-gray-700">
+                    <div class="text-sm text-gray-700 dark:text-gray-300">
                         {{ formatDateTime(slotProps.data.dateTime) }}
                     </div>
                 </template>
@@ -207,7 +207,7 @@ onMounted(() => {
                 style="width: 20%"
             >
                 <template #body="slotProps">
-                    <div class="font-medium text-gray-900">
+                    <div class="font-medium text-gray-900 dark:text-gray-100">
                         {{ slotProps.data.itemName }}
                     </div>
                 </template>
@@ -239,9 +239,9 @@ onMounted(() => {
             >
                 <template #body="slotProps">
                     <div class="text-center font-semibold" :class="{
-                        'text-green-600': slotProps.data.qtyChanged > 0,
-                        'text-red-600': slotProps.data.qtyChanged < 0,
-                        'text-gray-600': slotProps.data.qtyChanged === 0
+                        'text-green-600 dark:text-green-400': slotProps.data.qtyChanged > 0,
+                        'text-red-600 dark:text-red-400': slotProps.data.qtyChanged < 0,
+                        'text-gray-600 dark:text-gray-400': slotProps.data.qtyChanged === 0
                     }">
                         {{ slotProps.data.qtyChanged > 0 ? '+' : '' }}{{ slotProps.data.qtyChanged }}
                     </div>
@@ -256,7 +256,7 @@ onMounted(() => {
                 style="width: 12%"
             >
                 <template #body="slotProps">
-                    <div class="text-center font-medium text-gray-700">
+                    <div class="text-center font-medium text-gray-700 dark:text-gray-300">
                         {{ slotProps.data.balance }}
                     </div>
                 </template>
@@ -270,7 +270,7 @@ onMounted(() => {
                 style="width: 10%"
             >
                 <template #body="slotProps">
-                    <div class="text-sm text-blue-600 font-medium">
+                    <div class="text-sm text-blue-600 dark:text-blue-400 font-medium">
                         {{ slotProps.data.reference }}
                     </div>
                 </template>
@@ -284,13 +284,10 @@ onMounted(() => {
                 style="width: 13%"
             >
                 <template #body="slotProps">
-                    <div class="text-sm text-gray-500 truncate" :title="slotProps.data.notes">
+                    <div class="text-sm text-gray-500 dark:text-gray-400 truncate" :title="slotProps.data.notes">
                         {{ slotProps.data.notes }}
                     </div>
                 </template>
             </Column>
         </DataTable>
-    </div>
-
-    <Toast />
-</template>
+    </div></template>

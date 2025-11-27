@@ -3,9 +3,6 @@ import { ref, computed, watch, onMounted } from "vue";
 import { useToast } from "primevue/usetoast";
 import { getProducts, addItem, generateBatchNumber, generateSerialNumbers, getCurrentQuantity } from "@/api/auth";
 
-
-
-
 const toast = useToast();
 const op2 = ref(null);
 const stockLimit = computed(() => selectedProduct.value?.stock_limit || 1);
@@ -29,6 +26,21 @@ const serialNumbers = ref(""); // comma-separated string
 
 const products = ref([]);
 const selectedProduct = ref(null);
+const searchQuery = ref("");
+
+// Filtered products based on search query
+const filteredProducts = computed(() => {
+  if (!searchQuery.value) {
+    return products.value;
+  }
+  
+  const query = searchQuery.value.toLowerCase();
+  return products.value.filter(product => {
+    const productName = (product.product_name || "").toLowerCase();
+    const brand = (product.brand || "").toLowerCase();
+    return productName.includes(query) || brand.includes(query);
+  });
+});
 
 const isConsumable = computed(
   () => selectedProduct.value?.category === "Consumable"
@@ -44,8 +56,6 @@ const maxQuantity = computed(() => {
   const left = stockLimit.value - currentStock.value;
   return left > 0 ? left : 0;
 });
-
-
 
 watch(selectedProduct, async (prod) => {
   quantity.value = 0;
@@ -69,7 +79,6 @@ watch(
       quantity.value = maxQuantity.value;
     }
     // ... rest of your logic ...
-  
 
     if (prod && prod.id) {
       // Generate batch number for any product
@@ -144,8 +153,6 @@ const clearForm = () => {
   serialNumbers.value = "";
   selectedProduct.value = null;
 };
-
-
 
 const fetchProducts = async () => {
   try {
@@ -397,7 +404,28 @@ onMounted(() => {
         <label>Select Product</label>
         <Button icon="pi pi-list" label="Choose Product" @click="toggleDataTable($event)" />
         <Popover ref="op2" id="overlay_panel" style="width: 70rem">
-          <DataTable v-model:selection="selectedProduct" :value="products" selectionMode="single" paginator :rows="5" @row-select="onProductSelect">
+          <div class="mb-3" style="max-width: 400px;">
+            <IconField iconPosition="left">
+              <InputIcon class="pi pi-search" />
+              <InputText 
+                v-model="searchQuery" 
+                placeholder="Search by Product Name or Brand..." 
+                style="width: 100%;"
+              />
+            </IconField>
+          </div>
+          <DataTable 
+            v-model:selection="selectedProduct" 
+            :value="filteredProducts" 
+            selectionMode="single" 
+            paginator 
+            :rows="5" 
+            @row-select="onProductSelect"
+            stripedRows
+            :pt="{
+              bodyRow: { style: 'height: 3.5rem;' }
+            }"
+          >
             <Column field="product_name" header="Product Name" sortable />
             <Column field="brand" header="Brand" sortable />
             <Column field="category" header="Category" sortable />
@@ -499,7 +527,5 @@ onMounted(() => {
       <Button label="Submit" :disabled="maxQuantity === 0 || !selectedProduct" class="px-32 py-4" @click="handleSubmitWithToast" />
       <Button label="Clear" :fluid="false" class="px-32 py-4" @click="clearForm" />
     </div>
-     <span v-if="maxQuantity === 0 && selectedProduct" class="text-red-500">Stock limit reached. Cannot add more.</span>
-    <Toast />
-  </div>
+     <span v-if="maxQuantity === 0 && selectedProduct" class="text-red-500">Stock limit reached. Cannot add more.</span></div>
 </template>

@@ -32,34 +32,15 @@ const filteredReservations = computed(() => {
         });
     }
     
-    // Apply time filter
-    if (filters.value?.checkInTime?.value) {
-        const filterTime = new Date(filters.value.checkInTime.value);
-        const filterHour = filterTime.getHours();
-        const filterMinute = filterTime.getMinutes();
-        
-        filtered = filtered.filter(reservation => {
-            const checkInDate = new Date(reservation.checkInDate);
-            const checkInHour = checkInDate.getHours();
-            const checkInMinute = checkInDate.getMinutes();
-            
-            // Match exact hour and minute
-            return checkInHour === filterHour && checkInMinute === filterMinute;
-        });
-    }
-    
     return filtered;
 });
 
 async function loadCheckIns() {
     try {
         loading.value = true;
-        console.log('Fetching check-in list...');
         const response = await fetchCheckInList();
-        console.log('Raw response:', response);
         
         if (!response.data || response.data.error) {
-            console.error('Server error:', response.data?.error);
             throw new Error(response.data?.error || 'Failed to load check-in list');
         }
         
@@ -74,7 +55,7 @@ async function loadCheckIns() {
             checkOutDate: new Date(booking.check_out_datetime),
             // Payment data from checkin_payments table
             paymentData: {
-                roomRate: parseFloat(booking.room_rate) || parseFloat(booking.selected_rate) || 0,
+                roomRate: parseFloat(booking.selected_rate) || 0, // Use selected_rate as the base room rate
                 extrasTotal: parseFloat(booking.extras_total) || 0,
                 amenitiesTotal: parseFloat(booking.amenities_total) || 0,
                 damageCharges: parseFloat(booking.damage_charges) || 0,
@@ -82,7 +63,12 @@ async function loadCheckIns() {
                 extendAmount: parseFloat(booking.extend_amount) || 0,
                 depositAmount: parseFloat(booking.deposit_amount) || 0,
                 totalDue: parseFloat(booking.total_due) || 0,
-                balanceDue: parseFloat(booking.total_due) || 0 // Check-in list shows pending payments
+                balanceDue: parseFloat(booking.total_due) || 0, // Check-in list shows pending payments
+                discountName: booking.discount_name || null,
+                discountPercent: parseFloat(booking.discount_percent) || 0,
+                discountAmount: parseFloat(booking.discount_amount) || 0, // Add manual discount amount
+                additionalPersonCount: parseInt(booking.additional_person_count) || 0,
+                additionalPersonTotal: parseFloat(booking.additional_person_total) || 0
             },
             paymentStatus: {
                 ratePaid: false, // Amount received not tracked in list view since it's in localStorage
@@ -98,20 +84,46 @@ async function loadCheckIns() {
             notes: booking.note,
             extras_total: parseFloat(booking.extras_total) || 0,
             amenities_total: parseFloat(booking.amenities_total) || 0,
-            rentalAmenities: booking.rental_amenities ? booking.rental_amenities.split(',').map(item => item.trim()) : [],
-            consumableProducts: booking.consumable_products ? 
+            // Parse rental amenities from "Amenity Name - Price" format
+            rentalAmenities: booking.rental_amenities ? 
+                booking.rental_amenities.split(',').map(item => {
+                    const trimmed = item.trim();
+                    const parts = trimmed.split(' - ');
+                    if (parts.length >= 2) {
+                        return {
+                            amenity_name: parts[0].trim(),
+                            unit_rental_price: parseFloat(parts[1].trim()) || 0
+                        };
+                    }
+                    return { amenity_name: trimmed, unit_rental_price: 0 };
+                }).filter(a => a.amenity_name) : [],
+            // Parse consumables from "Product Name - Quantity x Price = Total" format
+            consumables: booking.consumable_products ? 
                 booking.consumable_products.split('||').map(item => {
-                    const parts = item.trim().split(' - ');
-                    return {
-                        name: parts[0] || '',
-                        quantity: parts[1] || '',
-                        price: parts[2] || '0'
-                    };
-                }) : [],
-            discount: {
-                name: booking.discount_name,
-                percent: booking.discount_percent
-            }
+                    const trimmed = item.trim();
+                    
+                    // Parse format: "Product Name - Quantity x Price = Total"
+                    const mainParts = trimmed.split(' - ');
+                    if (mainParts.length < 2) {
+                        return null;
+                    }
+                    
+                    const productName = mainParts[0];
+                    const rest = mainParts[1]; // "Quantity x Price = Total"
+                    
+                    // Parse the "Quantity x Price = Total" part
+                    const match = rest.match(/^(\d+(?:,\d+)?(?:\.\d+)?)\s*x\s*(\d+(?:,\d+)?(?:\.\d+)?)\s*=\s*(\d+(?:,\d+)?(?:\.\d+)?)$/);
+                    if (match) {
+                        return {
+                            product_name: productName,
+                            quantity: parseFloat(match[1].replace(/,/g, '')),
+                            price: parseFloat(match[2].replace(/,/g, '')),
+                            total_item_cost: parseFloat(match[3].replace(/,/g, ''))
+                        };
+                    }
+                    return null;
+                }).filter(c => c !== null) : [],
+            checkInStatus: booking.status
         }));
     } catch (error) {
         console.error("Error loading check-in list:", error);
@@ -128,12 +140,12 @@ onBeforeMount(() => {
     initFilters();
 });
 
-const op = ref();
+const showDetailsDialog = ref(false);
 const selectedReservation = ref(null);
 
-const handleClick = (event, reservation) => {
+const handleClick = (reservation) => {
     selectedReservation.value = reservation;
-    op.value.toggle(event);
+    showDetailsDialog.value = true;
 };
 
 function initFilters() {
@@ -143,8 +155,7 @@ function initFilters() {
             operator: FilterOperator.AND,
             constraints: [{ value: null, matchMode: FilterMatchMode.CONTAINS }],
         },
-        checkInDate: { value: null, matchMode: FilterMatchMode.DATE_IS },
-        checkInTime: { value: null, matchMode: FilterMatchMode.CONTAINS }
+        checkInDate: { value: null, matchMode: FilterMatchMode.DATE_IS }
     };
 }
 
@@ -153,6 +164,23 @@ function formatCurrency(value) {
         style: "currency",
         currency: "PHP",
     });
+}
+
+const calculateDiscountedRate = (originalRate, paymentData) => {
+    if (!originalRate) return 0
+    
+    // Manual discount takes precedence
+    if (paymentData.discountAmount > 0) {
+        return Math.max(0, originalRate - paymentData.discountAmount)
+    }
+    
+    // Percentage discount
+    if (paymentData.discountPercent > 0) {
+        const discountAmount = (originalRate * paymentData.discountPercent) / 100
+        return Math.max(0, originalRate - discountAmount)
+    }
+    
+    return originalRate
 }
 </script>
 
@@ -184,14 +212,6 @@ function formatCurrency(value) {
                 showIcon
                 dateFormat="mm/dd/yy"
                 style="width: 200px"
-            />
-            <DatePicker  
-                v-model="filters['checkInTime'].value"
-                placeholder="Select Time"
-                timeOnly
-                showIcon
-                hourFormat="12"
-                style="width: 150px"
             />
         </div>
         
@@ -256,7 +276,7 @@ function formatCurrency(value) {
                 </template>
             </Column>
 
-            <!-- Action Column with Popover -->
+            <!-- Action Column with Dialog -->
             <Column header="Actions" style="min-width: 100px">
                 <template #body="{ data }">
                     <Button
@@ -264,192 +284,307 @@ function formatCurrency(value) {
                         class="p-button-info"
                         outlined
                         rounded
-                        @click="handleClick($event, data)"
+                        @click="handleClick(data)"
                     />
                 </template>
             </Column>
         </DataTable>
 
-        <!-- Popover Overlay -->
-        <Popover ref="op">
-            <div class="p-4 bg-white dark:bg-gray-800" v-if="selectedReservation">
-                <!-- Main Horizontal Container -->
-                <div class="flex flex-row gap-4">
-                    <!-- Left Column -->
-                    <div class="flex-1 flex flex-col gap-3 min-w-[200px]">
-                        <!-- Guest Name -->
-                        <div class="font-bold text-lg border-b border-gray-200 dark:border-gray-600 pb-2 text-gray-900 dark:text-gray-100">
-                            {{ selectedReservation.guestName }}
+        <!-- Details Dialog -->
+        <Dialog
+            v-model:visible="showDetailsDialog"
+            modal
+            header="Check-In Details"
+            :style="{ width: '90vw', maxWidth: '1200px' }"
+            class="p-fluid"
+            :dismissableMask="true"
+        >
+            <div class="p-6" v-if="selectedReservation">
+                <!-- Guest Header Section -->
+                <div class="mb-6 pb-4 border-b border-gray-200 dark:border-gray-600">
+                    <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+                        {{ selectedReservation.guestName }}
+                    </h2>
+                    <div class="flex flex-wrap gap-4 items-center">
+                        <div class="flex items-center gap-2">
+                            <i class="pi pi-home text-blue-500"></i>
+                            <span class="text-gray-700 dark:text-gray-300">{{ selectedReservation.roomType }}</span>
                         </div>
-
-                        <!-- Room Details -->
-                        <div class="flex flex-col gap-2">
-                            <div>
-                                <label class="font-medium text-gray-700 dark:text-gray-300">Room Type:</label>
-                                <div class="mt-1 text-gray-900 dark:text-gray-100">
-                                    {{ selectedReservation.roomType }}
-                                </div>
-                            </div>
-                            <div>
-                                <label class="font-medium text-gray-700 dark:text-gray-300"
-                                    >Selected Hours:</label
-                                >
-                                <Tag
-                                    :value="`${selectedReservation.selectedHours}hrs`"
-                                    severity="info"
-                                    class="mt-1"
-                                />
-                            </div>
+                        <div class="flex items-center gap-2">
+                            <i class="pi pi-door-open text-purple-500"></i>
+                            <span class="text-gray-700 dark:text-gray-300">Room {{ selectedReservation.roomNumber }}</span>
+                        </div>
+                        <Tag
+                            :value="`${selectedReservation.selectedHours}hrs`"
+                            severity="info"
+                        />
+                        <div class="flex items-center gap-2">
+                            <i class="pi pi-money-bill text-green-500"></i>
+                            <span class="font-semibold text-gray-900 dark:text-gray-100">
+                                {{ formatCurrency(selectedReservation.selectedRate) }}
+                            </span>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Middle Column -->
-                    <div class="flex-1 flex flex-col gap-3 min-w-[250px]">
-                        <div>
-                            <label class="text-gray-700 dark:text-gray-300"> Rate</label>
-                            <div class="flex items-center gap-1">
-                                <i class="pi pi-money-bill text-blue-500"></i>
-                                <span class="text-gray-900 dark:text-gray-100">{{
-                                    formatCurrency(
-                                        selectedReservation.selectedRate,
-                                    )
-                                }}</span>
+                <!-- Main Content Grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Left Column - Booking & Payment Info -->
+                    <div class="space-y-4">
+                        <!-- Contact Information Card -->
+                        <div class="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                            <h3 class="font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
+                                <i class="pi pi-user text-blue-500"></i>
+                                Contact Information
+                            </h3>
+                            <div class="space-y-2">
+                                <div class="flex items-center gap-2">
+                                    <i class="pi pi-phone text-gray-500"></i>
+                                    <span class="text-gray-700 dark:text-gray-300">{{ selectedReservation.contactInfo.cellphone || 'N/A' }}</span>
+                                </div>
+                                <div v-if="selectedReservation.contactInfo.email" class="flex items-center gap-2">
+                                    <i class="pi pi-envelope text-gray-500"></i>
+                                    <span class="text-gray-700 dark:text-gray-300">{{ selectedReservation.contactInfo.email }}</span>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Discount Information -->
-                        <div v-if="selectedReservation.discount.name" class="bg-green-50 dark:bg-green-900/30 p-3 rounded">
-                            <div class="flex items-center gap-2 text-green-700 dark:text-green-300 mb-2">
-                                <i class="pi pi-percentage"></i>
-                                <span class="text-sm font-medium">Discount Applied</span>
-                            </div>
-                            <div class="text-sm">
-                                <div class="text-gray-800 dark:text-gray-200">{{ selectedReservation.discount.name }}</div>
-                                <div class="text-green-600 dark:text-green-400 font-medium">{{ selectedReservation.discount.percent }}% off</div>
+                        <!-- Check-in/Check-out Times -->
+                        <div v-if="selectedReservation.checkInDate || selectedReservation.checkOutDate" class="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg">
+                            <h3 class="font-semibold text-blue-700 dark:text-blue-300 mb-3 flex items-center gap-2">
+                                <i class="pi pi-clock"></i>
+                                Check-in/Expected Checkout
+                            </h3>
+                            <div class="space-y-2">
+                                <div v-if="selectedReservation.checkInDate" class="flex justify-between items-center">
+                                    <span class="text-gray-700 dark:text-gray-300">Check-in:</span>
+                                    <span class="font-medium text-gray-900 dark:text-gray-100">{{ selectedReservation.checkInDate.toLocaleString('en-US', {
+                                        year: 'numeric',
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: 'numeric',
+                                        minute: '2-digit',
+                                        hour12: true
+                                    }) }}</span>
+                                </div>
+                                <div v-if="selectedReservation.checkOutDate" class="flex justify-between items-center">
+                                    <span class="text-gray-700 dark:text-gray-300">Expected Checkout:</span>
+                                    <span class="font-medium text-gray-900 dark:text-gray-100">{{ selectedReservation.checkOutDate.toLocaleString('en-US', {
+                                        year: 'numeric',
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: 'numeric',
+                                        minute: '2-digit',
+                                        hour12: true
+                                    }) }}</span>
+                                </div>
                             </div>
                         </div>
 
                         <!-- Payment Summary -->
-                        <div class="bg-blue-50 dark:bg-blue-900/30 p-3 rounded">
-                            <div class="flex items-center gap-2 text-blue-700 dark:text-blue-300 mb-2">
-                                <i class="pi pi-credit-card"></i>
-                                <span class="text-sm font-medium">Payment Summary</span>
+                        <div v-if="selectedReservation.paymentData" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-4 rounded-lg">
+                            <h3 class="font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
+                                <i class="pi pi-credit-card text-green-500"></i>
+                                Payment Summary
+                            </h3>
+                            <div class="space-y-2">
+                                <!-- Discount Information -->
+                                <div v-if="selectedReservation.paymentData.discountName || selectedReservation.paymentData.discountAmount > 0" class="bg-green-50 dark:bg-green-900/30 p-3 rounded mb-3">
+                                    <!-- Percentage Discount -->
+                                    <div v-if="selectedReservation.paymentData.discountName && selectedReservation.paymentData.discountPercent > 0" class="flex items-center justify-between mb-2">
+                                        <div class="flex items-center gap-2">
+                                            <i class="pi pi-percentage text-green-600"></i>
+                                            <span class="font-medium text-green-700 dark:text-green-300">{{ selectedReservation.paymentData.discountName }}</span>
+                                        </div>
+                                        <span class="bg-green-200 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
+                                            {{ selectedReservation.paymentData.discountPercent }}% off
+                                        </span>
+                                    </div>
+                                    <!-- Manual Discount -->
+                                    <div v-if="selectedReservation.paymentData.discountAmount > 0" class="flex items-center justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <i class="pi pi-money-bill text-green-600"></i>
+                                            <span class="font-medium text-green-700 dark:text-green-300">Manual Discount</span>
+                                        </div>
+                                        <span class="bg-green-200 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
+                                            {{ formatCurrency(selectedReservation.paymentData.discountAmount) }}
+                                        </span>
+                                    </div>
+                                </div>
+                                
+                                <!-- Payment Breakdown -->
+                                <div class="space-y-2">
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-gray-600 dark:text-gray-400">Room Rate:</span>
+                                        <div class="text-right">
+                                            <!-- Show discount calculation if there's a discount -->
+                                            <div v-if="selectedReservation.paymentData.discountAmount > 0 || (selectedReservation.paymentData.discountName && selectedReservation.paymentData.discountPercent > 0)" class="flex flex-col items-end">
+                                                <!-- Original price with red strikethrough -->
+                                                <span class="text-sm text-red-500 dark:text-red-400 line-through">
+                                                    {{ formatCurrency(selectedReservation.paymentData.roomRate) }}
+                                                </span>
+                                                <!-- Discounted price -->
+                                                <span class="font-medium text-gray-900 dark:text-gray-100">
+                                                    {{ formatCurrency(calculateDiscountedRate(selectedReservation.paymentData.roomRate, selectedReservation.paymentData)) }}
+                                                </span>
+                                                <!-- Discount amount/percentage -->
+                                                <span class="text-xs text-green-600 dark:text-green-400">
+                                                    <span v-if="selectedReservation.paymentData.discountAmount > 0">-{{ formatCurrency(selectedReservation.paymentData.discountAmount) }}</span>
+                                                    <span v-else-if="selectedReservation.paymentData.discountPercent > 0">-{{ selectedReservation.paymentData.discountPercent }}%</span>
+                                                </span>
+                                            </div>
+                                            <!-- No discount - show regular price -->
+                                            <span v-else class="font-medium text-gray-900 dark:text-gray-100">
+                                                {{ formatCurrency(selectedReservation.paymentData.roomRate) }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div v-if="selectedReservation.paymentData.extendAmount > 0" class="flex justify-between items-center">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-gray-600 dark:text-gray-400">Extend Charges:</span>
+                                            <span v-if="selectedReservation.paymentData.extendHours > 0" class="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs font-medium">
+                                                {{ selectedReservation.paymentData.extendHours }}h
+                                            </span>
+                                        </div>
+                                        <span class="font-medium text-gray-900 dark:text-gray-100">{{ formatCurrency(selectedReservation.paymentData.extendAmount) }}</span>
+                                    </div>
+                                    <div v-if="selectedReservation.paymentData.extrasTotal > 0" class="flex justify-between items-center">
+                                        <span class="text-gray-600 dark:text-gray-400">Consumables:</span>
+                                        <span class="font-medium text-gray-900 dark:text-gray-100">{{ formatCurrency(selectedReservation.paymentData.extrasTotal) }}</span>
+                                    </div>
+                                    <div v-if="selectedReservation.paymentData.amenitiesTotal > 0" class="flex justify-between items-center">
+                                        <span class="text-gray-600 dark:text-gray-400">Amenities:</span>
+                                        <span class="font-medium text-gray-900 dark:text-gray-100">{{ formatCurrency(selectedReservation.paymentData.amenitiesTotal) }}</span>
+                                    </div>
+                                    <div v-if="selectedReservation.paymentData.additionalPersonCount > 0" class="flex justify-between items-center">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-gray-600 dark:text-gray-400">Additional Person:</span>
+                                            <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium">
+                                                {{ selectedReservation.paymentData.additionalPersonCount }} person{{ selectedReservation.paymentData.additionalPersonCount > 1 ? 's' : '' }}
+                                            </span>
+                                        </div>
+                                        <span class="font-medium text-gray-900 dark:text-gray-100">{{ formatCurrency(selectedReservation.paymentData.additionalPersonTotal) }}</span>
+                                    </div>
+                                    <div v-if="selectedReservation.paymentData.damageCharges > 0" class="flex justify-between items-center">
+                                        <span class="text-red-600 dark:text-red-400">Damage Charges:</span>
+                                        <span class="font-medium text-red-600 dark:text-red-400">{{ formatCurrency(selectedReservation.paymentData.damageCharges) }}</span>
+                                    </div>
+                                
+                                    <div v-if="selectedReservation.paymentData.depositAmount > 0" class="flex justify-between items-center">
+                                        <span class="text-blue-600 dark:text-blue-400">Deposit Paid:</span>
+                                        <span class="font-medium text-blue-600 dark:text-blue-400">{{ formatCurrency(selectedReservation.paymentData.depositAmount) }}</span>
+                                    </div>
+                                    <div class="border-t border-gray-200 dark:border-gray-600 pt-2 flex justify-between items-center">
+                                        <span class="font-semibold text-gray-900 dark:text-gray-100">Total Due:</span>
+                                        <span class="font-bold text-lg text-gray-900 dark:text-gray-100">{{ formatCurrency(selectedReservation.paymentData.totalDue) }}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-gray-600 dark:text-gray-400">Payment Status:</span>
+                                        <span class="flex items-center gap-1 text-green-600 dark:text-green-400 font-medium">
+                                            <i class="pi pi-check-circle"></i>
+                                            Fully Paid
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="space-y-1 text-sm text-gray-800 dark:text-gray-200">
-                                <div class="flex justify-between">
-                                    <span>Room Rate:</span>
-                                    <span>{{ formatCurrency(selectedReservation.paymentData.roomRate) }}</span>
-                                </div>
-                                <div v-if="selectedReservation.paymentData.extendAmount > 0" class="flex justify-between">
-                                    <span>Extend Charges <span v-if="selectedReservation.paymentData.extendHours > 0" class="bg-orange-200 text-orange-800 px-2 py-1 rounded-full text-xs font-medium ml-2">{{ selectedReservation.paymentData.extendHours }}h</span>:</span>
-                                    <span>{{ formatCurrency(selectedReservation.paymentData.extendAmount) }}</span>
-                                </div>
-                                <div v-if="selectedReservation.paymentData.extrasTotal > 0" class="flex justify-between">
-                                    <span>Consumables:</span>
-                                    <span>{{ formatCurrency(selectedReservation.paymentData.extrasTotal) }}</span>
-                                </div>
-                                <div v-if="selectedReservation.paymentData.amenitiesTotal > 0" class="flex justify-between">
-                                    <span>Amenities:</span>
-                                    <span>{{ formatCurrency(selectedReservation.paymentData.amenitiesTotal) }}</span>
-                                </div>
-                                <div v-if="selectedReservation.paymentData.damageCharges > 0" class="flex justify-between text-red-600">
-                                    <span>Damage Charges:</span>
-                                    <span>{{ formatCurrency(selectedReservation.paymentData.damageCharges) }}</span>
-                                </div>
-                                <div v-if="selectedReservation.paymentData.depositAmount > 0" class="flex justify-between text-blue-600">
-                                    <span>Deposit Paid:</span>
-                                    <span>{{ formatCurrency(selectedReservation.paymentData.depositAmount) }}</span>
-                                </div>
-                                <div class="border-t pt-1 font-medium flex justify-between">
-                                    <span>Total Due:</span>
-                                    <span>{{ formatCurrency(selectedReservation.paymentData.totalDue) }}</span>
-                                </div>
-                                <div class="flex justify-between text-green-600 font-medium">
-                                    <span>Payment Status:</span>
-                                    <span>✓ Paid</span>
-                                </div>
+                        </div>
+                        <div v-else class="bg-yellow-50 dark:bg-yellow-900/30 p-4 rounded-lg">
+                            <div class="flex items-center gap-2 text-yellow-700 dark:text-yellow-300">
+                                <i class="pi pi-info-circle"></i>
+                                <span class="font-medium">No check-in payment recorded yet</span>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Right Column -->
-                    <div class="flex-1 flex flex-col gap-3 min-w-[200px]">
-                        <!-- Contact & Amenities -->
-                        <div class="flex flex-col gap-2">
-                            <div>
-                                <label class="font-medium text-gray-700 dark:text-gray-300">Contact Info:</label>
-                                <div class="mt-1 flex flex-col gap-1">
-                                    <div class="flex items-center gap-2 text-gray-800 dark:text-gray-200">
-                                        <i class="pi pi-phone text-blue-500"></i>
-                                        {{ selectedReservation.contactInfo.cellphone }}
-                                    </div>
-                                    <div class="flex items-center gap-2 text-gray-800 dark:text-gray-200">
-                                        <i class="pi pi-envelope text-blue-500"></i>
-                                        {{ selectedReservation.contactInfo.email }}
-                                    </div>
-                                </div>
-                            </div>
-                            <div>
-                                <i class="pi pi-box text-blue-500 mr-2"></i>
-                                <label class="font-medium text-gray-700 dark:text-gray-300">Rented Amenities:</label>
-                                <div class="mt-1">
-                                    <div v-if="selectedReservation.rentalAmenities.length > 0" 
-                                         class="overflow-y-auto" 
-                                         style="max-height: 50px;">
-                                        <div
-                                            v-for="(amenity, index) in selectedReservation.rentalAmenities"
-                                            :key="index"
-                                            class="flex items-center justify-between gap-2 py-1 border-b last:border-b-0 border-gray-100 dark:border-gray-600"
-                                        >
-                                            <div class="flex items-center gap-2">
-                                                <span class="text-gray-800 dark:text-gray-200">{{ amenity.split(' - ')[0] }}</span>
-                                            </div>
-                                            <span class="text-green-600 dark:text-green-400 font-medium">₱{{ parseFloat(amenity.split(' - ')[1]).toFixed(2) }}</span>
+                    <!-- Right Column - Items & Services -->
+                    <div class="space-y-4">
+                        <!-- Consumables -->
+                        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-4 rounded-lg">
+                            <h3 class="font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
+                                <i class="pi pi-shopping-cart text-orange-500"></i>
+                                Consumables
+                            </h3>
+                            <div v-if="selectedReservation.consumables && selectedReservation.consumables.length > 0"
+                                 class="space-y-2 max-h-40 overflow-y-auto">
+                                <div v-for="(consumable, idx) in selectedReservation.consumables" 
+                                     :key="idx"
+                                     class="flex items-center justify-between gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded">
+                                    <div class="flex-1">
+                                        <div class="font-medium text-gray-900 dark:text-gray-100 text-sm">
+                                            {{ consumable.product_name }}
+                                        </div>
+                                        <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                                            <span class="bg-gray-200 dark:bg-gray-600 px-2 py-0.5 rounded">
+                                                Qty: {{ consumable.quantity }}
+                                            </span>
+                                            <span>@ {{ formatCurrency(consumable.price) }}</span>
                                         </div>
                                     </div>
-                                    <div v-else class="text-gray-500 dark:text-gray-400 italic">
-                                        No rented amenities
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Consumables (Extras Bill) -->
-                            <div>
-                                <i class="pi pi-shopping-cart text-blue-500 mr-2"></i>
-                                <label class="font-medium text-gray-700 dark:text-gray-300">Consumables:</label>
-                                <div class="mt-1">
-                                    <div v-if="selectedReservation.consumableProducts.length > 0"
-                                         class="overflow-y-auto"
-                                         style="max-height: 100px;">
-                                        <div
-                                            v-for="(product, index) in selectedReservation.consumableProducts"
-                                            :key="index"
-                                            class="flex items-center justify-between gap-2 py-1 border-b last:border-b-0 border-gray-100 dark:border-gray-600"
-                                        >
-                                            <div class="flex items-center gap-2">
-                                                <span class="text-gray-800 dark:text-gray-200">{{ product.name }}</span>
-                                                <span class="text-gray-500 dark:text-gray-400">{{ product.quantity }}</span>
-                                            </div>
-                                           
+                                    <div class="text-right">
+                                        <div class="font-semibold text-orange-600 dark:text-orange-400">
+                                            {{ formatCurrency(consumable.total_item_cost) }}
                                         </div>
                                     </div>
-                                    <div v-else class="text-gray-500 dark:text-gray-400 italic">
-                                        No consumables
+                                </div>
+                                <div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600 flex justify-between items-center">
+                                    <span class="font-medium text-gray-700 dark:text-gray-300">Total Consumables:</span>
+                                    <span class="font-bold text-orange-600 dark:text-orange-400">
+                                        {{ formatCurrency(selectedReservation.paymentData.extrasTotal) }}
+                                    </span>
+                                </div>
+                            </div>
+                            <div v-else class="text-center py-4">
+                                <i class="pi pi-shopping-cart text-4xl text-gray-300 dark:text-gray-600 mb-2"></i>
+                                <p class="text-gray-500 dark:text-gray-400 text-sm">No consumables ordered</p>
+                            </div>
+                        </div>
+
+                        <!-- Rented Amenities -->
+                        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-4 rounded-lg">
+                            <h3 class="font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
+                                <i class="pi pi-box text-purple-500"></i>
+                                Rented Amenities
+                            </h3>
+                            <div v-if="selectedReservation.rentalAmenities && selectedReservation.rentalAmenities.length > 0" 
+                                 class="space-y-2 max-h-40 overflow-y-auto">
+                                <div v-for="(amenity, index) in selectedReservation.rentalAmenities" 
+                                     :key="index"
+                                     class="flex items-center justify-between gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded">
+                                    <div class="flex-1">
+                                        <div class="font-medium text-gray-900 dark:text-gray-100 text-sm">
+                                            {{ amenity.amenity_name }}
+                                        </div>
+                                    </div>
+                                    <div class="font-semibold text-purple-600 dark:text-purple-400">
+                                        {{ formatCurrency(amenity.unit_rental_price) }}
                                     </div>
                                 </div>
+                                <div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600 flex justify-between items-center">
+                                    <span class="font-medium text-gray-700 dark:text-gray-300">Total Amenities:</span>
+                                    <span class="font-bold text-purple-600 dark:text-purple-400">
+                                        {{ formatCurrency(selectedReservation.paymentData.amenitiesTotal) }}
+                                    </span>
+                                </div>
+                            </div>
+                            <div v-else class="text-center py-4">
+                                <i class="pi pi-box text-4xl text-gray-300 dark:text-gray-600 mb-2"></i>
+                                <p class="text-gray-500 dark:text-gray-400 text-sm">No amenities rented</p>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Notes (Full Width) -->
-                <div class="mt-4 pt-3 border-t border-gray-200 dark:border-gray-600">
+                <div v-if="selectedReservation.notes" class="mt-4 pt-3 border-t border-gray-200 dark:border-gray-600">
                     <label class="font-medium text-gray-700 dark:text-gray-300">Notes:</label>
                     <div class="p-2 bg-gray-100 dark:bg-gray-700 rounded mt-1 text-gray-800 dark:text-gray-200">
                         {{ selectedReservation.notes || "No special notes" }}
                     </div>
                 </div>
             </div>
-        </Popover>
+        </Dialog>
     </div>
 </template>
+
+<style scoped>
+</style>

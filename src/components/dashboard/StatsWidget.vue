@@ -15,6 +15,8 @@ export default {
                     { name: "Room Revenue", amount: 0, percentage: 0 },
                     { name: "Consumables", amount: 0, percentage: 0 },
                     { name: "Amenities", amount: 0, percentage: 0 },
+                    { name: "Additional Person", amount: 0, percentage: 0 },
+                    { name: "Damage Charges", amount: 0, percentage: 0 },
                 ],
             },
             _timer: null,
@@ -229,7 +231,7 @@ export default {
                                     'bg-blue-500': index === 0,
                                     'bg-green-500': index === 1,
                                     'bg-purple-500': index === 2,
-                                    'bg-pink-500': index === 3,
+                                    'bg-red-500': index === 3,
                                 }"
                                 :style="{ width: category.percentage + '%' }"
                             ></div>

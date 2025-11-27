@@ -514,5 +514,4 @@ const showToast = (severity, summary, detail) => {
             </template>
         </Dialog>
     </div>
-    <toast />
 </template>

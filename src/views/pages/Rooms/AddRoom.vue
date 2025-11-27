@@ -3,7 +3,6 @@ import { ref, computed, onMounted } from "vue";
 import { useToast } from "primevue/usetoast";
 import { getRoomTypes, getAvailableAmenities, getAvailableAmenitiesAddRoom, addRoom, fetchRoomCategories, getRooms, getSerialTypes  } from "@/api/auth";
 
-
 const amenityTypes = ref([]);
 const selectedType = ref(null);
 
@@ -41,7 +40,6 @@ function floorExistsNum(n) {
   return floorOptions.value.some(o => o.value === n) ||
          (existingRooms.value || []).some(r => normalizeFloor(r.floor_number) === n);
 }
-
 
 const floorExists = computed(() => {
   const n = newFloorNumber.value;
@@ -141,8 +139,6 @@ function syncFloorOptionsFromRooms() {
   floorOptions.value.sort((a, b) => a.value - b.value);
 }
 
-
-
 let lastPreviewUrl = null;
 
 async function setImageFromUrl(url, filename = 'sample.jpg') {
@@ -235,12 +231,9 @@ function useExistingRoom(room) {
   showExistingDialog.value = false;
 }
 
-
-
 const isAmenitiesDialogVisible = ref(false);
 
 const amenitySearch = ref("");
-
 
 function clearAmenitySearch() {
   amenitySearch.value = "";
@@ -257,8 +250,6 @@ function canClickStep(step) {
   return step === maxStep + 1;
 }
 
-
-
 // Selection handling
 const selectedAmenities = ref([]); // Will be set to your selectedItems logic
 
@@ -270,7 +261,6 @@ function confirmAmenitiesSelection() {
 function closeAmenitiesDialog() {
   isAmenitiesDialogVisible.value = false;
 }
-
 
 const existingRooms = ref([]);
 
@@ -314,9 +304,6 @@ const roomsByFloor = computed(() => {
   });
 });
 
-
-
-
 const nextRoomNumber = computed(() => {
   const nums = existingRooms.value
     .map(r => parseInt(r.room_number, 10))
@@ -332,7 +319,6 @@ const isRoomNumberDuplicate = computed(() => {
     room => room.room_number.toString().trim().toLowerCase() === newRoom.value.roomName.toString().trim().toLowerCase()
   );
 });
-
 
 const availableAmenities = computed(() => {
   let filtered = filteredData.value;
@@ -353,7 +339,6 @@ const availableAmenities = computed(() => {
   }
   return filtered;
 });
-
 
 const fetchAmenities = async () => {
     try {
@@ -385,7 +370,6 @@ const fetchAmenities = async () => {
         toast.add({ severity: "error", summary: "Amenities error", detail: e.message, life: 3000 });
     }
 };
-
 
 onMounted(async () => {
 
@@ -442,7 +426,6 @@ function validateGeneralInfo() {
   nextStep();
 }
 
-
 function validateRates() {
   if (!selectedRoomType.value) {
     toast.add({
@@ -473,7 +456,6 @@ function nextStep() {
     currentStep.value++;
   }
 }
-
 
 function prevStep() {
     if (currentStep.value > 1) currentStep.value--;
@@ -637,9 +619,6 @@ async function saveRoom() {
 }
 </script>
 
-
-
-
 <template>
     <div class="card">
         <h1 class="text-2xl font-bold mb-4">Add New Room</h1>
@@ -669,7 +648,6 @@ async function saveRoom() {
 </Stepper>
         </div>
 
-      
         <!-- Step 1: General Information -->
         <div v-if="currentStep === 1" class="space-y-4">
             <!-- Image Upload -->
@@ -731,7 +709,6 @@ async function saveRoom() {
   </span>
 </div>
 
-
 <div class="mt-2">
   <Button
     label="View Existing Rooms"
@@ -741,7 +718,6 @@ async function saveRoom() {
     @click="showExistingDialog = true"
   />
 </div>
-
 
 <Dialog
   v-model:visible="showExistingDialog"
@@ -1341,7 +1317,6 @@ async function saveRoom() {
   </div>
 </Dialog>
 
-
                 <!-- Navigation Buttons -->
                 <div class="flex justify-between mt-5">
                     <Button
@@ -1688,7 +1663,5 @@ async function saveRoom() {
   <template #footer>
     <Button label="Close" icon="pi pi-times" @click="manageFloorsVisible = false" />
   </template>
-</Dialog>
-        <Toast />
-    </div>
+</Dialog></div>
 </template>

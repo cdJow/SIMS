@@ -2,9 +2,9 @@
 import { ref, onMounted, onUnmounted, computed, watch } from "vue";
 import { getRooms, getRoomTypeRates, bookRoom, fetchLatestBooking, cancelBooking, checkInBooking, checkoutRoom, cleaningComplete, fetchPOSProducts, fetchPOSPreview, posCheckout, fetchDiscounts, getAvailableAmenities, getRoomSerialNumbers, updateRoomSerialNumbers, createCheckinPayment, updateCheckinPaymentNote, updateCheckinPaymentAmount, extendCheckinPayment, extendBooking, updateCheckinPaymentExtras } from "@/api/auth";
 import { useToast } from "primevue/usetoast";
+import { useConfirm } from "primevue/useconfirm";
 import RoomSummary from "./RoomSummary.vue";
 //extend rates
-
 
 const extendRates = ref({ "6": 0, "12": 0, "24": 0 });   // fetched via getRoomTypeRates
 const extendHoursSel = ref(null);                        // 6 | 12 | 24
@@ -34,6 +34,21 @@ const selectedExtendDuration = ref(null);
 const settingExtendedHours = ref(false); // Flag to prevent watch interference
 const preventingAutoRefetch = ref(false); // Flag to prevent automatic refetch during extension
 
+// Transaction Report
+const transactionReportDialogVisible = ref(false);
+const transactionReportStartDate = ref(null);
+const transactionReportEndDate = ref(null);
+const transactionReportStartTime = ref(null);
+const transactionReportEndTime = ref(null);
+const transactionReportData = ref({
+    checkinPayments: [],
+    bills: [],
+    totalCheckinPayments: 0,
+    totalBills: 0,
+    grandTotal: 0
+});
+const loadingTransactionReport = ref(false);
+
 // Calculate daily rates for extend based on 24-hour rate
 const extendDailyRates = computed(() => {
     const rate24h = extendRates.value?.["24"] || 0;
@@ -55,7 +70,6 @@ const extendDailyRates = computed(() => {
 const extendAmountPD = computed(() =>
   Number(selectedRoom.value?.guestDetails?.extend?.amount || 0)
 );
-
 
 function resetExtensionForm() {
   extendHoursSel.value = null;
@@ -137,7 +151,6 @@ async function openExtendDialog(room) {
 
   extendDialogVisible.value = true;
 }
-
 
 function validateExtendInputs() {
   const hours = Number(extendHoursSel.value || 0);
@@ -349,12 +362,7 @@ async function confirmExtension() {
   }
 }
 
-
-
 //--------------discounts-----------
-
-
-
 
 const discounts = ref([]); // [{ id, name, percent, status }]
 
@@ -367,6 +375,24 @@ const selectedDiscount = computed(() =>
   activeDiscounts.value.find(d => Number(d.id) === Number(selectedDiscountId.value)) || null
 );
 
+// Manual discount functionality
+const discountType = ref("manual"); // "percentage" | "manual"
+const manualDiscountAmount = ref(0);
+
+const discountTypeOptions = [
+  { label: "Manual Discount", value: "manual" },
+  { label: "Percentage Discount", value: "percentage" }
+];
+
+// Watch for discount type changes to clear opposite values
+watch(discountType, (newType) => {
+  if (newType === "percentage") {
+    manualDiscountAmount.value = 0;
+  } else if (newType === "manual") {
+    selectedDiscountId.value = null;
+  }
+});
+
 async function loadDiscounts() {
   try {
     const res = await fetchDiscounts({ status: "active" }); // GET /discounts?status=active
@@ -376,14 +402,16 @@ async function loadDiscounts() {
   }
 }
 
-
 // ==== Discounted totals (room only) ====
 const roomRate = computed(() => Number(selectedRoom.value?.guestDetails?.selectedrate) || 0);
 const roomDiscountPercent = computed(() => Number(selectedDiscount.value?.percent) || 0);
-const roomDiscountAmount = computed(() => +(roomRate.value * roomDiscountPercent.value / 100).toFixed(2));
+const roomDiscountAmount = computed(() => {
+  if (discountType.value === "manual") {
+    return Number(manualDiscountAmount.value) || 0;
+  }
+  return +(roomRate.value * roomDiscountPercent.value / 100).toFixed(2);
+});
 const discountedRoomRate = computed(() => Math.max(0, +(roomRate.value - roomDiscountAmount.value).toFixed(2)));
-
-
 
 const productSearchQueryPD = ref("");
 const productsPD = ref([]);
@@ -519,7 +547,6 @@ function getStockPD(id){ return stockByIdPD.value.get(Number(id)) ?? 0; }
 const lastCheckInByRoom = new Map();
 
 const paymentFlow = ref("WALKIN");
-
 
 const payloadItemsPD = computed(() =>
   cartPD.value.filter(it => (it.quantity || 0) > 0)
@@ -932,7 +959,6 @@ function getBookingExpiryTs(room) {
   return baseTs + CHECKIN_WINDOW_MS;
 }
 
-
 const CHECKIN_WINDOW_MS = 60 * 60 * 1000;
 
 const uiBookedAtMsByRoom = new Map();
@@ -951,7 +977,6 @@ const sortTick = ref(0);         // drives resort cadence
 
 let tickTimer = null;
 let sortTimer = null;
-
 
 function bookedRemainingMs(room) {
   if (room?.status !== "Booked") return null;
@@ -998,8 +1023,6 @@ const bumpSort = () => { sortTick.value++; };
 
     const NEAR_MS = 30 * 60 * 1000;       // 30 minutes in ms
 
-
-
     function remainingMs(room) {
     const endTs = getCheckoutTs(room);
     if (endTs == null) return null;
@@ -1031,7 +1054,6 @@ function formatRemaining(ms) {
   return `${s}s`;
 }
 
-
     function remainingLabel(room) {
     const ms = remainingMs(room);
     if (ms == null) return null;
@@ -1040,15 +1062,11 @@ function formatRemaining(ms) {
 
     const rooms = ref([]);  
 
-    
-
-
     // Live counters for RoomSummary props
     const countAvailable = computed(() => rooms.value.filter(r => r.status === 'Available').length);
     const countOccupied = computed(() => rooms.value.filter(r => r.status === 'Occupied').length);
     const countCleaning = computed(() => rooms.value.filter(r => r.status === 'Cleaning').length);
     const countBooked = computed(() => rooms.value.filter(r => r.status === 'Booked').length);
-
 
     function isWalkInStay(target) {
   // accepts a room or a guestDetails object
@@ -1065,8 +1083,6 @@ function isBookedStay(target) {
   if (t) return t.includes("book");    // "Booking", "BOOKING", etc.
   // fallback: presence of a book code usually means a booking
   return !!b?.bookCode;}
-    
-
 
     function toPHDateTimeString(date) {
         // Convert any JS date to PH time string "YYYY-MM-DD HH:mm:ss"
@@ -1081,9 +1097,6 @@ function isBookedStay(target) {
         const s = String(d.getSeconds()).padStart(2, "0");
         return `${y}-${m}-${day} ${h}:${min}:${s}`;
     }
-
-
-
 
     let bookingExpiryTimers = new Map();   // bookingId -> timeoutId
 const bookingExpiryInFlight = new Set();
@@ -1180,8 +1193,6 @@ onUnmounted(() => {
   for (const [, id] of bookingExpiryTimers) clearTimeout(id);
   bookingExpiryTimers.clear();
 });
-
-
 
     function BookingselectRateAndHours(hours, rate) {
         guestDetails.value.selectedHours = hours; // Update booking state
@@ -1338,11 +1349,10 @@ async function savePaymentNote(){
   }
 }
 
-
-
     const cancelDialogVisible = ref(false); // Tracks visibility of the dialog
     const cleaningConfirmationVisible = ref(false);
     const toast = useToast();
+    const confirm = useConfirm();
 
     // Lightweight global emitters for instant cross-view updates
     function emitRoomsChanged(reason, roomId) {
@@ -1351,7 +1361,6 @@ async function savePaymentNote(){
     function emitBookingsChanged(reason, bookingId, roomId) {
         window.dispatchEvent(new CustomEvent("bookings:changed", { detail: { reason, bookingId, roomId } }));
     }
-
 
     const selectedBookingId = ref(null);
 
@@ -1554,14 +1563,10 @@ onUnmounted(() => {
     if (sortTimer) clearInterval(sortTimer);
 });
 
-   
-
-   
     function openCleaningConfirmation(room) {
         selectedRoom.value = room;
         cleaningConfirmationVisible.value = true;
     }
-
 
     async function refreshRoomsAndSelectedRoom() {
         await fetchRooms();
@@ -1658,7 +1663,6 @@ onUnmounted(() => {
   });
 }
 
-
     // Add computed properties for filtering
     const filteredRooms = computed(() => {
         return rooms.value.filter((room) => {
@@ -1754,17 +1758,15 @@ onUnmounted(() => {
   return items.map(i => i.room);
 });
 
-
     // Payment Dialog Visibility
     const paymentDialogVisible = ref(false);
 
     // Payment Details
     const paymentDetails = ref({
         amountReceived: "",
-        deposit: "200",
+        deposit: "100",
         note: "",
     });
-
 
     // Basic form validation for Booking/Walk-In
     // Cellphone and Email are OPTIONAL: if provided, must be valid; if empty, allowed.
@@ -1783,11 +1785,9 @@ onUnmounted(() => {
         return hasName && cellOk && emailOk && !!gd.checkInDateTime && hasHours && hasRate;
     });
 
-
    async function handleWalkInPayment() {
 const room = rooms.value.find(r => r.id === selectedRoom.value.id);
 if (!room) return;
-
 
 try {
 // Require a deposit amount before proceeding
@@ -1795,6 +1795,7 @@ if (Number(paymentDetails.value.deposit) <= 0) {
   toast.add({ severity: "warn", summary: "Deposit required", detail: "Enter a deposit amount before confirming.", life: 2500 });
   return;
 }
+
 // 0) Sell extras (if any) via POS — this decrements stock + creates bill
 let posBill = null;
 if (cartPD.value.length > 0) {
@@ -1807,24 +1808,25 @@ return; // stop — don’t proceed with check-in if extras failed to sell
 }
 }
 
-
  // 1) Compute payment fields for the room
  const amountReceived = parseFloat(paymentDetails.value.amountReceived) || 0;
  const deposit = parseFloat(paymentDetails.value.deposit) || 0;
  const paid = !isAmountInsufficient.value;
 
-
 const hours = Number(selectedRoom.value?.guestDetails?.selectedHours || 0);
 const now = new Date();
 const out = new Date(now.getTime() + (hours || 0) * 60 * 60 * 1000);
 
-
 lastCheckInByRoom.set(room.id, { inISO: now.toISOString(), outISO: out.toISOString(), at: Date.now() });
-
 
   // Promo note (if any)
   const promo = selectedDiscount.value;
-  const promoNote = promo ? ` [DISCOUNT] ${promo.name} (${roomDiscountPercent.value}%) -₱${roomDiscountAmount.value.toFixed(2)}` : "";
+  let promoNote = "";
+  if (discountType.value === "manual" && manualDiscountAmount.value > 0) {
+    promoNote = ` [DISCOUNT] Manual Discount -₱${manualDiscountAmount.value.toFixed(2)}`;
+  } else if (promo) {
+    promoNote = ` [DISCOUNT] ${promo.name} (${roomDiscountPercent.value}%) -₱${roomDiscountAmount.value.toFixed(2)}`;
+  }
   const userNote = (paymentDetails.value.note || "").trim();
   // Build rentals note from selected amenities
   const amenMap = new Map((amenitiesPD.value || []).map(a => [Number(a.serial_id), a]));
@@ -1832,8 +1834,13 @@ lastCheckInByRoom.set(room.id, { inISO: now.toISOString(), outISO: out.toISOStri
   const rentalNote = rentals.length
     ? ` [RENTALS] ` + rentals.map(r => `${r.product_name || 'Amenity'} (${r.serial_number}) ₱${Number(r.unit_rental_price||0).toFixed(2)}`).join(', ')
     : "";
- const noteSuffix = (userNote ? ` [NOTE] ${userNote}` : "") + rentalNote;
-
+ 
+  // Build additional person note
+  const additionalPersonNote = Number(additionalPersonCount.value) > 0 
+    ? ` [ADDITIONAL PERSON] ${additionalPersonCount.value} person(s) @ ₱${Number(additionalPersonPrice.value).toFixed(2)} each = ₱${Number(totalAdditionalPersonCharge.value).toFixed(2)}`
+    : "";
+ 
+ const noteSuffix = (userNote ? ` [NOTE] ${userNote}` : "") + rentalNote + additionalPersonNote;
 
  // 2) Persist room check-in (walk-in or booked)
   if (paymentFlow.value === "WALKIN") {
@@ -1851,12 +1858,16 @@ lastCheckInByRoom.set(room.id, { inISO: now.toISOString(), outISO: out.toISOStri
       selected_rate: g.selectedrate,
       room_code: generateroomCode("WI"),
       book_code: generateroomCode("WI"),
-      notes: (posBill?.invoice_no ? `POS invoice: ${posBill.invoice_no}` : (g.notes || "")) + noteSuffix + promoNote
+      notes: (posBill?.invoice_no ? `POS invoice: ${posBill.invoice_no}` : (g.notes || "")) + noteSuffix + promoNote,
+      discount_type: discountType.value,
+      discount_name: discountType.value === "manual" ? "Manual Discount" : (selectedDiscount.value?.name || ""),
+      discount_percent: discountType.value === "manual" ? 0 : Number(roomDiscountPercent.value || 0),
+      discount_amount: discountType.value === "manual" ? Number(manualDiscountAmount.value || 0) : 0,
+      discount_id: discountType.value === "manual" ? null : (selectedDiscount.value?.id || null)
   });
 } else {
   const bookingId = selectedRoom.value?.guestDetails?.id;
   if (!bookingId) throw new Error("No booking found to check in.");
-
 
   await checkInBooking(bookingId, {
       check_in_datetime: toPHDateTimeString(now),
@@ -1875,7 +1886,7 @@ lastCheckInByRoom.set(room.id, { inISO: now.toISOString(), outISO: out.toISOStri
    } else {
      bookingIdForLog = selectedRoom.value?.guestDetails?.id || null;
    }
-   const finalRate = Number((selectedDiscount.value ? discountedRoomRate.value : roomRate.value) || 0);
+   const finalRate = Number(discountedRoomRate.value || roomRate.value || 0);
    const cpPayload = {
      room_id: room.id,
      booking_id: bookingIdForLog,
@@ -1883,12 +1894,15 @@ lastCheckInByRoom.set(room.id, { inISO: now.toISOString(), outISO: out.toISOStri
      booking_type: paymentFlow.value === "WALKIN" ? "Walk-In" : "Booking",
      hours_selected: hours,
      room_rate: finalRate,
-     discount_name: selectedDiscount.value?.name || "",
-     discount_percent: Number(roomDiscountPercent.value || 0),
-     discount_id: selectedDiscount.value?.id || null,
+     discount_name: discountType.value === "manual" ? "Manual Discount" : (selectedDiscount.value?.name || ""),
+     discount_percent: discountType.value === "manual" ? 0 : Number(roomDiscountPercent.value || 0),
+     discount_amount: discountType.value === "manual" ? Number(manualDiscountAmount.value || 0) : 0,
+     discount_id: discountType.value === "manual" ? null : (selectedDiscount.value?.id || null),
      extras_bill_id: posBill?.bill_id || null,
      extras_total: Number((posBill?.total ?? uiTotalExtrasPD.value) || 0),
      amenities_total: Number(uiTotalAmenitiesPD.value || 0),
+     additional_person_count: Number(additionalPersonCount.value || 0),
+     additional_person_total: Number(totalAdditionalPersonCharge.value || 0),
      deposit_amount: deposit,
      total_due: Number(totalAmountDue.value || 0),
      note: paymentDetails.value.note || "",
@@ -1906,7 +1920,6 @@ selectedRoom.value.guestDetails.payment = { deposit, isPaid: paid, note: payment
 selectedRoom.value.guestDetails.checkInDateTime = now.toISOString();
 selectedRoom.value.guestDetails.checkOutDateTime = out.toISOString();
 
-
 const idx = rooms.value.findIndex(r => r.id === selectedRoom.value?.id);
 if (idx !== -1) {
 const r = rooms.value[idx];
@@ -1917,7 +1930,6 @@ r.guestDetails.checkInDateTime = now.toISOString();
 r.guestDetails.checkOutDateTime = out.toISOString();
 }
 
-
  // 5) Clear mini-POS state + refresh products list (stock changed)
 cartPD.value = [];
 previewPD.value = { lines: [], total: 0 };
@@ -1925,7 +1937,6 @@ try {
 const res = await fetchPOSProducts();
 productsPD.value = res.data || [];
 } catch {}
-
 
 // Broadcast + toasts
 if (paymentFlow.value === "WALKIN") {
@@ -1935,9 +1946,7 @@ emitBookingsChanged("checked-in", selectedRoom.value?.guestDetails?.id || null, 
 }
 emitRoomsChanged("status-updated", room.id);
 
-
 toast.add({ severity: "success", summary: "Payment Completed", detail: posBill?.invoice_no ? `Extras sold (Invoice ${posBill.invoice_no}). Room checked in.` : "Room checked in.", life: 3500 });
-
 
 paymentDialogVisible.value = false;
 BookingDialogVisible.value = false;
@@ -1953,18 +1962,14 @@ DialogVisible.value = false;
    }
  } catch (_) { /* non-fatal */ }
 
-
 } catch (err) {
 toast.add({ severity: "error", summary: "Check-In Failed", detail: err?.response?.data?.message || err.message, life: 3000 });
 }
 }
 
-
-
     // Modified generator function with prefix support
     function generateroomCode(prefix = "BK") {
     // Helper to safely parse numeric inputs from text/number fields
-
 
         const randomString = Math.random()
             .toString(36)
@@ -1979,14 +1984,23 @@ toast.add({ severity: "error", summary: "Check-In Failed", detail: err?.response
   return amountReceived - totalAmountDue.value;
 });
 
-    // Total amount due = rate + deposit
+    // Total amount due = (room rate + extras + amenities + deposit) with discount applied, then add extend + additional person
 const totalAmountDue = computed(() => {
   const deposit = Number(paymentDetails.value.deposit) || 0;
   const extras = Number(uiTotalExtrasPD.value) || 0;
   const amenRent = Number(uiTotalAmenitiesPD.value) || 0;
-  return discountedRoomRate.value + deposit + extras + amenRent + extendAmountPD.value; // <-- add extend
+  const additionalPersonCharges = Number(totalAdditionalPersonCharge.value) || 0;
+  
+  // Base amount to apply discount to: room rate + extras + amenities + deposit
+  const baseAmount = roomRate.value + deposit + extras + amenRent;
+  
+  // Apply discount to the base amount
+  const discountAmount = Number(roomDiscountAmount.value) || 0;
+  const discountedBaseAmount = Math.max(0, baseAmount - discountAmount);
+  
+  // Add non-discountable charges: extend amount + additional person charges
+  return discountedBaseAmount + extendAmountPD.value + additionalPersonCharges;
 });
-
 
     // Validation for Insufficient Amount compares against (rate + deposit)
 const isAmountInsufficient = computed(() => {
@@ -2017,8 +2031,10 @@ const occupiedPayment = computed(() => {
       extend_amount: 0,
       discountName: '',
       discountPercent: 0,
+      discountAmount: 0,
       discount_name: '',
       discount_percent: 0,
+      discount_amount: 0,
     };
   }
   return pay;
@@ -2042,6 +2058,14 @@ const occDiscountPercent = computed(() => {
   if (Number.isFinite(payPct)) return payPct;
   const g = selectedRoom.value?.guestDetails || {};
   const raw = Number(g.discountPercent ?? g.discount_percent ?? NaN);
+  return Number.isFinite(raw) ? raw : 0;
+});
+
+const occDiscountAmount = computed(() => {
+  const payAmt = Number(occupiedPayment.value.discountAmount ?? occupiedPayment.value.discount_amount ?? NaN);
+  if (Number.isFinite(payAmt)) return payAmt;
+  const g = selectedRoom.value?.guestDetails || {};
+  const raw = Number(g.discountAmount ?? g.discount_amount ?? NaN);
   return Number.isFinite(raw) ? raw : 0;
 });
 const occBaseRoomRate = computed(() => {
@@ -2089,7 +2113,7 @@ const occDeposit = computed(() => {
   return Number(g.payment?.deposit ?? g.payment?.deposit_amount ?? 0);
 });
 const occTotalDue = computed(() => {
-  const base = occRoomRate.value + occExtras.value + occRent.value + occExtend.value;
+  const base = occRoomRate.value + occExtras.value + occRent.value + occExtend.value + occAdditionalPersonTotal.value;
   const liveDamage = checkoutDamageChargesNumber.value;
   if (Number.isFinite(liveDamage) && liveDamage > 0) {
     return roundCurrency(base + liveDamage);
@@ -2105,6 +2129,21 @@ const occChange = computed(() => {
   const storageKey = `amountReceived_room_${roomId}`;
   const amt = Number(localStorage.getItem(storageKey) || 0);
   return amt - occTotalDue.value;
+});
+
+// Additional person computed properties for occupied rooms
+const occAdditionalPersonCount = computed(() => {
+  const payVal = Number(occupiedPayment.value.additional_person_count ?? occupiedPayment.value.additionalPersonCount ?? NaN);
+  if (Number.isFinite(payVal)) return payVal;
+  const g = selectedRoom.value?.guestDetails || {};
+  return Number(g.payment?.additional_person_count ?? g.payment?.additionalPersonCount ?? 0);
+});
+
+const occAdditionalPersonTotal = computed(() => {
+  const payVal = Number(occupiedPayment.value.additional_person_total ?? occupiedPayment.value.additionalPersonTotal ?? NaN);
+  if (Number.isFinite(payVal)) return payVal;
+  const g = selectedRoom.value?.guestDetails || {};
+  return Number(g.payment?.additional_person_total ?? g.payment?.additionalPersonTotal ?? 0);
 });
 
 function roomExtendedHours(room){
@@ -2219,7 +2258,6 @@ async function saveOccupiedAmountReceived(){
     updatingOccupiedAmount.value = false;
   }
 }
-
 
 function occRemoveAmenity(id){
   const nid = Number(id);
@@ -2383,22 +2421,32 @@ async function confirmOccupiedExtras(){
   }
 }
 
-
 // Visual highlight for Discount card
 const discountHighlightClass = computed(() => {
-  return selectedDiscount.value
+  const hasDiscount = (discountType.value === "manual" && manualDiscountAmount.value > 0) || !!selectedDiscount.value;
+  return hasDiscount
     ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/20'
     : 'border-slate-200';
 });
     
-    // Reset Payment Form
+    // Additional Person functionality
+const additionalPersonCount = ref(0);
+const additionalPersonPrice = ref(250);
+
+const totalAdditionalPersonCharge = computed(() => {
+    return Number(additionalPersonCount.value || 0) * Number(additionalPersonPrice.value || 0);
+});
+
+// Reset Payment Form
 function resetPaymentForm() {
     paymentDetails.value = {
         amountReceived: "",
-        deposit: "200",
+        deposit: "100",
         note: "",
     };
     selectedAmenityIds.value = [];
+    additionalPersonCount.value = 0;
+    additionalPersonPrice.value = 250;
 }
 
 // Confirmation dialog before finalizing payment/check-in
@@ -2420,10 +2468,20 @@ const confirmSummaryText = computed(() => {
   const roomNo = selectedRoom.value?.roomNumber || '—';
   const hours = Number(g.selectedHours || 0);
 
-  const hasDiscount = !!selectedDiscount.value;
-  const ratePart = hasDiscount
-    ? `${formatCurrency(roomRate.value)} (Promo ${selectedDiscount.value?.name} ${Number(roomDiscountPercent.value)}% -> ${formatCurrency(discountedRoomRate.value)})`
-    : `${formatCurrency(roomRate.value)}`;
+  const hasDiscount = (discountType.value === "manual" && manualDiscountAmount.value > 0) || !!selectedDiscount.value;
+  let ratePart;
+  let discountText;
+  
+  if (discountType.value === "manual" && manualDiscountAmount.value > 0) {
+    ratePart = `${formatCurrency(roomRate.value)} (Manual Discount -₱${manualDiscountAmount.value} -> ${formatCurrency(discountedRoomRate.value)})`;
+    discountText = `Manual Discount (₱${manualDiscountAmount.value})`;
+  } else if (selectedDiscount.value) {
+    ratePart = `${formatCurrency(roomRate.value)} (Promo ${selectedDiscount.value?.name} ${Number(roomDiscountPercent.value)}% -> ${formatCurrency(discountedRoomRate.value)})`;
+    discountText = `${selectedDiscount.value?.name} (${Number(roomDiscountPercent.value)}%)`;
+  } else {
+    ratePart = `${formatCurrency(roomRate.value)}`;
+    discountText = 'None';
+  }
 
   // Extras summary
   const extrasRows = cartViewPD.value || [];
@@ -2435,16 +2493,22 @@ const confirmSummaryText = computed(() => {
   const amenList = amenRows.map(a => `${a.name} #${a.serial} ${formatCurrency(a.price)}`).join('; ');
   const amenTotal = formatCurrency(uiTotalAmenitiesPD.value || 0);
 
+  // Additional person summary
+  const additionalPersonSummary = Number(additionalPersonCount.value) > 0 
+    ? `${additionalPersonCount.value} additional person(s) @ ${formatCurrency(additionalPersonPrice.value)} each`
+    : 'None';
+  const additionalPersonTotal = formatCurrency(totalAdditionalPersonCharge.value || 0);
+
   const amtRecv = Number(paymentDetails.value.amountReceived) || 0;
   const deposit = Number(paymentDetails.value.deposit) || 0;
   const totalDue = Number(totalAmountDue.value) || 0;
   const change = Number(calculateChange.value) || 0;
   const note = (paymentDetails.value.note || '').trim() || '—';
-  const discountText = hasDiscount ? `${selectedDiscount.value?.name} (${Number(roomDiscountPercent.value)}%)` : 'None';
 
   return `Guest ${guestName} in Room ${roomNo} for ${hours} hour(s); rate ${ratePart}. ` +
          `Extras ${extrasTotal}: ${extrasList || 'None'}. ` +
          `Amenities ${amenTotal}: ${amenList || 'None'}. ` +
+         `Additional Person ${additionalPersonTotal}: ${additionalPersonSummary}. ` +
          `Payment: received ${formatCurrency(amtRecv)}, deposit ${formatCurrency(deposit)}, total due ${formatCurrency(totalDue)}, change ${formatCurrency(change)}. ` +
          `Discount: ${discountText}. Note: ${note}.`;
 });
@@ -2466,18 +2530,25 @@ const amenitiesOverflow = computed(() => {
   const total = (selectedAmenitiesPD.value || []).length;
   return total > 5 ? total - 5 : 0;
 });
-const discountBadgeText = computed(() => selectedDiscount.value ? `${selectedDiscount.value.name} (${Number(roomDiscountPercent.value)}%)` : null);
+const discountBadgeText = computed(() => {
+  if (discountType.value === "manual" && manualDiscountAmount.value > 0) {
+    return `Manual Discount (₱${manualDiscountAmount.value})`;
+  }
+  return selectedDiscount.value ? `${selectedDiscount.value.name} (${Number(roomDiscountPercent.value)}%)` : null;
+});
 
     // Open Payment Dialog
 async function openPaymentDialog(room) {
-paymentDetails.value = { amountReceived: "", deposit: "200", note: "" };
+paymentDetails.value = { amountReceived: "", deposit: "100", note: "" };
 selectedAmenityIds.value = [];
 selectedDiscountId.value = null; // reset promo selection each time
-
+discountType.value = "manual"; // reset to manual discount
+manualDiscountAmount.value = 0; // reset manual discount amount
+additionalPersonCount.value = 0; // reset additional person count
+additionalPersonPrice.value = 250; // reset additional person price to default
 
 // Use the same reference (or a shallow copy once), don't call openDialog here
 selectedRoom.value = { ...room, guestDetails: room.guestDetails ? { ...room.guestDetails } : null };
-
 
 if (room?.status === "Booked") {
 paymentFlow.value = "BOOKED";
@@ -2521,10 +2592,8 @@ const g = guestDetails.value || {};
   };
 }
 
-
 // finally show dialog
 paymentDialogVisible.value = true;
-
 
 if (!loadedProductsOncePD) {
 try {
@@ -2536,12 +2605,10 @@ toast.add({ severity: "error", summary: "POS Products", detail: "Failed to load 
 }
 }
 
-
 // reset cart + preview every time you open payment
 cartPD.value = [];
 previewPD.value = { lines: [], total: 0 };
 productSearchQueryPD.value = "";
-
 
 // load active discounts last
 await loadDiscounts();
@@ -2572,13 +2639,6 @@ await loadDiscounts();
  }
 }
 
-
-
-
-
-
-
-
     const checkInDialogVisible = ref(false); // Controls the visibility of the dialog
 
     // Derived data: Check-In and Check-Out dates
@@ -2608,8 +2668,10 @@ await loadDiscounts();
         return Math.round(num * 100) / 100;
     }
 
-
     function openCheckoutDialog(room) {
+        const roomId = room?.id;
+        const isSameRoom = roomId && lastPaymentConfirmedRoomId.value === roomId;
+        
         selectedRoom.value = {
             ...room,
             guestDetails: { ...room.guestDetails }, // Copy nested object
@@ -2620,6 +2682,14 @@ await loadDiscounts();
         checkoutDamageCharges.value = roundCurrency(Math.max(0, existingDamage));
         const existingDeposit = Number(pay.deposit ?? pay.deposit_amount ?? 0);
         checkoutDepositOriginal.value = roundCurrency(Math.max(0, existingDeposit));
+        
+        // Only reset payment confirmation if opening a different room
+        if (!isSameRoom) {
+            checkoutAdditionalPaymentReceived.value = 0;
+            isPaymentConfirmed.value = false;
+            lastPaymentConfirmedRoomId.value = null;
+        }
+        
         checkoutAssignedAmenities.value = [];
         checkoutAmenitiesError.value = null;
         checkoutDialogVisible.value = true;
@@ -2679,7 +2749,6 @@ await loadDiscounts();
         isEmailValid.value = validateGmail(email);
     }
 
-
     // Reactive state for checkout dialog
     const checkoutDialogVisible = ref(false);
     const checkoutDamageCharges = ref(0);
@@ -2689,6 +2758,30 @@ await loadDiscounts();
     const checkoutDepositOriginalNumber = computed(() => roundCurrency(Math.max(0, Number(checkoutDepositOriginal.value || 0))));
     const checkoutRefundToGuest = computed(() => roundCurrency(Math.max(0, checkoutDepositOriginalNumber.value - checkoutDamageChargesNumber.value)));
     const checkoutDamageShortfall = computed(() => roundCurrency(Math.max(0, checkoutDamageChargesNumber.value - checkoutDepositOriginalNumber.value)));
+    
+    // Additional payment fields
+    const checkoutAdditionalPaymentReceived = ref(0);
+    const checkoutAdditionalPaymentChange = computed(() => {
+        const received = Number(checkoutAdditionalPaymentReceived.value || 0);
+        const due = checkoutDamageShortfall.value;
+        return roundCurrency(Math.max(0, received - due));
+    });
+    const isCheckoutPaymentComplete = computed(() => {
+        // Allow checkout if there's no shortfall OR if payment received covers the shortfall
+        if (checkoutDamageShortfall.value <= 0) return true;
+        return Number(checkoutAdditionalPaymentReceived.value || 0) >= checkoutDamageShortfall.value;
+    });
+    const showAdditionalPaymentDialog = ref(false);
+    const isPaymentConfirmed = ref(false);
+    const lastPaymentConfirmedRoomId = ref(null); // Track which room has confirmed payment
+    
+    // This computed checks if checkout can proceed - no shortfall OR payment confirmed
+    const canProceedWithCheckout = computed(() => {
+        // If there's no shortfall, can proceed immediately
+        if (checkoutDamageShortfall.value <= 0) return true;
+        // If there IS a shortfall, payment must be confirmed
+        return isPaymentConfirmed.value;
+    });
 
     const checkoutAssignedAmenities = ref([]);
     const checkoutAmenitiesLoading = ref(false);
@@ -2700,6 +2793,10 @@ await loadDiscounts();
             checkoutAssignedAmenities.value = [];
             checkoutAmenitiesError.value = null;
             checkoutAmenitiesLoading.value = false;
+            // Don't reset payment confirmation state - keep it if user reopens
+            // checkoutAdditionalPaymentReceived.value = 0;
+            // isPaymentConfirmed.value = false;
+            showAdditionalPaymentDialog.value = false;
         }
     });
 
@@ -2735,6 +2832,14 @@ await loadDiscounts();
         // Note: This only marks the item for damage reporting - it does NOT change
         // the serial_numbers status. The status will remain unchanged (assigned, cleaning, etc.)
         // Only a damage report will be created during checkout
+    }
+
+    function confirmAdditionalPayment() {
+        if (isCheckoutPaymentComplete.value) {
+            isPaymentConfirmed.value = true;
+            lastPaymentConfirmedRoomId.value = selectedRoom.value?.id || null;
+            showAdditionalPaymentDialog.value = false;
+        }
     }
 
     async function loadCheckoutAssignedAmenities(roomId) {
@@ -2810,15 +2915,49 @@ await loadDiscounts();
             return;
         }
 
+        const roomNumberLabel = roomRef?.roomNumber || roomRef?.room_number || roomRef?.roomCode || 'Room';
+        const depositReturn = checkoutRefundToGuest.value;
+        const hasAdditionalPayment = isPaymentConfirmed.value && checkoutAdditionalPaymentReceived.value > 0;
+        
+        // Build confirmation message
+        let confirmMessage = `Are you sure you want to check out ${roomNumberLabel}?`;
+        
+        // If there's additional payment, only show deposit return (if any)
+        if (hasAdditionalPayment) {
+            if (depositReturn > 0) {
+                confirmMessage += `\n\n✓ Deposit to Return: ${formatCurrency(depositReturn)}`;
+            }
+        } else {
+            // No additional payment - show deposit return if available
+            if (depositReturn > 0) {
+                confirmMessage += `\n\n✓ Deposit to Return: ${formatCurrency(depositReturn)}`;
+            }
+        }
+        
+        // Show confirmation dialog
+        confirm.require({
+            message: confirmMessage,
+            header: 'Confirm Checkout',
+            icon: 'pi pi-exclamation-triangle',
+            rejectClass: 'p-button-secondary p-button-outlined',
+            rejectLabel: 'Cancel',
+            acceptLabel: 'Confirm',
+            accept: async () => {
+                await processCheckout(roomRef, roomId, roomNumberLabel);
+            }
+        });
+    }
+
+    // Separate function to process the actual checkout
+    async function processCheckout(roomRef, roomId, roomNumberLabel) {
         const damagedSerialIds = checkoutDamagedSerialIds.value.slice();
         const damageCount = damagedSerialIds.length;
-        const roomNumberLabel = roomRef?.roomNumber || roomRef?.room_number || roomRef?.roomCode || 'Room';
         const bookingRef = Number(roomRef?.guestDetails?.id) || null;
 
         const originalDepositVal = checkoutDepositOriginalNumber.value;
         const damageVal = checkoutDamageChargesNumber.value;
         const newDepositVal = 0;
-        const totalDueVal = roundCurrency(occRoomRate.value + occExtras.value + occRent.value + occExtend.value + damageVal);
+        const totalDueVal = roundCurrency(occRoomRate.value + occExtras.value + occRent.value + occExtend.value + occAdditionalPersonTotal.value + damageVal);
         // Use localStorage to get the amount received since we removed it from database
         const storageKey = `amountReceived_room_${roomId}`;
         const storedAmount = Number(localStorage.getItem(storageKey) || 0);
@@ -2933,6 +3072,11 @@ await loadDiscounts();
         checkoutDialogVisible.value = false;
         DialogVisible.value = false;
         checkoutAssignedAmenities.value = [];
+        
+        // Reset payment confirmation after successful checkout
+        checkoutAdditionalPaymentReceived.value = 0;
+        isPaymentConfirmed.value = false;
+        lastPaymentConfirmedRoomId.value = null;
     }
 
     // Mock version: Update room status in local storage
@@ -2970,11 +3114,6 @@ await loadDiscounts();
         return base + additionalRate.value;
     });
 
-  
-   
-
-
-   
     // Functions
     function formatDate(date) {
         if (!date) return "N/A";
@@ -2988,9 +3127,6 @@ await loadDiscounts();
             timeZone: "Asia/Manila"
         });
     }
-
-
-
 
     // State for dialog visibility and selected room
 
@@ -3051,6 +3187,7 @@ await loadDiscounts();
                     selectedRoom.value.guestDetails.roomRateCharged = Number(res.data.room_rate_charged || res.data.room_rate || 0);
                     selectedRoom.value.guestDetails.discountName = res.data.discount_name || '';
                     selectedRoom.value.guestDetails.discountPercent = Number(res.data.discount_percent || 0);
+                    selectedRoom.value.guestDetails.discountAmount = Number(res.data.discount_amount || 0);
                     // (no extension logs in this version)
                 } else {
                     selectedRoom.value.guestDetails = null;
@@ -3079,8 +3216,6 @@ await loadDiscounts();
 
     }
 
-
-
     // Function to confirm and cancel the booking
     async function confirmAndCancelBooking(bookingId) {
         try {
@@ -3100,8 +3235,6 @@ await loadDiscounts();
             });
         }
     }
-
-
 
     // Reactive state for dialog visibility
     const BookingDialogVisible = ref(false); // Tracks visibility of the booking dialog
@@ -3143,8 +3276,19 @@ watch(customerType, (val) => {
   }
 });
 
+// Auto-generate sales report when dates change
+watch([transactionReportStartDate, transactionReportEndDate], () => {
+  if (transactionReportStartDate.value && transactionReportDialogVisible.value) {
+    fetchTransactionReport();
+  }
+});
 
-
+// Also trigger when start/end times change
+watch([transactionReportStartTime, transactionReportEndTime], () => {
+  if (transactionReportStartDate.value && transactionReportDialogVisible.value) {
+    fetchTransactionReport();
+  }
+});
 
     async function submitBooking(guestDetails) {
         // Generate unique codes
@@ -3166,6 +3310,11 @@ const bookingData = {
   room_code: generateroomCode(room.id),
   book_code: generateroomCode("BK"),
   notes: guestDetails.notes || "",
+  discount_type: discountType.value,
+  discount_name: discountType.value === "manual" ? "Manual Discount" : (selectedDiscount.value?.name || ""),
+  discount_percent: discountType.value === "manual" ? 0 : Number(roomDiscountPercent.value || 0),
+  discount_amount: discountType.value === "manual" ? Number(manualDiscountAmount.value || 0) : 0,
+  discount_id: discountType.value === "manual" ? null : (selectedDiscount.value?.id || null),
 };
 
 const nowMs = Date.now();
@@ -3185,7 +3334,6 @@ if (idx !== -1) {
   rooms.value[idx].status = "Booked";
   rooms.value[idx].guestDetails = optimisticDetails;
 }
-
 
         try {
             await bookRoom(bookingData);
@@ -3214,6 +3362,172 @@ if (idx !== -1) {
         }
     }
 
+    // Sales Report Functions
+    function showTransactionReport() {
+        // Set default to current date
+        const now = new Date();
+        transactionReportStartDate.value = new Date(now);
+        transactionReportEndDate.value = null; // Leave end date empty initially (same as start date)
+        
+        // Clear times to show full day data initially
+        transactionReportStartTime.value = null;
+        transactionReportEndTime.value = null;
+        
+        transactionReportDialogVisible.value = true;
+        fetchTransactionReport();
+    }
+
+    async function fetchTransactionReport() {
+        if (!transactionReportStartDate.value) {
+            toast.add({
+                severity: "warn",
+                summary: "Start Date Required",
+                detail: "Please select a start date",
+                life: 3000
+            });
+            return;
+        }
+
+        // Reset data before loading
+        transactionReportData.value = {
+            checkinPayments: [],
+            bills: [],
+            totalCheckinPayments: 0,
+            totalBills: 0,
+            grandTotal: 0
+        };
+
+        loadingTransactionReport.value = true;
+        try {
+            const startDate = transactionReportStartDate.value;
+            const endDate = transactionReportEndDate.value || startDate; // Use start date if end date is not set
+            
+            let startDateTime, endDateTime;
+            
+            // Determine start datetime
+            if (transactionReportStartTime.value) {
+                const startHour = transactionReportStartTime.value.getHours();
+                const startMinute = transactionReportStartTime.value.getMinutes();
+                const startSecond = transactionReportStartTime.value.getSeconds();
+                
+                startDateTime = new Date(
+                    startDate.getFullYear(),
+                    startDate.getMonth(),
+                    startDate.getDate(),
+                    startHour,
+                    startMinute,
+                    startSecond
+                );
+            } else {
+                // No start time specified, use beginning of start date
+                startDateTime = new Date(
+                    startDate.getFullYear(),
+                    startDate.getMonth(),
+                    startDate.getDate(),
+                    0, 0, 0
+                );
+            }
+            
+            // Determine end datetime
+            if (transactionReportEndTime.value) {
+                const endHour = transactionReportEndTime.value.getHours();
+                const endMinute = transactionReportEndTime.value.getMinutes();
+                const endSecond = transactionReportEndTime.value.getSeconds();
+                
+                endDateTime = new Date(
+                    endDate.getFullYear(),
+                    endDate.getMonth(),
+                    endDate.getDate(),
+                    endHour,
+                    endMinute,
+                    endSecond
+                );
+            } else {
+                // No end time specified, use end of end date
+                endDateTime = new Date(
+                    endDate.getFullYear(),
+                    endDate.getMonth(),
+                    endDate.getDate(),
+                    23, 59, 59
+                );
+            }
+            
+            // Format for API - use Philippines timezone (UTC+8)
+            const formatPHDateTime = (date) => {
+                // Ensure we're working with local PH time
+                const phDate = new Date(date.getTime());
+                const year = phDate.getFullYear();
+                const month = String(phDate.getMonth() + 1).padStart(2, '0');
+                const day = String(phDate.getDate()).padStart(2, '0');
+                const hours = String(phDate.getHours()).padStart(2, '0');
+                const minutes = String(phDate.getMinutes()).padStart(2, '0');
+                const seconds = String(phDate.getSeconds()).padStart(2, '0');
+                return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+            };
+            
+            const startDateTimeStr = formatPHDateTime(startDateTime);
+            const endDateTimeStr = formatPHDateTime(endDateTime);
+            
+            console.log('Sendsing datetime query:', { startDateTimeStr, endDateTimeStr });
+            
+            // Fetch sales data: checked-in sales + POS sales
+            const response = await fetch(`http://127.0.0.1:5000/transaction-report?start_datetime=${startDateTimeStr}&end_datetime=${endDateTimeStr}`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to fetch sales report');
+            }
+            
+            const data = await response.json();
+            transactionReportData.value = {
+                checkinPayments: data.checkin_payments || [],
+                bills: data.bills || [],
+                totalCheckinPayments: data.total_checkin_payments || 0,
+                totalBills: data.total_bills || 0,
+                grandTotal: data.grand_total || 0
+            };
+        } catch (error) {
+            toast.add({
+                severity: "error",
+                summary: "Error",
+                detail: "Failed to fetch sales report: " + error.message,
+                life: 3000
+            });
+        } finally {
+            loadingTransactionReport.value = false;
+        }
+    }
+
+    function clearTransactionReportFilters() {
+        // Clear only end date, start time, and end time (keep start date)
+        transactionReportEndDate.value = null;
+        transactionReportStartTime.value = null;
+        transactionReportEndTime.value = null;
+        
+        // If start date exists, automatically fetch the full day report
+        if (transactionReportStartDate.value) {
+            fetchTransactionReport();
+        } else {
+            // Clear the report data if no start date
+            transactionReportData.value = {
+                checkinPayments: [],
+                bills: [],
+                totalCheckinPayments: 0,
+                totalBills: 0,
+                grandTotal: 0
+            };
+        }
+        
+        toast.add({
+            severity: "info",
+            summary: "Cleared",
+            detail: "Time filters cleared - showing full day data",
+            life: 2000
+        });
+    }
 
     </script>
 
@@ -3231,7 +3545,15 @@ if (idx !== -1) {
 
             <!-- Room Grid Section -->
             <div class="flex-1 card p-4">
-                <h2 class="text-xl font-bold mb-5">Room List</h2>
+                <div class="flex justify-between items-center mb-5">
+                    <h2 class="text-xl font-bold">Room List</h2>
+                    <Button 
+                        icon="pi pi-chart-bar" 
+                        label="Sales Report" 
+                        class="p-button-info" 
+                        @click="showTransactionReport"
+                    />
+                </div>
                 
                 <!-- Empty State -->
                 <div v-if="sortedRooms.length === 0" 
@@ -3478,7 +3800,6 @@ if (idx !== -1) {
 
 </template>
 
-
             <div v-if="selectedRoom">
                 <!-- Available Room Actions -->
                 <div
@@ -3591,8 +3912,7 @@ if (idx !== -1) {
                   </div>
                 </div>
                   <!-- Occupied Room Actions -->
-                  
-                
+
                 <div
                     v-if="selectedRoom.status === 'Occupied'"
                     class="flex flex-col gap-4 p-4">
@@ -3650,9 +3970,6 @@ if (idx !== -1) {
   {{ formatDate(selectedRoom.guestDetails.checkInDateTime) }}
 </p>
 
-
-
-
                     <div class="mt-4 pt-4 border-t space-y-3" v-if="selectedRoom?.status === 'Occupied'">
                         <div class="flex items-center justify-between gap-2 mb-2">
                           <h4 class="text-xl font-bold">Payment Details</h4>
@@ -3663,8 +3980,6 @@ if (idx !== -1) {
                             @click.stop="openOccupiedExtrasDialog"
                           />
                         </div>
-
-                        
 
                         <!-- Extras list -->
                         <div>
@@ -3696,24 +4011,27 @@ if (idx !== -1) {
                           <div class="flex items-center justify-between text-sm">
                             <span>Room Rate</span>
                             <span class="flex items-center gap-2">
-                              <template v-if="Number(occDiscountPercent || 0) > 0">
+                              <!-- Manual Discount - Show discount name with slash and amount -->
+                              <template v-if="occDiscountName && occDiscountName.toLowerCase().includes('manual') && Number(occDiscountAmount || 0) > 0">
                                 <span class="price-old">{{ formatCurrency(occBaseRoomRate) }}</span>
-                               
-                                
-                              <span
-                                v-if="Number(occDiscountPercent || 0) > 0"
-                                class="discount-pill"
-                              >
-                                {{ occDiscountName || 'Promo' }} -{{ Number(occDiscountPercent) }}%
-                              </span>
-                               <span class="price-new">{{ formatCurrency(occRoomRate) }}</span>
+                                <span class="discount-pill">
+                                  {{ occDiscountName }} / -₱{{ Number(occDiscountAmount).toFixed(2) }}
+                                </span>
+                                <span class="price-new">{{ formatCurrency(occRoomRate) }}</span>
                               </template>
+                              <!-- Percentage Discount -->
+                              <template v-else-if="Number(occDiscountPercent || 0) > 0">
+                                <span class="price-old">{{ formatCurrency(occBaseRoomRate) }}</span>
+                                <span class="discount-pill">
+                                  {{ occDiscountName || 'Promo' }} -{{ Number(occDiscountPercent) }}%
+                                </span>
+                                <span class="price-new">{{ formatCurrency(occRoomRate) }}</span>
+                              </template>
+                              <!-- No Discount -->
                               <strong v-else>{{ formatCurrency(occRoomRate) }}</strong>
-                            
                             </span>
                           </div>
-                           
-                          
+
                            <div class="flex items-center justify-between text-sm">
                             <span>Consumables</span>
                             <strong>{{ formatCurrency(occExtras) }}</strong>
@@ -3730,6 +4048,14 @@ if (idx !== -1) {
                                 </div>
                               </div>
 
+                          <div v-if="Number(occAdditionalPersonCount) > 0" class="flex items-center justify-between text-sm">
+                            <span>Additional Person</span>
+                            <div class="flex items-center gap-2">
+                              <span class="text-xs font-semibold text-blue-700">{{ occAdditionalPersonCount }} person{{ occAdditionalPersonCount > 1 ? 's' : '' }}</span>
+                              <strong>{{ formatCurrency(occAdditionalPersonTotal) }}</strong>
+                            </div>
+                          </div>
+
                           <div class="flex items-center justify-between text-l">
                             <span>Deposit</span>
                             <strong>{{ formatCurrency(occDeposit) }}</strong>
@@ -3743,8 +4069,7 @@ if (idx !== -1) {
                                   <span>Total</span>
                                   <strong>{{ formatCurrency(occTotalDue) }}</strong>
                                 </div>
-                           
-                        
+
                           <!-- Payment note (view/edit) -->
                           <div class="mt-2">
                             <div class="flex items-center justify-between text-l">
@@ -3858,7 +4183,6 @@ if (idx !== -1) {
                     </p>
                 </div>
 
-                
                 <label class="block text-sm font-medium mb-1">
                      Check In Time:
                     <span v-if="isWalkIn || isBook" class="text-sm text-gray-500">
@@ -4265,10 +4589,7 @@ if (idx !== -1) {
       </div>
     </div>
 
-    
-  
   </div>
-
 
   <!-- Payment inputs + Totals -->
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -4291,60 +4612,97 @@ if (idx !== -1) {
         </div>
       </div>
 
-    
-    
+      
+       <div :class="['rounded-lg p-3 border', discountHighlightClass]">
+<div class="flex flex-col gap-3">
+  <span class="font-medium">Discount</span>
+  
+  <!-- Discount Type Dropdown -->
+  <div class="flex flex-col md:flex-row md:items-center gap-3">
+    <Dropdown
+      v-model="discountType"
+      :options="discountTypeOptions"
+      optionLabel="label"
+      optionValue="value"
+      placeholder="Select discount type"
+      class="w-full md:w-64"
+    />
+  </div>
+  
+  <!-- Percentage Discount Section -->
+  <div v-if="discountType === 'percentage'" class="flex flex-col md:flex-row md:items-center gap-3">
+    <Dropdown
+      v-model="selectedDiscountId"
+      :options="activeDiscounts"
+      optionLabel="name"
+      optionValue="id"
+      placeholder="Select promo"
+      class="w-full md:w-80"
+      :showClear="true"
+    />
+    <span v-if="selectedDiscount" class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+      {{ selectedDiscount.name }} – {{ Number(selectedDiscount.percent) }}%
+    </span>
+  </div>
+  
+  <!-- Manual Discount Section -->
+  <div v-if="discountType === 'manual'" class="flex flex-col gap-2">
+    <div class="flex items-center gap-2">
+      <InputNumber
+        v-model="manualDiscountAmount"
+        mode="decimal"
+        placeholder="Enter amount"
+        class="w-32"
+        :min="0"
+        :max="roomRate"
+        prefix="₱"
+      />
+    </div>
 
-
-      <div :class="['rounded-lg p-3 border', paymentHighlightClass]">
-        <div class="flex items-center justify-between mb-2">
-          <div class="font-semibold">Payment</div>
-          <div class="text-sm font-bold">Total: {{ formatCurrency(totalAmountDue) }}</div>
-        </div>
+    <div v-if="manualDiscountAmount > 0" class="mt-1">
+      <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-800">
+        Manual Discount – ₱{{ Number(manualDiscountAmount).toFixed(2) }}
+      </span>
+    </div>
+  </div>
+</div>
+</div>
+      <!-- Additional Person Section -->
+      <div class="border rounded-lg p-3">
+        <div class="font-semibold mb-3">Additional Person</div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div class="space-y-1">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Deposit Amount</label>
-            <div class="relative">
-              <span class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">₱</span>
-              <InputText 
-                v-model="paymentDetails.deposit" 
-                placeholder="0.00" 
-                type="number" 
-                class="w-full pl-8 text-right"
-              />
-            </div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Number of Additional Persons</label>
+            <InputNumber
+              v-model="additionalPersonCount"
+              :min="0"
+              :max="10"
+              buttonLayout="horizontal"
+              class="w-full"
+              placeholder="0"
+            />
           </div>
           <div class="space-y-1">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Payment Amount</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Price per Additional Person (₱)</label>
             <div class="relative">
               <span class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">₱</span>
               <InputText
-                v-model="paymentDetails.amountReceived"
-                placeholder="0.00"
+                v-model="additionalPersonPrice"
+                placeholder="250.00"
                 type="number"
-                :class="['w-full pl-8 text-right', { 'p-invalid': isAmountInsufficient }]"
+                class="w-full pl-8 text-right"
+                :min="0"
               />
             </div>
           </div>
         </div>
-        <div v-if="isAmountInsufficient" class="text-xs text-red-700 mt-1">Insufficient amount received.</div>
+        <div v-if="Number(additionalPersonCount) > 0 && Number(additionalPersonPrice) > 0" class="mt-3 p-2 bg-blue-50 border border-blue-200 rounded-lg dark:bg-blue-900/30 dark:border-blue-700">
+          <div class="text-sm text-blue-800 dark:text-blue-200">
+            <strong>{{ additionalPersonCount }} additional person(s) × ₱{{ Number(additionalPersonPrice).toFixed(2) }} = ₱{{ Number(totalAdditionalPersonCharge).toFixed(2) }}</strong>
+          </div>
+        </div>
       </div>
-       <div :class="['rounded-lg p-3 border', discountHighlightClass]">
-<div class="flex flex-col md:flex-row md:items-center gap-3">
-<span class="font-medium">Discount</span>
-<Dropdown
-v-model="selectedDiscountId"
-:options="activeDiscounts"
-optionLabel="name"
-optionValue="id"
-placeholder="Select promo"
-class="w-full md:w-80"
-:showClear="true"
-/>
-<span v-if="selectedDiscount" class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
-{{ selectedDiscount.name }} – {{ Number(selectedDiscount.percent) }}%
-</span>
-</div>
-</div>
+
       <div class="border rounded-lg p-3">
         <div class="font-semibold mb-2">Note</div>
         <textarea
@@ -4396,9 +4754,41 @@ class="w-full md:w-80"
       </div>
         
         </div>
-      
 
-      
+        <div :class="['rounded-lg p-3 border', paymentHighlightClass]">
+        <div class="flex items-center justify-between mb-2">
+          <div class="font-semibold">Payment</div>
+          <div class="text-sm font-bold">Total: {{ formatCurrency(totalAmountDue) }}</div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Deposit Amount</label>
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">₱</span>
+              <InputText 
+                v-model="paymentDetails.deposit" 
+                placeholder="0.00" 
+                type="number" 
+                class="w-full pl-8 text-right"
+              />
+            </div>
+          </div>
+          <div class="space-y-1">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Payment Amount</label>
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">₱</span>
+              <InputText
+                v-model="paymentDetails.amountReceived"
+                placeholder="0.00"
+                type="number"
+                :class="['w-full pl-8 text-right', { 'p-invalid': isAmountInsufficient }]"
+              />
+            </div>
+          </div>
+        </div>
+        <div v-if="isAmountInsufficient" class="text-xs text-red-700 mt-1">Insufficient amount received.</div>
+      </div>
+
       <div
   class="p-4 rounded-lg border
          bg-blue-50 text-blue-900 border-blue-200
@@ -4410,7 +4800,14 @@ class="w-full md:w-80"
   <div class="flex items-center justify-between">
     <span>Room Rate</span>
     <div class="text-right">
-      <template v-if="selectedDiscount">
+      <template v-if="discountType === 'manual' && manualDiscountAmount > 0">
+        <div class="inline-flex items-center gap-1">
+          <span class="price-old">{{ formatCurrency(roomRate) }}</span>
+          <span class="discount-pill">-₱{{ manualDiscountAmount }}</span>
+        </div>
+        <div class="price-new">{{ formatCurrency(discountedRoomRate) }}</div>
+      </template>
+      <template v-else-if="selectedDiscount">
         <div class="inline-flex items-center gap-1">
           <span class="price-old">{{ formatCurrency(roomRate) }}</span>
           <span class="discount-pill">-{{ Number(roomDiscountPercent) }}%</span>
@@ -4431,6 +4828,10 @@ class="w-full md:w-80"
   <div class="flex items-center justify-between py-1">
     <span>Amenities Rent</span>
     <span class="font-semibold">₱{{ Number(uiTotalAmenitiesPD).toFixed(2) }}</span>
+  </div>
+  <div v-if="Number(totalAdditionalPersonCharge) > 0" class="flex items-center justify-between py-1">
+    <span>Additional Person ({{ additionalPersonCount }})</span>
+    <span class="font-semibold">₱{{ Number(totalAdditionalPersonCharge).toFixed(2) }}</span>
   </div>
   <div class="flex items-center justify-between py-1">
     <span>Deposit</span>
@@ -4458,7 +4859,6 @@ class="w-full md:w-80"
 </div>
 </div>
   </div>
-
 
             <!-- Action Buttons -->
             <div class="flex gap-4 mt-6">
@@ -4506,7 +4906,16 @@ class="w-full md:w-80"
                 <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Rate</div>
                 <div class="flex items-center justify-between">
                   <span class="text-sm">Room:</span>
-                  <template v-if="selectedDiscount">
+                  <template v-if="discountType === 'manual' && manualDiscountAmount > 0">
+                    <div class="text-right">
+                      <div class="inline-flex items-center gap-1">
+                        <span class="price-old">{{ formatCurrency(roomRate) }}</span>
+                        <span class="discount-pill">-₱{{ manualDiscountAmount }}</span>
+                      </div>
+                      <div class="price-new mt-1">{{ formatCurrency(discountedRoomRate) }}</div>
+                    </div>
+                  </template>
+                  <template v-else-if="selectedDiscount">
                     <div class="text-right">
                       <div class="inline-flex items-center gap-1">
                         <span class="price-old">{{ formatCurrency(roomRate) }}</span>
@@ -4558,7 +4967,7 @@ class="w-full md:w-80"
                 <div class="text-sm flex items-center justify-between">
                   <span>Room Rate</span>
                   <strong>
-                    <template v-if="selectedDiscount">
+                    <template v-if="(discountType === 'manual' && manualDiscountAmount > 0) || selectedDiscount">
                       {{ formatCurrency(discountedRoomRate) }}
                     </template>
                     <template v-else>
@@ -4601,8 +5010,6 @@ class="w-full md:w-80"
             </div>
           </div>
 
-          
-
           <!-- Action Buttons -->
           <div class="flex gap-4 mt-6">
             <Button
@@ -4638,7 +5045,7 @@ class="w-full md:w-80"
             <div class="p-4 space-y-4">
                 <!-- Guest Information -->
                 <div class="space-y-2">
-                    <label class="block text-sm font-medium text-gray-600">
+                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300">
                         Guest Name
                     </label>
                     <InputText
@@ -4650,7 +5057,7 @@ class="w-full md:w-80"
 
                 <!-- Contact Number -->
                 <div class="space-y-2">
-                    <label class="block text-sm font-medium text-gray-600">
+                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300">
                         Room Code:
                     </label>
                     <InputText
@@ -4663,21 +5070,21 @@ class="w-full md:w-80"
                 <div class="space-y-4">
                   <div>
                     <div class="flex items-center justify-between mb-1">
-                      <div class="text-sm uppercase tracking-wide text-gray-500">Assigned Amenities</div>
-                      <span v-if="checkoutDamagedSerialIds.length" class="text-xs font-semibold text-red-600">{{ checkoutDamagedSerialIds.length }} damaged</span>
+                      <div class="text-sm uppercase tracking-wide text-gray-500 dark:text-gray-400">Assigned Amenities</div>
+                      <span v-if="checkoutDamagedSerialIds.length" class="text-xs font-semibold text-red-600 dark:text-red-400">{{ checkoutDamagedSerialIds.length }} damaged</span>
                     </div>
-                    <div v-if="checkoutAmenitiesLoading" class="text-sm text-gray-500">Loading assigned amenities...</div>
-                    <div v-else-if="checkoutAmenitiesError" class="text-sm text-red-600">{{ checkoutAmenitiesError }}</div>
+                    <div v-if="checkoutAmenitiesLoading" class="text-sm text-gray-500 dark:text-gray-400">Loading assigned amenities...</div>
+                    <div v-else-if="checkoutAmenitiesError" class="text-sm text-red-600 dark:text-red-400">{{ checkoutAmenitiesError }}</div>
                     <div v-else-if="checkoutAssignedAmenities.length" class="max-h-32 overflow-y-auto space-y-2 pr-1">
                       <div
                         v-for="(amenity, idx) in checkoutAssignedAmenities"
                         :key="amenity.serial_id ?? amenity.id ?? idx"
-                        :class="['border rounded-md p-2 text-sm transition-colors', amenity.damaged ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-white']"
+                        :class="['border rounded-md p-2 text-sm transition-colors', amenity.damaged ? 'border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/20' : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800']"
                       >
                         <div class="flex items-start justify-between gap-2">
                           <div class="space-y-0.5">
-                            <div class="font-semibold text-xs uppercase tracking-wide text-gray-600">{{ amenity.product_name || amenity.amenity_name || ('Amenity ' + (idx + 1)) }}</div>
-                            <div class="text-xs text-gray-500 flex flex-wrap gap-x-2">
+                            <div class="font-semibold text-xs uppercase tracking-wide text-gray-600 dark:text-gray-300">{{ amenity.product_name || amenity.amenity_name || ('Amenity ' + (idx + 1)) }}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400 flex flex-wrap gap-x-2">
                               <span v-if="amenity.brand">Brand: {{ amenity.brand }}</span>
                               <span v-if="amenity.product_type">Type: {{ amenity.product_type }}</span>
                               <span v-if="amenity.serial_number">SN: {{ amenity.serial_number }}</span>
@@ -4686,7 +5093,7 @@ class="w-full md:w-80"
                           <span
                             v-if="amenity.status || amenity.damaged"
                             class="text-[10px] px-2 py-0.5 rounded-full border self-start"
-                            :class="amenity.damaged ? 'border-red-300 text-red-600 bg-red-50' : 'border-gray-300 text-gray-600 bg-gray-50'"
+                            :class="amenity.damaged ? 'border-red-300 text-red-600 bg-red-50 dark:border-red-700 dark:text-red-400 dark:bg-red-900/20' : 'border-gray-300 text-gray-600 bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:bg-gray-800'"
                           >
                             {{ amenity.damaged ? 'Damaged (pending)' : (amenity.status || 'Assigned') }}
                           </span>
@@ -4705,7 +5112,7 @@ class="w-full md:w-80"
                     <div v-else class="text-sm opacity-60">No assigned amenities found.</div>
                   </div>
                   <div>
-                    <div class="text-sm uppercase tracking-wide text-gray-500 mb-1">Consumables</div>
+                    <div class="text-sm uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Consumables</div>
                     <div v-if="(selectedRoom.guestDetails?.extrasItems || []).length" class="space-y-1 text-sm">
                       <div
                         v-for="(it, i) in selectedRoom.guestDetails.extrasItems"
@@ -4719,7 +5126,7 @@ class="w-full md:w-80"
                     <div v-else class="text-sm opacity-60">No consumables.</div>
                   </div>
                   <div>
-                    <div class="text-sm uppercase tracking-wide text-gray-500 mb-1">Amenities</div>
+                    <div class="text-sm uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Amenities</div>
                     <div v-if="(selectedRoom.guestDetails?.amenitiesItems || []).length" class="space-y-1 text-sm">
                       <div
                         v-for="(a, i) in selectedRoom.guestDetails.amenitiesItems"
@@ -4732,8 +5139,8 @@ class="w-full md:w-80"
                     </div>
                     <div v-else class="text-sm opacity-60">No amenities.</div>
                   </div>
-                  <div class="border rounded-lg p-4 space-y-3 bg-white">
-                    <div class="text-sm uppercase tracking-wide text-gray-500">Payment</div>
+                  <div class="border rounded-lg p-4 space-y-3 bg-white dark:bg-gray-800 dark:border-gray-700">
+                    <div class="text-sm uppercase tracking-wide text-gray-500 dark:text-gray-400">Payment</div>
                     <div class="flex items-center justify-between text-sm">
                       <span>Room Rate</span>
                       <span class="flex items-center gap-2">
@@ -4778,10 +5185,6 @@ class="w-full md:w-80"
                       </div>
                     </div>
                     <div class="flex items-center justify-between text-sm">
-                      <span>Damage (Recorded)</span>
-                      <strong>{{ formatCurrency(checkoutDamageChargesNumber) }}</strong>
-                    </div>
-                    <div class="flex items-center justify-between text-sm">
                       <span>Deposit Collected</span>
                       <strong>{{ formatCurrency(checkoutDepositOriginalNumber) }}</strong>
                     </div>
@@ -4789,16 +5192,40 @@ class="w-full md:w-80"
                       <span>Total Due</span>
                       <strong>{{ formatCurrency(occTotalDue) }}</strong>
                     </div>
-                    <div class="flex items-center justify-between text-sm font-semibold bg-amber-100 text-amber-900 border border-amber-300 rounded-lg px-3 py-2">
+                    <div class="flex items-center justify-between text-sm font-semibold bg-amber-100 text-amber-900 border border-amber-300 rounded-lg px-3 py-2 dark:bg-amber-900/20 dark:text-amber-200 dark:border-amber-700">
                       <span>Deposit Returned</span>
                       <strong>{{ formatCurrency(checkoutRefundToGuest) }}</strong>
                     </div>
                     <div
-                      v-if="checkoutDamageShortfall > 0"
-                      class="flex items-center justify-between text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2"
+                      v-if="checkoutDamageShortfall > 0 && !isPaymentConfirmed"
+                      class="flex items-center justify-between text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 dark:text-red-200 dark:bg-red-900/20 dark:border-red-700"
                     >
                       <span>Additional Payment Due</span>
                       <strong>{{ formatCurrency(checkoutDamageShortfall) }}</strong>
+                    </div>
+                    
+                    <!-- Additional Payment Button Section (only show if there's a shortfall) -->
+                    <div v-if="checkoutDamageShortfall > 0" class="border-t pt-3">
+                      <Button
+                        v-if="!isPaymentConfirmed"
+                        icon="pi pi-wallet"
+                        label="Process Additional Payment"
+                        severity="warning"
+                        class="w-full mb-3"
+                        @click="showAdditionalPaymentDialog = true"
+                      />
+                      
+                      <div 
+                        v-if="isPaymentConfirmed" 
+                        class="text-xs text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-200 dark:border-green-700 flex items-center gap-2"
+                      >
+                        <i class="pi pi-check-circle"></i>
+                        <div>
+                          <div class="font-semibold">Payment Complete</div>
+                          <div class="mt-1">Amount Received: {{ formatCurrency(checkoutAdditionalPaymentReceived) }}</div>
+                          <div v-if="checkoutAdditionalPaymentChange > 0">Change to Return: {{ formatCurrency(checkoutAdditionalPaymentChange) }}</div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -4816,11 +5243,92 @@ class="w-full md:w-80"
                     label="Confirm Checkout"
                     icon="pi pi-check"
                     class="flex-1 p-button-primary"
-                    :disabled="selectedRoom.selectedrate == null"
+                    :disabled="selectedRoom.selectedrate == null || !canProceedWithCheckout"
                     @click="confirmCheckout"
                 />
             </div>
         </Dialog>
+        
+        <!-- Additional Payment Dialog -->
+        <Dialog
+            v-model:visible="showAdditionalPaymentDialog"
+            header="Process Additional Payment"
+            :modal="true"
+            :dismissable-mask="true"
+            style="width: 450px"
+        >
+            <div class="space-y-4 p-4">
+                <!-- Amount Due -->
+                <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-4">
+                    <div class="text-sm text-red-700 dark:text-red-300 mb-1">Amount Due</div>
+                    <div class="text-2xl font-bold text-red-800 dark:text-red-200">
+                        {{ formatCurrency(checkoutDamageShortfall) }}
+                    </div>
+                </div>
+                
+                <!-- Amount Received Input -->
+                <div class="space-y-2">
+                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        Amount Received from Guest
+                    </label>
+                    <InputNumber
+                        v-model="checkoutAdditionalPaymentReceived"
+                        mode="currency"
+                        currency="PHP"
+                        :min="0"
+                        :maxFractionDigits="2"
+                        input-class="w-full text-right text-lg"
+                        class="w-full"
+                        placeholder="0.00"
+                        :autofocus="true"
+                    />
+                </div>
+                
+                <!-- Change Display -->
+                <div 
+                    v-if="checkoutAdditionalPaymentReceived > 0"
+                    class="rounded-lg p-4 border"
+                    :class="checkoutAdditionalPaymentChange >= 0 ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700' : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700'"
+                >
+                    <div class="text-sm mb-1" :class="checkoutAdditionalPaymentChange >= 0 ? 'text-blue-700 dark:text-blue-300' : 'text-red-700 dark:text-red-300'">
+                        {{ checkoutAdditionalPaymentChange >= 0 ? 'Change to Return' : 'Insufficient Payment' }}
+                    </div>
+                    <div class="text-2xl font-bold" :class="checkoutAdditionalPaymentChange >= 0 ? 'text-blue-800 dark:text-blue-200' : 'text-red-800 dark:text-red-200'">
+                        {{ formatCurrency(Math.abs(checkoutAdditionalPaymentChange)) }}
+                    </div>
+                    <div v-if="checkoutAdditionalPaymentChange < 0" class="text-xs mt-2 text-red-600 dark:text-red-400">
+                        Still need: {{ formatCurrency(Math.abs(checkoutAdditionalPaymentChange)) }}
+                    </div>
+                </div>
+                
+                <!-- Payment Status -->
+                <div 
+                    v-if="isPaymentConfirmed" 
+                    class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3 flex items-center gap-2 text-green-700 dark:text-green-300"
+                >
+                    <i class="pi pi-check-circle text-lg"></i>
+                    <span class="text-sm font-semibold">Payment Complete - Ready to Checkout</span>
+                </div>
+            </div>
+            
+            <template #footer>
+                <div class="flex gap-2 justify-end">
+                    <Button
+                        label="Cancel"
+                        severity="secondary"
+                        @click="showAdditionalPaymentDialog = false"
+                    />
+                    <Button
+                        label="Confirm Payment"
+                        icon="pi pi-check"
+                        severity="success"
+                        :disabled="!isCheckoutPaymentComplete"
+                        @click="confirmAdditionalPayment"
+                    />
+                </div>
+            </template>
+        </Dialog>
+        
       <!-- Add Consumables & Amenities dialog -->
         <Dialog
             v-model:visible="occExtrasDialogVisible"
@@ -5071,8 +5579,6 @@ class="w-full md:w-80"
     />
   </div>
 
- 
-
   <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
     <div class="space-y-2">
       <label class="block text-sm font-medium text-gray-600">Amount Received</label>
@@ -5109,7 +5615,6 @@ class="w-full md:w-80"
     </div>
   </div>
 </div>
-
 
             <template #footer>
   <Button
@@ -5251,7 +5756,274 @@ class="w-full md:w-80"
             </template>
         </Dialog>
 
-        <Toast />
+        <!-- Sales Report Dialog -->
+        <Dialog 
+            v-model:visible="transactionReportDialogVisible" 
+            header="Sales Report" 
+            :modal="true" 
+            class="w-5/6 max-w-6xl"
+            :dismissable-mask="true"
+        >
+            <div class="space-y-4">
+                <!-- Date and Time Selection -->
+
+                <!-- Time Range Display -->
+                <div v-if="transactionReportData.date_range" class="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+                    <div class="flex items-center justify-center gap-2">
+                        <i class="pi pi-calendar text-gray-600"></i>
+                        <span class="font-semibold text-gray-800">
+                            <!-- Show date range -->
+                            <span v-if="transactionReportData.date_range.start_datetime.split(' ')[0] !== transactionReportData.date_range.end_datetime.split(' ')[0]">
+                                <span class="bg-purple-100 text-purple-700 px-2 py-1 rounded text-sm mr-2">Date Range</span>
+                                {{ transactionReportData.date_range.start_datetime.split(' ')[0] }}
+                                <span v-if="transactionReportStartTime"> {{ transactionReportData.date_range.start_time }}</span>
+                                to {{ transactionReportData.date_range.end_datetime.split(' ')[0] }}
+                                <span v-if="transactionReportEndTime"> {{ transactionReportData.date_range.end_time }}</span>
+                            </span>
+                            <!-- Same day with times -->
+                            <span v-else-if="transactionReportStartTime || transactionReportEndTime">
+                                {{ transactionReportData.date_range.date }} from 
+                                <span v-if="transactionReportStartTime">{{ transactionReportData.date_range.start_time }}</span>
+                                <span v-else>12:00 AM</span>
+                                to 
+                                <span v-if="transactionReportEndTime">{{ transactionReportData.date_range.end_time }}</span>
+                                <span v-else>11:59 PM</span>
+                            </span>
+                            <!-- Full day -->
+                            <span v-else>
+                                {{ transactionReportData.date_range.date }} <span class="text-blue-600"> - Full Day</span>
+                            </span>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Summary Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6" v-if="(transactionReportData.checkinPayments?.length > 0) || (transactionReportData.bills?.length > 0)">
+                    <div class="card p-4 bg-blue-50 border-blue-200">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-2xl font-bold text-blue-700">₱{{ (transactionReportData.totalCheckinPayments || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
+                                <div class="text-sm text-blue-600">Checked-in Sales</div>
+                                <div class="text-xs text-blue-500">{{ transactionReportData.checkinPayments?.length || 0 }} transactions</div>
+                            </div>
+                            <i class="pi pi-home text-2xl text-blue-500"></i>
+                        </div>
+                    </div>
+                    <div class="card p-4 bg-green-50 border-green-200">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-2xl font-bold text-green-700">₱{{ (transactionReportData.totalBills || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
+                                <div class="text-sm text-green-600">POS Sales</div>
+                                <div class="text-xs text-green-500">{{ transactionReportData.bills?.length || 0 }} transactions</div>
+                            </div>
+                            <i class="pi pi-shopping-cart text-2xl text-green-500"></i>
+                        </div>
+                    </div>
+                    <div class="card p-4 bg-purple-50 border-purple-200">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-2xl font-bold text-purple-700">₱{{ (transactionReportData.grandTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
+                                <div class="text-sm text-purple-600">Total Sales</div>
+                                <div class="text-xs text-purple-500">{{ (transactionReportData.checkinPayments?.length || 0) + (transactionReportData.bills?.length || 0) }} total transactions</div>
+                            </div>
+                            <i class="pi pi-chart-bar text-2xl text-purple-500"></i>
+                        </div>
+                    </div>
+                    <div class="card p-4 bg-orange-50 border-orange-200">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-2xl font-bold text-orange-700">₱{{ ((transactionReportData.checkinPayments || []).reduce((sum, payment) => sum + (payment.deposit_amount || 0), 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
+                                <div class="text-sm text-orange-600">Total Deposits</div>
+                                <div class="text-xs text-orange-500">{{ (transactionReportData.checkinPayments || []).filter(p => p.deposit_amount > 0).length }} with deposits</div>
+                            </div>
+                            <i class="pi pi-wallet text-2xl text-orange-500"></i>
+                        </div>
+                    </div>
+                    <div class="card p-4 bg-red-50 border-red-200">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-2xl font-bold text-red-700">₱{{ ((transactionReportData.checkinPayments || []).reduce((sum, payment) => sum + (payment.damage_charges || 0), 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
+                                <div class="text-sm text-red-600">Damage Charges</div>
+                                <div class="text-xs text-red-500">{{ (transactionReportData.checkinPayments || []).filter(p => p.damage_charges > 0).length }} with damages</div>
+                            </div>
+                            <i class="pi pi-exclamation-triangle text-2xl text-red-500"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end mb-4">
+                   
+                  <div class="flex items-end">
+                        <Button 
+                            label="Clear" 
+                            icon="pi pi-filter-slash" 
+                            class="p-button-secondary p-button-outlined w-full"
+                            @click="clearTransactionReportFilters" 
+                        />
+                    </div>
+                  <div class="flex flex-col">
+                        
+                        <Calendar v-model="transactionReportStartDate" showIcon />
+                    </div>
+                    <div class="flex flex-col">
+                       
+                        <Calendar v-model="transactionReportEndDate" showIcon placeholder="End Date" />
+                    </div>
+                    <div class="flex flex-col">
+                        
+                        <Calendar 
+                            v-model="transactionReportStartTime" 
+                            timeOnly 
+                            showIcon 
+                            iconDisplay="input"
+                            showTime
+                            hourFormat="12"
+                            placeholder="Start Time"
+                        />
+                    </div>
+                    <div class="flex flex-col">
+                      
+                        <Calendar 
+                            v-model="transactionReportEndTime" 
+                            timeOnly 
+                            showIcon 
+                            iconDisplay="input"
+                            showTime
+                            hourFormat="12"
+                            placeholder="End Time"
+                        />
+                    </div>
+                  
+                </div>
+
+                <!-- Sales Tables -->
+                <div v-if="!loadingTransactionReport && ((transactionReportData.checkinPayments?.length > 0) || (transactionReportData.bills?.length > 0))">
+                    <!-- Checked-in Sales Table -->
+                    <div v-if="transactionReportData.checkinPayments?.length > 0" class="mb-6">
+                        <h3 class="text-lg font-semibold mb-3 text-blue-700">Checked-in Sales ({{ transactionReportData.checkinPayments?.length || 0 }})</h3>
+                        <DataTable 
+                            :value="transactionReportData.checkinPayments" 
+                            class="p-datatable-sm"
+                            :paginator="true"
+                            :rows="5"
+                            :showGridlines="true"
+                            responsiveLayout="scroll"
+                        >
+                            <Column field="created_at" header="Date/Time" sortable>
+                                <template #body="{ data }">
+                                    {{ new Date(data.created_at).toLocaleString('en-US', {
+                                        year: 'numeric',
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: 'numeric',
+                                        minute: '2-digit',
+                                        hour12: true
+                                    }) }}
+                                </template>
+                            </Column>
+                            <Column field="guest_name" header="Guest Name" sortable />
+                            <Column field="room_number" header="Room" sortable />
+                            <Column field="booking_type" header="Type" sortable>
+                                <template #body="{ data }">
+                                    <Tag :value="data.booking_type" :severity="data.booking_type === 'Walk-In' ? 'info' : 'success'" />
+                                </template>
+                            </Column>
+                            <Column field="hours_selected" header="Hours" sortable>
+                                <template #body="{ data }">{{ data.hours_selected }}h</template>
+                            </Column>
+                            <Column field="amount" header="Total Due" sortable>
+                                <template #body="{ data }">
+                                    <div class="flex flex-col">
+                                        <span class="font-semibold">₱{{ data.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span>
+                                        <div class="text-xs text-gray-500">
+                                            <div v-if="data.room_rate">Room: ₱{{ data.room_rate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
+                                            <div v-if="data.extras_total > 0">Extras: ₱{{ data.extras_total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
+                                            <div v-if="data.amenities_total > 0">Amenities: ₱{{ data.amenities_total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
+                                            <div v-if="data.additional_person_total > 0">Add'l Person: ₱{{ data.additional_person_total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
+                                            <div v-if="data.damage_charges > 0" class="text-red-600 font-medium">Damage: ₱{{ data.damage_charges.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
+                                            <div v-if="data.discount_amount > 0" class="text-red-500">Discount: -₱{{ data.discount_amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
+                                            <div v-if="data.deposit_amount > 0" class="text-green-600 font-medium">Deposit: ₱{{ data.deposit_amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </Column>
+                            <Column field="created_by_name" header="Created By">
+                                <template #body="{ data }">
+                                    <div class="flex flex-col">
+                                        <span class="font-medium text-sm">{{ data.created_by_name || 'Unknown' }}</span>
+                                        <span class="text-xs text-gray-500 capitalize">{{ data.created_by_role || 'Unknown' }}</span>
+                                    </div>
+                                </template>
+                            </Column>
+                        </DataTable>
+                    </div>
+
+                    <!-- POS Sales Table -->
+                    <div v-if="transactionReportData.bills?.length > 0">
+                        <h3 class="text-lg font-semibold mb-3 text-green-700">POS Sales ({{ transactionReportData.bills?.length || 0 }})</h3>
+                        <DataTable 
+                            :value="transactionReportData.bills" 
+                            class="p-datatable-sm"
+                            :paginator="true"
+                            :rows="5"
+                            :showGridlines="true"
+                            responsiveLayout="scroll"
+                        >
+                            <Column field="created_at" header="Date/Time" sortable>
+                                <template #body="{ data }">
+                                    {{ new Date(data.created_at).toLocaleString('en-US', {
+                                        year: 'numeric',
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: 'numeric',
+                                        minute: '2-digit',
+                                        hour12: true
+                                    }) }}
+                                </template>
+                            </Column>
+                            <Column field="invoice_no" header="Invoice #" sortable>
+                                <template #body="{ data }">#{{ data.invoice_no }}</template>
+                            </Column>
+                            <Column field="amount" header="Amount" sortable>
+                                <template #body="{ data }">₱{{ data.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</template>
+                            </Column>
+                            <Column field="created_by_name" header="Created By">
+                                <template #body="{ data }">
+                                    <div class="flex flex-col">
+                                        <span class="font-medium text-sm">{{ data.created_by_name || 'Unknown' }}</span>
+                                        <span class="text-xs text-gray-500 capitalize">{{ data.created_by_role || 'Unknown' }}</span>
+                                    </div>
+                                </template>
+                            </Column>
+                        </DataTable>
+                    </div>
+                </div>
+
+                <!-- Empty State -->
+                <div v-else-if="!loadingTransactionReport" class="text-center py-12">
+                    <i class="pi pi-chart-bar text-6xl text-gray-300 mb-4"></i>
+                    <h3 class="text-xl font-semibold text-gray-600 mb-2">No Sales Found</h3>
+                    <p class="text-gray-500">No checked-in sales or POS sales found for the selected date range.</p>
+                </div>
+
+                <!-- Loading State -->
+                <div v-if="loadingTransactionReport" class="text-center py-12">
+                    <ProgressSpinner />
+                    <p class="text-gray-500 mt-4">Generating sales report...</p>
+                </div>
+            </div>
+
+            <template #footer>
+                <Button 
+                    label="Close" 
+                    class="p-button-secondary" 
+                    @click="transactionReportDialogVisible = false" 
+                />
+            </template>
+        </Dialog>
+        
+        <!-- Confirmation Dialog for Checkout -->
+        <ConfirmDialog :dismissableMask="true"></ConfirmDialog>
     </template>
     <style scoped>
     /* Add to your style section */
@@ -5271,7 +6043,6 @@ class="w-full md:w-80"
         }
     }
 
-
     .room-card {
       position: relative;
       border-radius: 0.5rem;   /* same rounding as inner */
@@ -5283,7 +6054,6 @@ class="w-full md:w-80"
     }
 
     /* The animated gradient lives on a pseudo-element behind the content */
-
 
     /* Inner content sits above */
     .room-card__inner {
@@ -5314,8 +6084,6 @@ class="w-full md:w-80"
       pointer-events: none;
     }
 
-    
-
     /* Time's up: same animated border */
     .timeup-anim::before {
       opacity: 1;
@@ -5337,8 +6105,6 @@ class="w-full md:w-80"
       animation: steam 20s linear infinite;
       pointer-events: none;
     }
-
-   
 
     @keyframes steam {
       0%   { background-position:   0% 0; }
@@ -5379,10 +6145,4 @@ class="w-full md:w-80"
 }
 
     </style>
-
-
-
-
-
-
 

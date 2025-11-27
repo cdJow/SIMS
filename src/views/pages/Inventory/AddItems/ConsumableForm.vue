@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed } from "vue";
 import { useToast } from "primevue/usetoast";
 import { addProduct, getProducts } from "@/api/auth";
 
@@ -8,9 +8,7 @@ const toast = useToast();
 // Popover and Dialog Refs
 const op2 = ref(null);
 
-
 // Form fields
-
 
 const productName = ref("");
 const brand = ref("");
@@ -23,6 +21,21 @@ const unit = ref("");
 // Product list for popover
 const products = ref([]);
 const selectedProduct = ref(null);
+const searchQuery = ref("");
+
+// Filtered products based on search query
+const filteredProducts = computed(() => {
+  if (!searchQuery.value) {
+    return products.value;
+  }
+  
+  const query = searchQuery.value.toLowerCase();
+  return products.value.filter(product => {
+    const productName = (product.product_name || "").toLowerCase();
+    const brand = (product.brand || "").toLowerCase();
+    return productName.includes(query) || brand.includes(query);
+  });
+});
 
 // Fetch products for the popover
 const fetchProducts = async () => {
@@ -79,7 +92,6 @@ const clearForm = () => {
   minimumStock.value = "";
   stockLimit.value = "";
 };
-
 
 const handleSubmit = async () => {
  if (
@@ -172,13 +184,27 @@ onMounted(() => {
                 id="overlay_panel"
                 style="width: 70rem"
               >
+                <div class="mb-3" style="max-width: 400px;">
+                  <IconField iconPosition="left">
+                    <InputIcon class="pi pi-search" />
+                    <InputText 
+                      v-model="searchQuery" 
+                      placeholder="Search by Product Name or Brand..." 
+                      style="width: 100%;"
+                    />
+                  </IconField>
+                </div>
                 <DataTable
                   v-model:selection="selectedProduct"
-                  :value="products"
+                  :value="filteredProducts"
                   selectionMode="single"
                   paginator
                   :rows="5"
                   @row-select="onProductSelect"
+                  stripedRows
+                  :pt="{
+                    bodyRow: { style: 'height: 3.5rem;' }
+                  }"
                 >
                   <Column field="product_name" header="Product Name" sortable />
                   <Column field="brand" header="Brand" sortable />
@@ -279,9 +305,6 @@ onMounted(() => {
           <Button label="Clear" :fluid="false" class="px-32 py-4" @click="clearForm" />
         </div>
 </div>
-        
-      
-    </div>
-    <Toast />
-  </Fluid>
+
+    </div></Fluid>
 </template>

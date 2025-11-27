@@ -9,7 +9,6 @@ import Avatar from "primevue/avatar";
 import Button from "primevue/button";
 import { getCurrentUser, logoutUserLog } from "@/api/auth";
 
-
 const { toggleMenu, toggleDarkMode, isDarkTheme } = useLayout();
 const router = useRouter();
 const toast = useToast();
@@ -158,7 +157,6 @@ onBeforeUnmount(() => {
 <path d="M0 0 C3.93879158 -0.02568949 7.87754772 -0.04329749 11.81640625 -0.05493164 C13.77605922 -0.06213625 15.73568957 -0.07486655 17.6953125 -0.08789062 C30.84282746 -0.12011493 43.81929799 0.49304992 57 1 C57 19.81 57 38.62 57 58 C37.86 58 18.72 58 -1 58 C-1.08771341 38.61533567 -0.89475756 19.36341033 0 0 Z " fill="#002D3A" transform="translate(355,398)"/>
 </svg>
 
-
                 <span>WoodLand</span>
             </router-link>
         </div>
@@ -174,11 +172,8 @@ onBeforeUnmount(() => {
                     <i :class="[ 'pi', { 'pi-moon': isDarkTheme, 'pi-sun': !isDarkTheme } ]"></i>
                 </button>
 
-                
             </div>
         </div>
-
-
 
         <!-- USER AVATAR MENU OR LOGIN BUTTON -->
         <div class="relative">
@@ -265,7 +260,6 @@ onBeforeUnmount(() => {
             </div>
         </div>
     </div>
-    <Toast />
 </template>
 
 <style scoped>

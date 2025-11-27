@@ -43,28 +43,32 @@ onMounted(() => {
     loadInvoices();
 });
 
-// Utility functions
+// Utility functions - Create formatter instances once
+const currencyFormatter = new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency: "PHP",
+});
+
+const dateFormatter = new Intl.DateTimeFormat("en-PH", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+});
+
 const formatCurrency = (value) => {
-    return new Intl.NumberFormat("en-PH", {
-        style: "currency",
-        currency: "PHP",
-    }).format(value);
+    return currencyFormatter.format(value);
 };
 
 const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString("en-PH", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-    });
+    return dateFormatter.format(new Date(dateString));
 };
 
 // Filter state
 const filters = ref({
     searchQuery: "",
-    dateRange: null,
+    searchDate: null,
 });
 
 // Add sorting state and handler
@@ -316,11 +320,10 @@ const filteredInvoices = computed(() => {
                 );
             });
 
-        // Date range filter
+        // Single date filter - match invoices on the selected date
         const matchesDate =
-            !filters.value.dateRange ||
-            (new Date(invoice.date) >= new Date(filters.value.dateRange[0]) &&
-                new Date(invoice.date) <= new Date(filters.value.dateRange[1]));
+            !filters.value.searchDate ||
+            new Date(invoice.date).toDateString() === new Date(filters.value.searchDate).toDateString();
 
         return matchesSearch && matchesDate;
     });
@@ -330,7 +333,7 @@ const filteredInvoices = computed(() => {
 const clearFilters = () => {
     filters.value = {
         searchQuery: "",
-        dateRange: null,
+        searchDate: null,
     };
 };
 
@@ -352,42 +355,54 @@ const getRoleSeverity = (role) => {
 };
 </script>
 <template>
-    <div class="card">
-        <div class="gap-4 mb-6">
+    <div class="card flex flex-col max-h-[calc(100vh-8rem)]">
+        <div class="gap-4 mb-6 flex-shrink-0">
             <!-- Advanced Filters -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <!-- Global Search -->
-                <div class="flex flex-row gap-4">
-                    <Button
-                        type="button"
-                        icon="pi pi-filter-slash"
-                        label="Clear"
-                        outlined
-                        @click="clearFilters"
+            <div class="flex flex-row gap-4 items-center">
+                <Button
+                    type="button"
+                    icon="pi pi-filter-slash"
+                    label="Clear"
+                    outlined
+                    @click="clearFilters"
+                />
+                <IconField>
+                    <InputIcon>
+                        <i class="pi pi-search" />
+                    </InputIcon>
+                    <InputText
+                        placeholder="Search Invoice ID"
+                        class="w-80"
+                        v-model="filters.searchQuery"
                     />
-                    <IconField>
-                        <InputIcon>
-                            <i class="pi pi-search" />
-                        </InputIcon>
-                        <InputText
-                            placeholder="Keyword Search"
-                            class="w-full"
-                            v-model="filters.searchQuery"
-                        />
-                    </IconField>
-                </div>
+                </IconField>
+                
+                <!-- Single Date Filter -->
+                <DatePicker
+                    v-model="filters.searchDate"
+                    :manualInput="false"
+                    dateFormat="mm/dd/yy"
+                    placeholder="Search by Date"
+                    :showIcon="true"
+                    iconDisplay="input"
+                    class="w-64"
+                />
             </div>
         </div>
 
-        <h2 class="text-xl font-bold mb-4">POS Invoices</h2>
-        <DataTable
-            :value="filteredInvoices"
-            class="p-datatable-striped"
-            :sortField="sortField"
-            :sortOrder="sortOrder"
-            :loading="isLoading"
-            @sort="onSort"
-        >
+        <div class="overflow-y-auto flex-1 pr-2">
+            <h2 class="text-xl font-bold mb-4">POS Invoices</h2>
+            <DataTable
+                :value="filteredInvoices"
+                class="p-datatable-striped"
+                :sortField="sortField"
+                :sortOrder="sortOrder"
+                :loading="isLoading"
+                @sort="onSort"
+                :paginator="true"
+                :rows="10"
+            
+            >
             <!-- Invoice ID -->
             <Column field="invoiceId" header="Invoice ID" sortable>
                 <template #body="{ data }">
@@ -470,12 +485,12 @@ const getRoleSeverity = (role) => {
                             @click="handlePrint(data)"
                             v-tooltip.top="'Print Invoice'"
                         />
-                        
-                    
+
                     </div>
                 </template>
             </Column>
         </DataTable>
+        </div>
     </div>
 
     <Dialog
@@ -511,5 +526,4 @@ const getRoleSeverity = (role) => {
             />
         </template>
     </Dialog>
-    <Toast />
 </template>

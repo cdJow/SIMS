@@ -391,28 +391,55 @@ const openDeleteDialog = (room) => {
 const confirmDeleteRoom = async () => {
   try {
     await deleteRoom(roomToDelete.value.id);
-    toast.add({ severity: "success", summary: "Deleted", detail: "Room deleted.", life: 3000 });
+    toast.add({ severity: "success", summary: "Deleted", detail: "Room deleted successfully.", life: 3000 });
     isDeleteDialogVisible.value = false;
     await loadRooms();
     // Notify other views
     window.dispatchEvent(new CustomEvent("rooms:changed", { detail: { reason: "room-deleted", roomId: roomToDelete.value.id } }));
   } catch (err) {
-    // Check if error is related to existing payments
     const errorMessage = err?.response?.data?.error || err?.message || "Failed to delete room.";
     
-    if (errorMessage.toLowerCase().includes('payment') || errorMessage.toLowerCase().includes('booking') || errorMessage.toLowerCase().includes('used') || errorMessage === "Failed to delete room.") {
+    // Check for foreign key constraint errors
+    if (errorMessage.toLowerCase().includes('foreign key') || 
+        errorMessage.toLowerCase().includes('constraint') ||
+        errorMessage.toLowerCase().includes('cannot delete') ||
+        errorMessage.toLowerCase().includes('referenced by')) {
+      toast.add({ 
+        severity: "error", 
+        summary: "Cannot Delete Room", 
+        detail: `Room "${roomToDelete.value.room_number}" cannot be deleted because it has related data in the system. This room is connected to bookings, payments, damage reports, or other records that depend on it. Please remove or update all related records first before deleting this room.`, 
+        life: 8000 
+      });
+    } else if (errorMessage.toLowerCase().includes('payment') || 
+               errorMessage.toLowerCase().includes('booking') || 
+               errorMessage.toLowerCase().includes('used')) {
       toast.add({ 
         severity: "error", 
         summary: "Cannot Delete Room", 
         detail: `Room "${roomToDelete.value.room_number}" cannot be deleted because it is currently being used by existing payments or bookings. Please complete or cancel all related transactions first.`, 
         life: 6000 
       });
-    } else {
+    } else if (errorMessage.toLowerCase().includes('occupied')) {
       toast.add({ 
         severity: "error", 
-        summary: "Error", 
-        detail: errorMessage, 
-        life: 3000 
+        summary: "Cannot Delete Room", 
+        detail: `Room "${roomToDelete.value.room_number}" cannot be deleted because it is currently occupied. Please check out the guest first.`, 
+        life: 5000 
+      });
+    } else if (errorMessage.toLowerCase().includes('amenities') || 
+               errorMessage.toLowerCase().includes('assigned')) {
+      toast.add({ 
+        severity: "error", 
+        summary: "Cannot Delete Room", 
+        detail: `Room "${roomToDelete.value.room_number}" cannot be deleted because it has assigned amenities or inventory items. Please unassign all amenities from this room first.`, 
+        life: 6000 
+      });
+    } else {
+      toast.add({ 
+        severity: "warn", 
+        summary: "Delete Failed", 
+        detail: `cannot be deleted because it has records that depend on it. "${roomToDelete.value.room_number}".}`, 
+        life: 4000 
       });
     }
   }
@@ -518,33 +545,33 @@ onUnmounted(() => {
 
   <div class="flex flex-col md:flex-row gap-4">
     <div class="w-full md:w-1/3 lg:w-1/4 xl:w-1/5 p-2 md:p-4 card rounded-lg order-first md:order-last">
-      <h3 class="text-base md:text-lg font-bold mb-2">Filters</h3>
+      <h3 class="text-base md:text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">Filters</h3>
       <Button type="button" icon="pi pi-filter-slash" severity="danger" label="Clear" outlined class="w-full" @click="clearFilters"/>
       <InputText placeholder="Search Room Number" class="w-full mt-2" v-model="selectedFilter.searchQuery"/>
       <Select v-model="selectedFilter.roomCategory" :options="categoryOptions" optionLabel="label" optionValue="value" placeholder="Room Type" class="w-full mt-2"/>
       <div class="mt-2 flex flex-col gap-2">
   <div>
     <RadioButton v-model="selectedStatus" inputId="status-available" value="Available" class="mr-1" />
-    <label for="status-available" class="mr-2">Available</label>
+    <label for="status-available" class="text-gray-700 dark:text-gray-300 mr-2">Available</label>
   </div>
   <div>
     <RadioButton v-model="selectedStatus" inputId="status-occupied" value="Occupied" class="mr-1" />
-    <label for="status-occupied" class="mr-2">Occupied</label>
+    <label for="status-occupied" class="text-gray-700 dark:text-gray-300 mr-2">Occupied</label>
   </div>
   <div>
     <RadioButton v-model="selectedStatus" inputId="status-cleaning" value="Cleaning" class="mr-1" />
-    <label for="status-cleaning">Cleaning</label>
+    <label for="status-cleaning" class="text-gray-700 dark:text-gray-300">Cleaning</label>
   </div>
    <div>
     <RadioButton v-model="selectedStatus" inputId="status-maintenance" value="Under Maintenance" class="mr-1" />
-    <label for="status-maintenance">Maintenance</label>
+    <label for="status-maintenance" class="text-gray-700 dark:text-gray-300">Maintenance</label>
   </div>
 </div>
     </div>
 
     <div class="flex-1">
-      <div class="card">
-        <div class="font-semibold text-xl mb-4">Rooms</div>
+      <div class="card flex flex-col max-h-[calc(100vh-16rem)]">
+        <div class="font-semibold text-xl mb-4 flex-shrink-0">Rooms</div>
         <!-- Empty State Check -->
         <div v-if="filteredRooms.length === 0" class="text-center p-12 bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600">
           <i class="pi pi-home text-6xl text-gray-400 mb-4"></i>
@@ -586,22 +613,23 @@ onUnmounted(() => {
         </div>
 
         <!-- Rooms DataView -->
-        <DataView v-else :value="filteredRooms" :layout="layout">
-          <template #grid="slotProps">
-            <div class="grid grid-cols-2 gap-4 items-stretch">
+        <div v-else class="overflow-y-auto flex-1 pr-2">
+          <DataView :value="filteredRooms" :layout="layout">
+            <template #grid="slotProps">
+              <div class="grid grid-cols-2 gap-4 items-stretch">
               <div v-for="room in slotProps.items" :key="room.id" class="border rounded-lg shadow-md p-4 card h-full flex flex-col">
                 <div class="relative flex justify-center mb-4">
                   <img class="rounded-md w-full h-48 object-cover" :src="`http://localhost:5000/uploads/rooms/${room.image_url}`" :alt="room.room_number"/>
                   <Tag :value="room.status" :severity="getSeverity(room)" class="absolute top-2 left-2"/>
                 </div>
-                <div class="mb-2 text-lg font-bold">Room {{ room.room_number }}</div>
-                <div class="text-sm">Name: {{ getRoomType(room.type_id) }}</div>
-                <div class="text-sm">Category: {{ getRoomCategory(room.category_id) }}</div>
-                <div class="text-sm mt-2">{{ room.description }}</div>
-                <div class="text-sm mt-2">
+                <div class="mb-2 text-lg font-bold text-gray-900 dark:text-gray-100">Room {{ room.room_number }}</div>
+                <div class="text-sm text-gray-700 dark:text-gray-300">Name: {{ getRoomType(room.type_id) }}</div>
+                <div class="text-sm text-gray-700 dark:text-gray-300">Category: {{ getRoomCategory(room.category_id) }}</div>
+                <div class="text-sm text-gray-700 dark:text-gray-300 mt-2">{{ room.description }}</div>
+                <div class="text-sm text-gray-700 dark:text-gray-300 mt-2">
                   <i class="pi pi-user"></i> Occupancy: {{ room.occupancy }}
                 </div>
-             <div class="text-sm mt-2">
+             <div class="text-sm text-gray-700 dark:text-gray-300 mt-2">
   Rates:
   <span class="ml-2">
     6h {{ formatPrice(getRoomTypeRates(room.type_id).rates?.['6hrs']) }},
@@ -609,7 +637,7 @@ onUnmounted(() => {
     24h {{ formatPrice(getRoomTypeRates(room.type_id).rates?.['24hrs']) }}
   </span>
 </div>
-<div v-if="getRoomTypeRates(room.type_id).discount_percent" class="text-xs text-red-500 font-bold mt-1">
+<div v-if="getRoomTypeRates(room.type_id).discount_percent" class="text-xs text-red-500 dark:text-red-400 font-bold mt-1">
   Discount: {{ getRoomTypeRates(room.type_id).discount_percent }}%
 </div>
 
@@ -618,7 +646,7 @@ onUnmounted(() => {
                   <Button icon="pi pi-pencil" label="Edit" :disabled="room.status==='Occupied' || room.status==='Under Maintenance' || room.status==='Maintenance'" @click="openEditDialog(room)" class="flex-auto"></Button>
                   <Button icon="pi pi-info-circle" label="Details" severity="info" @click="openDetailsDialog(room)" class="flex-auto"></Button>
                   <Button icon="pi pi-wrench"
-                          :label="(room.status==='Under Maintenance'||room.status==='Maintenance') ? 'End Maintenance' : 'Maintenance'"
+                          :label="(room.status==='Under Maintenance'||room.status==='Maintenance') ? 'End' : 'Maintenance'"
                           severity="warn"
                           :disabled="room.status==='Occupied'"
                           @click="toggleMaintenance(room)"
@@ -629,6 +657,7 @@ onUnmounted(() => {
             </div>
           </template>
         </DataView>
+        </div>
       </div>
     </div>
   </div>
@@ -636,13 +665,13 @@ onUnmounted(() => {
   <!-- Details Dialog -->
   <Dialog v-model:visible="isDetailsDialogVisible" :dismissable-mask="true"  :header="selectedRoom?.room_number || 'Room Details'" :modal="true" :closable="true" :style="{ width: '50vw' }">
   <div v-if="selectedRoom">
-    <h3 class="text-lg font-semibold">Type: {{ getRoomType(selectedRoom.type_id) }}</h3>
-    <p class="text-sm text-gray-500">Category: {{ getRoomCategory(selectedRoom.category_id) }}</p>
-    <p class="mt-2 text-sm">{{ selectedRoom.description }}</p>
-    <div class="mt-2">
+    <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Type: {{ getRoomType(selectedRoom.type_id) }}</h3>
+    <p class="text-sm text-gray-500 dark:text-gray-400">Category: {{ getRoomCategory(selectedRoom.category_id) }}</p>
+    <p class="mt-2 text-sm text-gray-700 dark:text-gray-300">{{ selectedRoom.description }}</p>
+    <div class="mt-2 text-gray-700 dark:text-gray-300">
       <i class="pi pi-user"></i> Occupancy: {{ selectedRoom.occupancy }}
     </div>
-    <div class="text-sm mt-2">
+    <div class="text-sm text-gray-700 dark:text-gray-300 mt-2">
   Rates:
   <span class="ml-2">
     6h {{ formatPrice(getRoomTypeRates(selectedRoom.type_id).rates?.['6hrs']) }},
@@ -650,15 +679,15 @@ onUnmounted(() => {
     24h {{ formatPrice(getRoomTypeRates(selectedRoom.type_id).rates?.['24hrs']) }}
   </span>
 </div>
-<div v-if="getRoomTypeRates(selectedRoom.type_id).discount_percent" class="text-xs text-red-500 font-bold mt-1">
+<div v-if="getRoomTypeRates(selectedRoom.type_id).discount_percent" class="text-xs text-red-500 dark:text-red-400 font-bold mt-1">
   Discount: {{ getRoomTypeRates(selectedRoom.type_id).discount_percent }}%
 </div>
 
-    <h4 class="font-semibold mt-4 mb-2">Assigned Amenities</h4>
+    <h4 class="font-semibold text-gray-900 dark:text-gray-100 mt-4 mb-2">Assigned Amenities</h4>
     
     <!-- Empty State for No Amenities -->
     <div v-if="assignedSerialNumbers.length === 0" class="text-center p-6 bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600">
-      <i class="pi pi-box text-3xl text-gray-400 mb-2"></i>
+      <i class="pi pi-box text-3xl text-gray-400 dark:text-gray-500 mb-2"></i>
       <p class="text-gray-500 dark:text-gray-400 text-sm">
         No amenities assigned to this room
       </p>
@@ -666,15 +695,15 @@ onUnmounted(() => {
     
     <!-- Amenities Grid -->
     <div v-else class="grid grid-cols-4 gap-2 text-sm font-medium">
-      <div class="font-semibold">Product</div>
-      <div class="font-semibold">Category</div>
-      <div class="font-semibold">Brand</div>
-      <div class="font-semibold">Serial Number</div>
+      <div class="font-semibold text-gray-900 dark:text-gray-100">Product</div>
+      <div class="font-semibold text-gray-900 dark:text-gray-100">Category</div>
+      <div class="font-semibold text-gray-900 dark:text-gray-100">Brand</div>
+      <div class="font-semibold text-gray-900 dark:text-gray-100">Serial Number</div>
       <div v-for="serial in assignedSerialNumbers" :key="serial.id" class="contents">
-        <div>{{ serial.product_name }}</div>
-        <div>{{ serial.category }}</div>
-        <div>{{ serial.brand }}</div>
-        <div>{{ serial.serial_number }}</div>
+        <div class="text-gray-700 dark:text-gray-300">{{ serial.product_name }}</div>
+        <div class="text-gray-700 dark:text-gray-300">{{ serial.category }}</div>
+        <div class="text-gray-700 dark:text-gray-300">{{ serial.brand }}</div>
+        <div class="text-gray-700 dark:text-gray-300">{{ serial.serial_number }}</div>
       </div>
     </div>
   </div>
@@ -683,9 +712,9 @@ onUnmounted(() => {
   <!-- Delete Dialog -->
   <Dialog v-model:visible="isDeleteDialogVisible"  :dismissable-mask="true" :header="'Confirm Deletion'" :modal="true" :closable="true" :style="{ width: '30vw' }">
     <div class="flex flex-col items-center">
-      <p class="text-sm text-center mb-4">
+      <p class="text-sm text-gray-700 dark:text-gray-300 text-center mb-4">
         Are you sure you want to delete
-        <strong class="text-red-500">{{ roomToDelete?.room_number }}</strong>? This action cannot be undone.
+        <strong class="text-red-500 dark:text-red-400">{{ roomToDelete?.room_number }}</strong>? This action cannot be undone.
       </p>
       <div class="flex justify-end gap-2 w-full">
          <Button label="Delete" icon="pi pi-trash" severity="danger" @click="confirmDeleteRoom"></Button>
@@ -700,13 +729,13 @@ onUnmounted(() => {
        <div v-if="roomToEdit">
     <!-- Image Update Section -->
 
-   <label class="block text-sm font-medium mb-2">Room Image</label>
+   <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Room Image</label>
     <input
         type="file"
         id="roomImage"
         accept="image/*"
         @change="handleImageChange"
-        class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-500 hover:file:bg-green-100"
+        class="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-500 hover:file:bg-green-100 dark:file:bg-green-900/30 dark:file:text-green-400 dark:hover:file:bg-green-900/50"
     />
     <!-- Image Preview Section -->
     <div
@@ -716,11 +745,11 @@ onUnmounted(() => {
         <img
             :src="previewImageUrl || `http://localhost:5000/uploads/rooms/${roomToEdit.image_url}`"
             alt="Room Preview"
-            class="w-24 h-24 object-cover rounded-md border border-gray-300"
+            class="w-24 h-24 object-cover rounded-md border border-gray-300 dark:border-gray-600"
         />
         <div>
-            <p class="text-sm font-medium text-gray-700">Preview:</p>
-            <p class="text-sm text-gray-500">
+            <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Preview:</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400">
                 {{ previewImageUrl ? "Room Image Selected" : "Current Room Image" }}
             </p>
         </div>
@@ -734,12 +763,12 @@ onUnmounted(() => {
     </div>
 
 
-      <label class="block text-sm font-medium mb-2 mt-2">Room Number</label>
+      <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 mt-2">Room Number</label>
       <InputText v-model="roomToEdit.room_number" class="w-full"/>
-<span v-if="roomNumberError" class="text-red-500 text-xs">{{ roomNumberError }}</span>
+<span v-if="roomNumberError" class="text-red-500 dark:text-red-400 text-xs">{{ roomNumberError }}</span>
 
        <!-- Room Type Dropdown -->
-    <label class="block text-sm font-medium mb-2 mt-2">Room Type</label>
+    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 mt-2">Room Type</label>
     <Select
       v-model="roomToEdit.type_id"
       :options="roomTypeOptions"
@@ -749,16 +778,16 @@ onUnmounted(() => {
     />
 
     <!-- Readonly Category Display -->
-    <label class="block text-sm font-medium mb-2 mt-2">Category</label>
+    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 mt-2">Category</label>
     <InputText
       :value="selectedEditCategory"
       class="w-full"
       disabled
       style="background-color: #f9fafb;"
     />
-      <label class="block text-sm font-medium mb-2 mt-2">Description</label>
+      <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 mt-2">Description</label>
       <Textarea v-model="roomToEdit.description" class="w-full"/>
-      <label class="block text-sm font-medium mb-2 mt-2">Occupancy</label>
+      <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 mt-2">Occupancy</label>
       <InputText v-model="roomToEdit.occupancy" class="w-full" type="number"/>
       <Button label="Manage Amenities" icon="pi pi-pencil"  class=" mb-2 mt-5" @click="openAmenitiesDialog(roomToEdit)"></Button>
       <div class="flex justify-end gap-2 mt-4">
@@ -873,5 +902,4 @@ onUnmounted(() => {
   </div>
 </Dialog>
 
-  <Toast />
 </template>

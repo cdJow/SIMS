@@ -15,6 +15,10 @@ const NonConsumablebatchDialog = ref(false);
 const assignItemDialogVisible = ref(false); // For assigning items
 const reassignItemDialogVisible = ref(false); // For re-assigning items
 
+// Dialog for showing product batches
+const showProductBatchesDialog = ref(false);
+const selectedProductForDialog = ref(null);
+
 const deleteProductDialog = ref(false); // State for delete dialog
 const deleteBatchDialog = ref(false);
 const selectedBatchForDeletion = ref(null);
@@ -396,6 +400,12 @@ function saveEditConsumable() {
             serial.serialNumber = editingConsumableData.value.serialNumber;
             serial.srp = editingConsumableData.value.srp;
         }
+        
+        // Update selectedProductForDialog if it matches the updated product
+        if (selectedProductForDialog.value && selectedProductForDialog.value.id === product.id) {
+            console.log('Updating selectedProductForDialog with consumable changes');
+            selectedProductForDialog.value = { ...product };
+        }
     }
 
     console.log(
@@ -411,7 +421,8 @@ function saveEditConsumable() {
         life: 3000, // Duration in milliseconds
     });
 
-    editConsumableDialogVisible.value = false; // Close the dialog
+    // Close edit dialog and maintain context
+    editConsumableDialogVisible.value = false;
 }
 
 // Functions for editing serial number in isDialog2Visible
@@ -441,21 +452,32 @@ const isUpdateButtonDisabled = computed(() => {
 });
 
 function openEditSerialDialog(serial) {
+    console.log('Opening edit serial dialog for:', serial);
+    
     // Close the batch items dialog first
     isDialog2Visible.value = false;
     
-    editingSerialData.value = { 
-        id: serial.id || serial.serialId,
-        serialNumber: serial.serialNumber,
-        originalSerialNumber: serial.serialNumber
-    };
+    // Reset all states first
     serialNumberExists.value = false;
     serialNumberWarning.value = "";
+    
+    // Set the editing data with proper cloning
+    editingSerialData.value = { 
+        id: serial.id || serial.serialId,
+        serialNumber: String(serial.serialNumber || ''),
+        originalSerialNumber: String(serial.serialNumber || '')
+    };
+    
+    console.log('Editing serial data set to:', editingSerialData.value);
+    
+    // Open the dialog
     editSerialDialogVisible.value = true;
 }
 
 async function saveEditedSerialNumber() {
-    if (!editingSerialData.value.serialNumber.trim()) {
+    console.log('Attempting to save serial number:', editingSerialData.value);
+    
+    if (!editingSerialData.value.serialNumber || !editingSerialData.value.serialNumber.trim()) {
         toast.value.add({
             severity: "warn",
             summary: "Validation Error",
@@ -466,7 +488,7 @@ async function saveEditedSerialNumber() {
     }
 
     // Check if serial number actually changed
-    if (editingSerialData.value.serialNumber === editingSerialData.value.originalSerialNumber) {
+    if (editingSerialData.value.serialNumber.trim() === editingSerialData.value.originalSerialNumber.trim()) {
         toast.value.add({
             severity: "info",
             summary: "No Changes",
@@ -474,6 +496,17 @@ async function saveEditedSerialNumber() {
             life: 3000,
         });
         cancelEditSerial();
+        return;
+    }
+
+    // Check for duplicate serial numbers
+    if (serialNumberExists.value) {
+        toast.value.add({
+            severity: "error",
+            summary: "Duplicate Serial Number",
+            detail: serialNumberWarning.value,
+            life: 3000,
+        });
         return;
     }
 
@@ -517,6 +550,12 @@ async function saveEditedSerialNumber() {
                     targetSerial.serialNumber = editingSerialData.value.serialNumber;
                 }
             }
+            
+            // Update selectedProductForDialog if it matches the updated product
+            if (selectedProductForDialog.value && selectedProductForDialog.value.id === targetProduct.id) {
+                console.log('Updating selectedProductForDialog with new serial number');
+                selectedProductForDialog.value = { ...targetProduct };
+            }
         }
         
         toast.value.add({
@@ -526,7 +565,20 @@ async function saveEditedSerialNumber() {
             life: 3000,
         });
         
-        cancelEditSerial();
+        // Close edit dialog and reopen batch dialog to maintain context
+        editSerialDialogVisible.value = false;
+        
+        // Reset editing data
+        editingSerialData.value = {
+            id: null,
+            serialNumber: "",
+            originalSerialNumber: ""
+        };
+        serialNumberExists.value = false;
+        serialNumberWarning.value = "";
+        
+        // Reopen the batch items dialog to show updated data
+        isDialog2Visible.value = true;
         
     } catch (error) {
         console.error("Error updating serial number:", error);
@@ -540,6 +592,8 @@ async function saveEditedSerialNumber() {
 }
 
 function checkSerialNumberExists(newSerialNumber) {
+    console.log('Checking serial number:', newSerialNumber, 'against original:', editingSerialData.value.originalSerialNumber);
+    
     if (!newSerialNumber || newSerialNumber === editingSerialData.value.originalSerialNumber) {
         serialNumberExists.value = false;
         serialNumberWarning.value = "";
@@ -584,7 +638,10 @@ function checkSerialNumberExists(newSerialNumber) {
 }
 
 function cancelEditSerial() {
+    console.log('Canceling edit serial dialog');
     editSerialDialogVisible.value = false;
+    
+    // Reset all data
     editingSerialData.value = {
         id: null,
         serialNumber: "",
@@ -592,6 +649,9 @@ function cancelEditSerial() {
     };
     serialNumberExists.value = false;
     serialNumberWarning.value = "";
+    
+    // Reopen the batch items dialog to maintain user context
+    isDialog2Visible.value = true;
 }
 
 // Function to open the damage report dialog
@@ -1069,6 +1129,20 @@ function saveEditedSerial(serialData) {
     Object.assign(matchedSerial, serialData);
     console.log("Serial updated successfully:", matchedSerial);
 
+    // Update serialNumbers array if it contains this item
+    const serialIndex = serialNumbers.value.findIndex(
+        (item) => item.serialNumber === serialData.serialNumber
+    );
+    if (serialIndex !== -1) {
+        Object.assign(serialNumbers.value[serialIndex], serialData);
+    }
+
+    // Update selectedProductForDialog if it matches the updated product
+    if (selectedProductForDialog.value && selectedProductForDialog.value.id === matchedProduct.id) {
+        console.log('Updating selectedProductForDialog with serial changes');
+        selectedProductForDialog.value = { ...matchedProduct };
+    }
+
     // Show success message
     toast.value.add({
         severity: "success",
@@ -1077,7 +1151,9 @@ function saveEditedSerial(serialData) {
         life: 3000,
     });
 
+    // Close the serial edit dialog and reopen batch dialog to show changes
     hideSerialDialog();
+    isDialog2Visible.value = true;
 }
 
 // State management
@@ -1280,6 +1356,12 @@ async function saveProduct() {
                 );
                 if (index !== -1) {
                     products.value[index] = { ...products.value[index], ...product.value };
+                    
+                    // Update selectedProductForDialog if it matches the updated product
+                    if (selectedProductForDialog.value && selectedProductForDialog.value.id === product.value.id) {
+                        console.log('Updating selectedProductForDialog with product changes');
+                        selectedProductForDialog.value = { ...products.value[index] };
+                    }
                 }
 
                 toast.value.add({
@@ -1288,9 +1370,6 @@ async function saveProduct() {
                     detail: "Product updated successfully",
                     life: 3000
                 });
-
-                // Refresh data to get updated information
-                await refreshProducts();
             } else {
                 // Create new product (this would need a separate API endpoint)
                 product.value.id = createId();
@@ -1403,14 +1482,20 @@ async function saveNonConsumableBatchDetails() {
                     ...selectedBatch.value,
                 };
                 console.log("Batch updated successfully:", selectedBatch.value);
+                
+                // Update selectedProductForDialog if it matches the updated product
+                if (selectedProductForDialog.value && selectedProductForDialog.value.id === products.value[productIndex].id) {
+                    console.log('Updating selectedProductForDialog with batch changes');
+                    selectedProductForDialog.value = { ...products.value[productIndex] };
+                }
             }
         }
 
         showSuccess();
         NonConsumablebatchDialog.value = false;
         
-        // Refresh the data to show updated information
-        await refreshProducts();
+        // Reopen the product dialog to show updated information
+        showProductBatchesDialog.value = true;
         
     } catch (error) {
         console.error("Error updating batch:", error);
@@ -1471,31 +1556,32 @@ async function saveBatchDetails() {
     // Mark form as submitted to trigger validation messages
     submitted.value = true;
 
-    // Validate required fields
-    if (
-        !selectedBatch.value.batchNumber ||
-        !selectedBatch.value.quantity ||
-        !selectedBatch.value.purchaseDate ||
-        !selectedBatch.value.purchasePrice ||
-        !selectedBatch.value.unit ||
-        !selectedBatch.value.expDate
-    ) {
-        console.error("Validation failed: All required fields must be filled.");
+    // Validate required fields - only check essential fields
+    if (!selectedBatch.value.batchNumber) {
+        console.error("Validation failed: Batch Number is required.");
+        toast.value.add({
+            severity: "warn",
+            summary: "Validation Error",
+            detail: "Batch Number is required",
+            life: 3000,
+        });
         return;
     }
 
     try {
         // Prepare data for API call - map frontend fields to backend schema
         const updateData = {
-            batchNumber: selectedBatch.value.batchNumber,
-            quantity: selectedBatch.value.quantity,
-            arrivalDate: selectedBatch.value.purchaseDate, // Map purchaseDate to arrivalDate
-            purchasePrice: selectedBatch.value.purchasePrice,
-            unitRetailPrice: selectedBatch.value.srp,
-            supplier: selectedBatch.value.supplier || null,
-            unit: selectedBatch.value.unit,
-            expiryDate: selectedBatch.value.expDate
+            batchNumber: selectedBatch.value.batchNumber
         };
+        
+        // Only include fields if they have values to avoid overwriting with null/undefined
+        if (selectedBatch.value.quantity) updateData.quantity = selectedBatch.value.quantity;
+        if (selectedBatch.value.purchaseDate) updateData.arrivalDate = selectedBatch.value.purchaseDate;
+        if (selectedBatch.value.purchasePrice) updateData.purchasePrice = selectedBatch.value.purchasePrice;
+        if (selectedBatch.value.srp) updateData.unitRetailPrice = selectedBatch.value.srp;
+        if (selectedBatch.value.supplier) updateData.supplier = selectedBatch.value.supplier;
+        if (selectedBatch.value.unit) updateData.unit = selectedBatch.value.unit;
+        if (selectedBatch.value.expDate) updateData.expiryDate = selectedBatch.value.expDate;
 
         // Make API call to update the batch in the database
         await updateBatch(selectedBatch.value.batchId, updateData);
@@ -1519,6 +1605,12 @@ async function saveBatchDetails() {
                     ...selectedBatch.value,
                 };
                 console.log("Batch updated successfully in database and UI");
+                
+                // Update selectedProductForDialog if it matches the updated product
+                if (selectedProductForDialog.value && selectedProductForDialog.value.id === products.value[productIndex].id) {
+                    console.log('Updating selectedProductForDialog with batch changes');
+                    selectedProductForDialog.value = { ...products.value[productIndex] };
+                }
             } else {
                 // Add a new batch to the product's batches
                 selectedBatch.value.batchId = createId(); // Generate a new ID for the batch
@@ -1540,6 +1632,9 @@ async function saveBatchDetails() {
         Object.keys(selectedBatch.value).forEach((key) => {
             selectedBatch.value[key] = null;
         });
+
+        // Reopen the product dialog to show updated information
+        showProductBatchesDialog.value = true;
 
         console.log("Batch updated successfully in database");
         
@@ -1606,6 +1701,12 @@ async function deleteProduct() {
                 products.value.splice(index, 1); // Remove the product from the list
             }
 
+            // Close the product dialog if the deleted product was being viewed
+            if (selectedProductForDialog.value && selectedProductForDialog.value.id === product.value.id) {
+                showProductBatchesDialog.value = false;
+                selectedProductForDialog.value = null;
+            }
+
             deleteProductDialog.value = false; // Close the dialog
             product.value = null; // Reset the product reference
             
@@ -1615,9 +1716,6 @@ async function deleteProduct() {
                 detail: "Product deleted successfully",
                 life: 3000
             });
-
-            // Refresh data to ensure consistency
-            await refreshProducts();
             
         } catch (error) {
             console.error("Error deleting product:", error);
@@ -1900,25 +1998,12 @@ function toggleRowExpansion(event) {
             return;
         }
         
-        // Debug: Log current state
-        console.log("Current products count:", products.value?.length || 0);
-        console.log("Current safeProducts count:", safeProducts.value?.length || 0);
-        
-        // Toggle expansion state
-        if (expandedRows.value[rowData.id]) {
-            delete expandedRows.value[rowData.id];
-        } else {
-            expandedRows.value[rowData.id] = true;
-        }
-        
-        console.log("Toggled row expansion for:", rowData.id, expandedRows.value[rowData.id] ? 'expanded' : 'collapsed');
-        
-        // Debug: Log state after toggle
-        console.log("Products after toggle:", products.value?.length || 0);
-        console.log("SafeProducts after toggle:", safeProducts.value?.length || 0);
+        // Open dialog with product data
+        selectedProductForDialog.value = rowData;
+        showProductBatchesDialog.value = true;
         
     } catch (error) {
-        console.error("Error toggling row expansion:", error);
+        console.error("Error opening product dialog:", error);
     }
 }
 
@@ -2027,6 +2112,12 @@ async function deleteBatch() {
                 // Remove the batch from the product's batch list
                 products.value[productIndex].batches.splice(batchIndex, 1);
                 console.log("Batch deleted successfully");
+                
+                // Update selectedProductForDialog if it matches the updated product
+                if (selectedProductForDialog.value && selectedProductForDialog.value.id === products.value[productIndex].id) {
+                    console.log('Updating selectedProductForDialog after batch deletion');
+                    selectedProductForDialog.value = { ...products.value[productIndex] };
+                }
             }
         }
 
@@ -2040,8 +2131,8 @@ async function deleteBatch() {
             life: 3000
         });
         
-        // Refresh the data to show updated information
-        await refreshProducts();
+        // Reopen the product dialog to show updated information
+        showProductBatchesDialog.value = true;
         
     } catch (error) {
         console.error("Error deleting batch:", error);
@@ -2059,8 +2150,6 @@ async function deleteBatch() {
     console.log("Batch deleted successfully.");
     showError();
 }
-
-
 
 function formatCurrency(value) {
     if (value == null || value === '' || isNaN(parseFloat(value))) return "₱0.00"; // Default if invalid or null
@@ -2092,7 +2181,6 @@ function formatPrice(value) {
     return `₱${parseFloat(value).toFixed(2).toLocaleString()}`; // Format to 2 decimal places with commas
 }
 
-
 </script>
 
 <style scoped>
@@ -2109,6 +2197,16 @@ function formatPrice(value) {
 :deep(.cursor-pointer .p-button) {
     position: relative;
     z-index: 10;
+}
+
+/* Add indent to product table cells for better readability */
+:deep(.p-datatable-tbody > tr > td) {
+    padding-left: 1.5rem !important;
+}
+
+/* Keep header cells normal */
+:deep(.p-datatable-thead > tr > th) {
+    padding-left: 1rem !important;
 }
 </style>
 
@@ -2167,9 +2265,9 @@ function formatPrice(value) {
         <!-- DataTable when data exists -->
         <DataTable
             v-else
-            v-model:expandedRows="expandedRows"
             :value="safeProducts"
             dataKey="id"
+             stripedRows
             v-model:filters="filters"
             filterDisplay="menu"
             :globalFilterFields="[
@@ -2184,10 +2282,12 @@ function formatPrice(value) {
             ]"
             tableStyle="min-width: 60rem"
             paginator
-            :rows="10"
+            :rows="5"
             @row-click="toggleRowExpansion"
             :rowClass="() => 'cursor-pointer'"
         >
+
+
             <template #header>
                 <div class="flex justify-between items-center">
                     <!-- Filter Controls -->
@@ -2209,26 +2309,9 @@ function formatPrice(value) {
                             />
                         </IconField>
                     </div>
-
-                    <!-- Expand/Collapse Buttons -->
-                    <div class="flex flex-wrap justify-end gap-2">
-                        <Button
-                            text
-                            icon="pi pi-plus"
-                            label="Expand All"
-                            @click="expandAll"
-                        />
-                        <Button
-                            text
-                            icon="pi pi-minus"
-                            label="Collapse All"
-                            @click="collapseAll"
-                        />
-                    </div>
                 </div>
             </template>
 
-            <Column expander style="width: 2rem" />
             <Column
                 field="name"
                 header="Item Name"
@@ -2310,24 +2393,39 @@ function formatPrice(value) {
                     
                 </template>
             </Column>
+        </DataTable>
+    </div>
 
-            <template #expansion="slotProps">
-                <!--Consumable Batch Table-->
+    <!-- Product Batches Dialog -->
+    <Dialog
+        v-model:visible="showProductBatchesDialog"
+        :dismissableMask="true"
+        :modal="true"
+         :header="`${selectedProductForDialog?.category === 'Non-Consumable' ? 'Serial Numbers' : 'Batch Numbers'} - ${selectedProductForDialog?.name || 'Product'}`"
+        :style="{ width: '95vw', maxWidth: '1400px' }"
+    >
+        <div v-if="selectedProductForDialog">
+            <!--Consumable Batch Table-->
                 <DataTable
-                    class="p-datatable-sm"
+                    class="p-datatable-sm mb-5 mt-5 ml-5"
                     :paginator="true"
-                    :rows="10"
+                    :rows="5"
                     v-model:expandedRows="batchExpandedRows"
                     :value="
-                        filterConsumableBatches(slotProps.data?.batches || [])
+                        filterConsumableBatches(selectedProductForDialog?.batches || [])
                     "
                     dataKey="batchId"
-                    v-if="slotProps.data?.category === 'Consumable'"
+                    v-if="selectedProductForDialog?.category === 'Consumable'"
                     @row-click="toggleBatchRowExpansion"
                     :rowClass="() => 'cursor-pointer'"
+                    stripedRows
+                    :pt="{
+                        bodyRow: { style: 'height: 3.5rem;' }
+                    }"
                 >
-                    <div class="flex items-center gap-2 mb-4">
-                        <h5>Batch List for {{ slotProps.data.name }}</h5>
+                    <template #header>
+                    <div class="flex items-center gap-2 mb-5">
+                        <h5>Batch List for {{ selectedProductForDialog.name }}</h5>
                         <Button
                             type="button"
                             icon="pi pi-filter-slash"
@@ -2346,6 +2444,7 @@ function formatPrice(value) {
                             />
                         </IconField>
                     </div>
+                    </template>
                     <Column
                         field="batchNumber"
                         header="Batch Number"
@@ -2436,22 +2535,27 @@ function formatPrice(value) {
 
                 <!--Non-Consumable Batch Table-->
                 <DataTable
-                    class="p-datatable-sm"
+                    class="p-datatable-sm  mb-5 mt-5  ml-5"
                     :paginator="true"
-                    :rows="10"
+                    :rows="5"
                     v-model:expandedRows="batchExpandedRows"
                     :value="
                         filterNonConsumableBatches(
-                            slotProps.data?.batches || []
+                            selectedProductForDialog?.batches || []
                         )
                     "
                     dataKey="batchId"
-                    v-if="slotProps.data?.category === 'Non-Consumable'"
+                    v-if="selectedProductForDialog?.category === 'Non-Consumable'"
                     @row-click="toggleBatchRowExpansion"
                     :rowClass="() => 'cursor-pointer'"
+                    stripedRows
+                    :pt="{
+                        bodyRow: { style: 'height: 3.5rem;' }
+                    }"
                 >
-                    <div class="flex items-center gap-2 mb-4">
-                        <h5>Batch List for {{ slotProps.data.name }}</h5>
+                    <template #header>
+                    <div class="flex items-center gap-2  mb-5 ">
+                        <h5>Batch List for {{ selectedProductForDialog.name }}</h5>
                         <Button
                             type="button"
                             icon="pi pi-filter-slash"
@@ -2470,10 +2574,11 @@ function formatPrice(value) {
                             />
                         </IconField>
                     </div>
+                    </template>
 
                     <Column
                         field="batchNumber"
-                        header="Serial Number"
+                        header="Batch Number"
                         sortable
                     ></Column>
                     <Column
@@ -2723,9 +2828,8 @@ function formatPrice(value) {
                         </template>
                     </column>
                 </DataTable>
-            </template>
-        </DataTable>
-    </div>
+        </div>
+    </Dialog>
 
     <!-- Delete Product Dialog -->
     <Dialog
@@ -2796,6 +2900,7 @@ function formatPrice(value) {
                     optionLabel="label"
                     optionValue="value"
                     placeholder="Select Category"
+                    :disabled="!!product.id"
                     fluid
                 />
                 <small v-if="submitted && !product.category" class="text-red-500"
@@ -2887,13 +2992,14 @@ function formatPrice(value) {
             <!-- Batch Number -->
             <div>
                 <label for="batchNumber" class="block font-bold mb-3"
-                    >Batch Number</label
+                    >Batch Number *</label
                 >
                 <InputText
                     id="batchNumber"
                     v-model.trim="selectedBatch.batchNumber"
                     required="true"
                     :invalid="submitted && !selectedBatch.batchNumber"
+                    :disabled="!!selectedBatch.batchId"
                     fluid
                 />
                 <small
@@ -2911,14 +3017,8 @@ function formatPrice(value) {
                 <DatePicker
                     id="purchaseDate"
                     v-model="selectedBatch.purchaseDate"
-                    required="true"
                     fluid
                 />
-                <small
-                    v-if="submitted && !selectedBatch.purchaseDate"
-                    class="text-red-500"
-                    >Arrival Date is required.</small
-                >
             </div>
 
             <!-- Purchase Price -->
@@ -2931,8 +3031,6 @@ function formatPrice(value) {
                     v-model="selectedBatch.purchasePrice"
                     mode="currency"
                     currency="PHP"
-                    required="true"
-                    :invalid="submitted && !selectedBatch.purchasePrice"
                     fluid
                 />
             </div>
@@ -2969,14 +3067,8 @@ function formatPrice(value) {
                     id="expDate"
                     v-model="selectedBatch.expDate"
                     showIcon
-                    required="true"
                     fluid
                 />
-                <small
-                    v-if="submitted && !selectedBatch.expDate"
-                    class="text-red-500"
-                    >Expiration Date is required.</small
-                >
             </div>
         </div>
 
@@ -2997,7 +3089,7 @@ function formatPrice(value) {
         :dismissableMask="true"
         v-model:visible="NonConsumablebatchDialog"
         :style="{ width: '450px' }"
-        header="Batch Details"
+        header="Serial"
         :modal="true"
     >
         <div class="flex flex-col gap-6">
@@ -3009,6 +3101,7 @@ function formatPrice(value) {
                 <InputText
                     id="batchNumber"
                     v-model.trim="selectedBatch.batchNumber"
+                    :disabled="!!selectedBatch.batchId"
                     fluid
                 />
             </div>
@@ -3394,11 +3487,7 @@ function formatPrice(value) {
                 text
                 @click="reassignItemDialogVisible = false"
             />
-            <Button
-                label="Re-Assign"
-                icon="pi pi-check"
-                @click="reassignItem"
-            />
+            
         </template>
     </Dialog>
 
@@ -3482,11 +3571,13 @@ function formatPrice(value) {
                     placeholder="Enter serial number"
                     class="w-full"
                     :class="{ 'border-red-500': serialNumberExists }"
-                    @input="checkSerialNumberExists(editingSerialData.serialNumber)"
+                    @input="checkSerialNumberExists($event.target.value)"
+                    @keyup.enter="saveEditedSerialNumber"
+                    fluid
                     autofocus
                 />
                 <small class="text-gray-500 mt-1 block">
-                    Current: {{ editingSerialData.originalSerialNumber }}
+                    Original: {{ editingSerialData.originalSerialNumber }}
                 </small>
                 <div v-if="serialNumberWarning" class="mt-2">
                     <small class="text-red-500 flex items-center gap-1">
@@ -3608,7 +3699,6 @@ function formatPrice(value) {
         </template>
     </Dialog>
 
-    <template>
-        <Toast ref="toast" />
-    </template>
+    <!-- Toast Component for notifications -->
+    <Toast ref="toast" />
 </template>

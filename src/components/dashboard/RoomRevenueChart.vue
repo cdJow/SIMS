@@ -18,11 +18,21 @@ const revenueData = ref({
 // Fetch revenue data from backend
 const fetchRevenueData = async (period) => {
     try {
-        const response = await fetch(`http://127.0.0.1:5000/api/room-revenue/${period}`);
+        const timestamp = new Date().getTime();
+        const url = `http://127.0.0.1:5000/api/room-revenue/${period}?_t=${timestamp}`;
+        
+        const response = await fetch(url, {
+            cache: 'no-cache',
+            headers: {
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            }
+        });
         const data = await response.json();
+        
         if (response.ok) {
             revenueData.value[period] = data;
-            console.log(`✅ Room revenue data loaded for ${period}:`, data);
+            console.log(`✅ Room revenue data loaded for ${period}: ₱${data.total?.toLocaleString() || 0}`);
         } else {
             console.error('Error fetching revenue data:', data.error);
             // Set empty data on error
@@ -102,9 +112,11 @@ const roomSizeData = computed(() => ({
     ],
 }));
 
-const totalRevenue = computed(
-    () => revenueData.value[selectedPeriod.value].total,
-);
+const totalRevenue = computed(() => {
+    const currentPeriod = selectedPeriod.value;
+    const currentData = revenueData.value[currentPeriod];
+    return currentData.total || 0;
+});
 
 const getDateRange = (period) => {
     const now = new Date();
@@ -164,6 +176,13 @@ const getDateRange = (period) => {
         <div class="flex justify-between items-center">
             <h3 class="text-lg font-semibold">Room Revenue Breakdown</h3>
             <div class="flex items-center gap-2">
+                <Button 
+                    @click="() => fetchRevenueData(selectedPeriod)" 
+                    icon="pi pi-refresh" 
+                    size="small" 
+                    severity="secondary"
+                    title="Force Refresh Data"
+                />
                 <Select
                     v-model="selectedPeriod"
                     :options="periods"
@@ -223,7 +242,7 @@ const getDateRange = (period) => {
 
         <!-- Total Summary -->
         <div class="text-center font-semibold mt-4 p-3 bg-surface-100 dark:bg-surface-700 rounded-lg">
-            Total Revenue: ₱{{ totalRevenue.toLocaleString() }}
+            Total Room Revenue: ₱{{ totalRevenue.toLocaleString() }}
         </div>
     </div>
 </template>

@@ -6,7 +6,7 @@ import { fetchCancelledBookings } from "@/api/auth";
 // Filters
 const filters = ref({
     searchQuery: "",
-    dateRange: [null, null],
+    searchDate: null,
     roomType: null,
 });
 
@@ -65,100 +65,106 @@ const filteredBookings = computed(() => {
             String(booking.BookingCode || "").toLowerCase().includes(q) ||
             String(booking.guestName || "").toLowerCase().includes(q);
 
-        const [start, end] = filters.value.dateRange || [];
-        const startDate = start ? new Date(start) : null;
-        const endDate = end ? new Date(end) : null;
-        const cDate = booking.cancellationDate instanceof Date ? booking.cancellationDate : (booking.cancellationDate ? new Date(booking.cancellationDate) : null);
-        const dateMatches = !startDate || (!cDate ? false : (cDate >= startDate && (!endDate || cDate <= endDate)));
+        const matchesDate = !filters.value.searchDate || 
+            (booking.cancellationDate && 
+             new Date(booking.cancellationDate).toDateString() === new Date(filters.value.searchDate).toDateString());
 
         const roomTypeMatches = !filters.value.roomType || booking.roomType === filters.value.roomType;
 
-        return searchMatches && dateMatches && roomTypeMatches;
+        return searchMatches && matchesDate && roomTypeMatches;
     });
 });
 
 // Clear filters
 const clearFilters = () => {
-    filters.value = { searchQuery: "", dateRange: [null, null], roomType: null };
+    filters.value = { searchQuery: "", searchDate: null, roomType: null };
 };
 
 const toast = useToast();
 
-
-
-
-
-const op = ref();
 const selectedBooking = ref(null);
+const showViewDialog = ref(false);
 const handleClick = (event, bookingData) => {
     selectedBooking.value = bookingData;
-    op.value?.toggle(event);
+    showViewDialog.value = true;
 };
 </script>
 
 <template>
-    <div class="card p-4 rounded-lg shadow-sm">
-        <div class="text-xl font-semibold mb-4">Canceled Bookings</div>
+    <div class="card p-4 rounded-lg shadow-sm flex flex-col max-h-[calc(100vh-8rem)]">
+        <div class="text-xl font-semibold mb-4 flex-shrink-0">Canceled Bookings</div>
 
         <!-- Enhanced Filter Section -->
-        <div>
+        <div class="flex-shrink-0">
             <div class="mb-6">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                    <!-- Search -->
-                    <div>
-                        <div class="flex gap-2">
-                            <Button
-                                type="button"
-                                icon="pi pi-filter-slash"
-                                label="Clear"
-                                outlined
-                                class="whitespace-nowrap"
-                                @click="clearFilters"
-                            />
-                            <InputText
-                                placeholder="Enter Booking Code"
-                                class="flex-1 p-3 border rounded-lg"
-                                v-model="filters.searchQuery"
-                            />
-                        </div>
-                    </div>
-                    <!-- Date Range -->
+                <div class="flex flex-row gap-4 items-center">
+                    <Button
+                        type="button"
+                        icon="pi pi-filter-slash"
+                        label="Clear"
+                        outlined
+                        @click="clearFilters"
+                    />
+                    <IconField>
+                        <InputIcon>
+                            <i class="pi pi-search" />
+                        </InputIcon>
+                        <InputText
+                            placeholder="Keyword Search"
+                            class="w-80"
+                            v-model="filters.searchQuery"
+                        />
+                    </IconField>
+                    
+                    <!-- Single Date Filter -->
+                    <DatePicker
+                        v-model="filters.searchDate"
+                        :manualInput="false"
+                        dateFormat="mm/dd/yy"
+                        placeholder="Search by Cancellation Date"
+                        :showIcon="true"
+                        iconDisplay="input"
+                        class="w-64"
+                    />
                 </div>
             </div>
 
             <!-- DataTable and other content -->
         </div>
         
-        <!-- Empty State -->
-        <div v-if="!loading && (!filteredBookings || filteredBookings.length === 0)" 
-             class="text-center py-12 mt-6">
-            <div class="flex flex-col items-center gap-4">
-                <i class="pi pi-times-circle text-6xl text-gray-300 dark:text-gray-600"></i>
-                <div class="space-y-2">
-                    <h3 class="text-xl font-semibold text-gray-600 dark:text-gray-400">No Canceled Bookings</h3>
-                    <p class="text-gray-500 dark:text-gray-500 max-w-md">
-                        There are currently no canceled bookings to display. 
-                        <br>This is great news - it means fewer cancellations!
-                    </p>
+        <!-- Scrollable Content Area -->
+        <div class="overflow-y-auto flex-1 pr-2">
+            <!-- Empty State -->
+            <div v-if="!loading && (!filteredBookings || filteredBookings.length === 0)" 
+                 class="text-center py-12 mt-6">
+                <div class="flex flex-col items-center gap-4">
+                    <i class="pi pi-times-circle text-6xl text-gray-300 dark:text-gray-600"></i>
+                    <div class="space-y-2">
+                        <h3 class="text-xl font-semibold text-gray-600 dark:text-gray-400">No Canceled Bookings</h3>
+                        <p class="text-gray-500 dark:text-gray-500 max-w-md">
+                            There are currently no canceled bookings to display. 
+                            <br>This is great news - it means fewer cancellations!
+                        </p>
+                    </div>
+                    <Button
+                        icon="pi pi-refresh"
+                        label="Refresh"
+                        class="p-button-outlined"
+                        @click="loadCancelled"
+                        :loading="loading"
+                    />
                 </div>
-                <Button
-                    icon="pi pi-refresh"
-                    label="Refresh"
-                    class="p-button-outlined"
-                    @click="loadCancelled"
-                    :loading="loading"
-                />
             </div>
-        </div>
 
-        <!-- Data Table (only show when there's data) -->
-        <DataTable
-            v-if="!loading && filteredBookings && filteredBookings.length > 0"
-            :value="filteredBookings"
-            scrollable
-            scrollHeight="600px"
-            class="mt-6"
-        >
+            <!-- Data Table (only show when there's data) -->
+            <DataTable
+                v-if="!loading && filteredBookings && filteredBookings.length > 0"
+                :value="filteredBookings"
+                class="mt-6"
+                :loading="loading"
+                :paginator="true"
+                :rows="10"
+            >
             <!-- Booking Code -->
             <Column
                 field="BookingCode"
@@ -186,148 +192,110 @@ const handleClick = (event, bookingData) => {
                 </template>
             </Column>
 
-            <!-- Action Column with Popover -->
+            <!-- Action Column -->
             <Column header="Action" :style="{ minWidth: '100px' }">
                 <template #body="{ data }">
-                    <div class="flex gap-2">
-                        <Button
-                            icon="pi pi-info-circle"
-                            class="p-button-info"
-                            outlined
-                            rounded
-                            @click="handleClick($event, data)"
-                            v-tooltip="'View Guest Info'"
-                        />
-            
-                    </div>
+                    <Button
+                        icon="pi pi-info-circle"
+                        class="p-button-info"
+                        outlined
+                        rounded
+                        @click="handleClick($event, data)"
+                        v-tooltip="'View Guest Info'"
+                    />
                 </template>
             </Column>
         </DataTable>
+        </div>
 
-        <!-- Popover Overlay -->
-        <Popover ref="op">
-            <div class="p-4" v-if="selectedBooking">
-                <!-- Main Horizontal Container -->
-                <div class="flex flex-row gap-4">
-                    <!-- Left Column - Guest & Booking Info -->
-                    <div class="flex-1 flex flex-col gap-3 min-w-[200px]">
-                        <!-- Guest Name -->
-                        <div class="font-bold text-lg border-b pb-2">
-                            {{ selectedBooking.guestName }}
+        <!-- View Dialog -->
+        <Dialog 
+            v-model:visible="showViewDialog" 
+            modal 
+            header="Cancelled Booking Details" 
+            :style="{ width: '90vw', maxWidth: '1200px' }"
+            class="p-fluid"
+            :dismissableMask="true"
+        >
+            <div class="p-6" v-if="selectedBooking">
+                <!-- Guest Header Section -->
+                <div class="mb-6 pb-4 border-b border-gray-200 dark:border-gray-600">
+                    <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+                        {{ selectedBooking.guestName }}
+                    </h2>
+                    <div class="flex flex-wrap gap-4 items-center">
+                        <div class="flex items-center gap-2">
+                            <i class="pi pi-home text-blue-500"></i>
+                            <span class="text-gray-700 dark:text-gray-300">{{ selectedBooking.roomType }}</span>
                         </div>
-
-                        <!-- Booking Details -->
-                        <div class="flex flex-col gap-2">
-                            <div>
-                                <label class="font-medium">Booking Code:</label>
-                                <div class="mt-1">
-                                    {{ selectedBooking.BookingCode }}
-                                </div>
-                            </div>
-                            <div>
-                                <label class="font-medium">Room Number:</label>
-                                <div class="mt-1">
-                                    {{ selectedBooking.roomNumber }}
-                                </div>
-                            </div>
-                            <div>
-                                <label class="font-medium">Room Type:</label>
-                                <div class="mt-1">
-                                    {{ selectedBooking.roomType }}
-                                </div>
-                            </div>
+                        <div class="flex items-center gap-2">
+                            <i class="pi pi-building text-blue-500"></i>
+                            <span class="text-gray-700 dark:text-gray-300">Room {{ selectedBooking.roomNumber }}</span>
                         </div>
-                    </div>
-
-                    <!-- Middle Column - Booking Details -->
-                    <div class="flex-1 flex flex-col gap-3 min-w-[200px]">
-                        <!-- Selected Hours & Rate -->
-                        <div class="flex flex-col gap-2">
-                            <div>
-                                <label class="font-medium">Selected Hours:</label>
-                                <Tag
-                                    :value="`${selectedBooking.selectedHours}hrs`"
-                                    severity="info"
-                                    class="mt-1"
-                                />
-                            </div>
-                            <div>
-                                <label class="font-medium">Selected Rate:</label>
-                                <div class="flex items-center gap-1 mt-1">
-                                    <i class="pi pi-money-bill text-blue-500"></i>
-                                    <span>₱{{ parseFloat(selectedBooking.selectedRate || 0).toLocaleString() }}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Scheduled Times -->
-                        <div class="flex flex-col gap-2" v-if="selectedBooking.check_in_datetime">
-                            <div>
-                                <label class="font-medium">Scheduled Check-In:</label>
-                                <div class="mt-1 text-sm text-gray-600">
-                                    {{ new Date(selectedBooking.check_in_datetime).toLocaleString('en-US', {
-                                        year: 'numeric',
-                                        month: 'short',
-                                        day: 'numeric',
-                                        hour: 'numeric',
-                                        minute: 'numeric',
-                                        hour12: true
-                                    }) }}
-                                </div>
-                            </div>
-                            <div v-if="selectedBooking.check_out_datetime">
-                                <label class="font-medium">Scheduled Check-Out:</label>
-                                <div class="mt-1 text-sm text-gray-600">
-                                    {{ new Date(selectedBooking.check_out_datetime).toLocaleString('en-US', {
-                                        year: 'numeric',
-                                        month: 'short',
-                                        day: 'numeric',
-                                        hour: 'numeric',
-                                        minute: 'numeric',
-                                        hour12: true
-                                    }) }}
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Cancellation Status -->
-                        <div class="bg-red-50  rounded">
-                            <div class="flex items-center gap-2 text-red-700">
-                                <i class="pi pi-times-circle"></i>
-                                <span class="text-sm font-medium">Booking Cancelled</span>
-                            </div>
-                            <div class="text-xs text-red-600 mt-1">
-                                {{ formatCancellation(selectedBooking.cancellationDate) }}
-                            </div>
+                        <Tag
+                            :value="`${selectedBooking.selectedHours}hrs`"
+                            severity="info"
+                        />
+                        <div class="flex items-center gap-2">
+                            <i class="pi pi-money-bill text-green-500"></i>
+                            <span class="font-semibold text-gray-900 dark:text-gray-100">
+                                ₱{{ parseFloat(selectedBooking.selectedRate || 0).toLocaleString() }}
+                            </span>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Right Column - Contact Info -->
-                    <div class="flex-1 flex flex-col gap-3 min-w-[200px]">
-                        <!-- Contact Information -->
-                        <div class="flex flex-col gap-2">
-                            <div>
-                                <label class="font-medium">Contact Info:</label>
-                                <div class="mt-1 flex flex-col gap-1">
-                                    <div class="flex items-center gap-2">
-                                        <i class="pi pi-phone text-blue-500"></i>
-                                        {{ selectedBooking.cellphone || 'N/A' }}
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <i class="pi pi-envelope text-blue-500"></i>
-                                        {{ selectedBooking.guest_email || 'N/A' }}
-                                    </div>
+                <!-- Main Content Grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Left Column - Booking Info -->
+                    <div class="space-y-4">
+                        <!-- Booking Details Card -->
+                        <div class="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                            <h3 class="font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
+                                <i class="pi pi-bookmark text-blue-500"></i>
+                                Booking Information
+                            </h3>
+                            <div class="space-y-2">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-gray-600 dark:text-gray-400">Booking Code:</span>
+                                    <span class="font-medium text-gray-900 dark:text-gray-100">{{ selectedBooking.BookingCode }}</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-gray-600 dark:text-gray-400">Room Number:</span>
+                                    <span class="font-medium text-gray-900 dark:text-gray-100">{{ selectedBooking.roomNumber }}</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-gray-600 dark:text-gray-400">Room Type:</span>
+                                    <span class="font-medium text-gray-900 dark:text-gray-100">{{ selectedBooking.roomType }}</span>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Booking Dates -->
-                        <div class="bg-gray-50 rounded">
-                            <div class="flex items-center gap-2 text-gray-700 mb-2">
-                                <i class="pi pi-calendar"></i>
-                                <span class="text-sm font-medium">Booking Created</span>
+                        <!-- Contact Information Card -->
+                        <div class="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                            <h3 class="font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
+                                <i class="pi pi-user text-blue-500"></i>
+                                Contact Information
+                            </h3>
+                            <div class="space-y-2">
+                                <div class="flex items-center gap-2">
+                                    <i class="pi pi-phone text-gray-500"></i>
+                                    <span class="text-gray-700 dark:text-gray-300">{{ selectedBooking.cellphone || 'N/A' }}</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <i class="pi pi-envelope text-gray-500"></i>
+                                    <span class="text-gray-700 dark:text-gray-300">{{ selectedBooking.guest_email || 'N/A' }}</span>
+                                </div>
                             </div>
-                            <div class="text-xs text-gray-600">
+                        </div>
+
+                        <!-- Booking Created -->
+                        <div class="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                            <h3 class="font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
+                                <i class="pi pi-calendar text-blue-500"></i>
+                                Booking Created
+                            </h3>
+                            <div class="text-gray-700 dark:text-gray-300">
                                 {{ selectedBooking.created_at ? new Date(selectedBooking.created_at).toLocaleString('en-US', {
                                     year: 'numeric',
                                     month: 'short',
@@ -339,10 +307,89 @@ const handleClick = (event, bookingData) => {
                             </div>
                         </div>
                     </div>
+
+                    <!-- Right Column - Schedule & Cancellation -->
+                    <div class="space-y-4">
+                        <!-- Scheduled Times -->
+                        <div v-if="selectedBooking.check_in_datetime" class="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg">
+                            <h3 class="font-semibold text-blue-700 dark:text-blue-300 mb-3 flex items-center gap-2">
+                                <i class="pi pi-clock"></i>
+                                Scheduled Times
+                            </h3>
+                            <div class="space-y-2">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-gray-700 dark:text-gray-300">Check-in:</span>
+                                    <span class="font-medium text-gray-900 dark:text-gray-100">
+                                        {{ new Date(selectedBooking.check_in_datetime).toLocaleString('en-US', {
+                                            year: 'numeric',
+                                            month: 'short',
+                                            day: 'numeric',
+                                            hour: 'numeric',
+                                            minute: 'numeric',
+                                            hour12: true
+                                        }) }}
+                                    </span>
+                                </div>
+                                <div v-if="selectedBooking.check_out_datetime" class="flex justify-between items-center">
+                                    <span class="text-gray-700 dark:text-gray-300">Check-out:</span>
+                                    <span class="font-medium text-gray-900 dark:text-gray-100">
+                                        {{ new Date(selectedBooking.check_out_datetime).toLocaleString('en-US', {
+                                            year: 'numeric',
+                                            month: 'short',
+                                            day: 'numeric',
+                                            hour: 'numeric',
+                                            minute: 'numeric',
+                                            hour12: true
+                                        }) }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Cancellation Status -->
+                        <div class="bg-red-50 dark:bg-red-900/30 p-4 rounded-lg">
+                            <h3 class="font-semibold text-red-700 dark:text-red-300 mb-3 flex items-center gap-2">
+                                <i class="pi pi-times-circle"></i>
+                                Cancellation Status
+                            </h3>
+                            <div class="space-y-2">
+                                <div class="flex items-center gap-2 text-red-700 dark:text-red-300">
+                                    <span class="font-medium">Status: Cancelled</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-gray-700 dark:text-gray-300">Cancelled on:</span>
+                                    <span class="font-medium text-red-600 dark:text-red-400">
+                                        {{ formatCancellation(selectedBooking.cancellationDate) }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Rate Information -->
+                        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-4 rounded-lg">
+                            <h3 class="font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
+                                <i class="pi pi-credit-card text-green-500"></i>
+                                Rate Information
+                            </h3>
+                            <div class="space-y-2">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-gray-600 dark:text-gray-400">Selected Hours:</span>
+                                    <Tag
+                                        :value="`${selectedBooking.selectedHours}hrs`"
+                                        severity="info"
+                                    />
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-gray-600 dark:text-gray-400">Rate:</span>
+                                    <span class="font-semibold text-gray-900 dark:text-gray-100">
+                                        ₱{{ parseFloat(selectedBooking.selectedRate || 0).toLocaleString() }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </Popover>
+        </Dialog>
     </div>
-
-     <toast />
 </template>

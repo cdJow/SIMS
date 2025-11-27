@@ -273,7 +273,7 @@ const clearFilters = () => {
                         Low Stock Alerts
                     </h2>
                 </div>
-                <p class="text-gray-600 dark:text-gray-400 mb-3 text-sm">Critical inventory alerts requiring immediate attention</p>
+             
                 
                 <!-- Summary Stats -->
                 <div v-if="reportSummary" class="flex flex-wrap gap-2">
@@ -308,7 +308,7 @@ const clearFilters = () => {
             </div>
             
             <!-- Action Buttons -->
-            <div class="flex gap-2 mt-3 lg:mt-0">
+            <div class="flex gap-2 ">
                 <Button
                     icon="pi pi-refresh"
                     label="Refresh"
@@ -579,7 +579,5 @@ const clearFilters = () => {
             </div>
         </div>
         
-        <!-- Toast for notifications -->
-        <Toast position="top-right" />
-    </div>
+        <!-- Toast for notifications --></div>
 </template>

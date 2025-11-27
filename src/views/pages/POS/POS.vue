@@ -19,6 +19,7 @@ const selectedAmenityRental = ref(null);
 const amenityRentalQuery = ref("");
 const billDialogVisible = ref(false);
 const confirmingCheckout = ref(false);
+const amountReceived = ref(0);
 const lastBillId = ref(null);
 const lastInvoiceNo = ref(null);
 
@@ -51,8 +52,6 @@ onBeforeUnmount(() => {
   clearTimeout(debounceTimer);
 });
 
-
-
 function warnLimit(id) {
   const stock = getStock(id);
   toast.add({
@@ -62,8 +61,6 @@ function warnLimit(id) {
     life: 3000
   });
 }
-
-
 
 /* ---------- UI prices (preview avg or fallback list price) ---------- */
 function previewLineFor(productId) {
@@ -88,6 +85,18 @@ const uiTotal = computed(() => {
   return cart.value.reduce((sum, it) => sum + uiSubtotal(it), 0);
 });
 
+const changeAmount = computed(() => {
+  const received = Number(amountReceived.value) || 0;
+  const total = Number(uiTotal.value) || 0;
+  return Math.max(0, received - total);
+});
+
+const isPaymentValid = computed(() => {
+  const received = Number(amountReceived.value) || 0;
+  const total = Number(uiTotal.value) || 0;
+  return received >= total;
+});
+
 /* ---------- Breakdowns and display rows (split by price) ---------- */
 function previewBreakdownFor(productId) {
   const line = previewLineFor(productId);
@@ -104,8 +113,6 @@ function previewBreakdownFor(productId) {
     subtotal: Number(unit_price) * Number(quantity)
   }));
 }
-
-
 
 const cartBreakdownRows = computed(() => {
   const rows = [];
@@ -139,7 +146,6 @@ const cartBreakdownRows = computed(() => {
   }
   return rows;
 });
-
 
 /* ---------- Debounced + deduped preview ---------- */
 let debounceTimer = null;
@@ -266,7 +272,6 @@ function decreaseByProductId(productId) {
   schedulePreview();
 }
 
-
 function removeSlice(row) {
   const id = Number(row.id);
   const removeQty = Number(row.quantity || 0);
@@ -310,6 +315,7 @@ function removeRow(row) {
 function checkout() {
   confirmingCheckout.value = true;
   billDialogVisible.value = true;
+  amountReceived.value = 0;
   runPreview(); // refresh once for accurate prices
 }
 
@@ -345,6 +351,7 @@ async function confirmCheckout() {
 function cancelCheckout() {
   confirmingCheckout.value = false;
   billDialogVisible.value = false;
+  amountReceived.value = 0;
 }
 
 /* ---------- History ---------- */
@@ -419,7 +426,6 @@ const displayedAmenityRentals = computed(() => {
   });
 });
 
-
 /* ---------- Bill dialog lines (split by price when available) ---------- */
 const billLines = computed(() => {
   if ((preview.value.lines || []).length) {
@@ -482,12 +488,8 @@ function onAmenityRentalRowClick(event) {
 }
 </script>
 
-
 <template>
-  <div class="p-4 card">
-    <Toast />
-
-    <h1 class="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">POS</h1>
+  <div class="p-4 card"><h1 class="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">POS</h1>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <!-- Products -->
@@ -623,10 +625,10 @@ function onAmenityRentalRowClick(event) {
       </div>
 
       <!-- Transaction History -->
-      <div class="border border-gray-200 dark:border-gray-600 rounded-lg shadow-md p-4 bg-white dark:bg-gray-800">
-        <h2 class="text-xl font-bold mb-3 text-gray-900 dark:text-gray-100">Transaction History</h2>
+      <div class="border border-gray-200 dark:border-gray-600 rounded-lg shadow-md p-6 bg-white dark:bg-gray-800 mt-6">
+        <h2 class="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">Transaction History</h2>
 
-        <div class="mb-3">
+        <div class="mb-4">
           <InputText
   v-model="historyQuery"
   placeholder="Search by invoice # or date/time (e.g. INV-2025, Aug, 12:30 PM)"
@@ -656,7 +658,7 @@ function onAmenityRentalRowClick(event) {
         <DataTable
           v-else
           :value="displayedHistory"
-          class="p-datatable-sm shadow-md"
+          class="p-datatable-sm shadow-md mt-4"
           responsiveLayout="scroll"
           style="max-height: 400px; overflow-y: auto"
           :paginator="true"
@@ -665,13 +667,13 @@ function onAmenityRentalRowClick(event) {
           @row-click="onHistoryRowClick"
           dataKey="id"
         >
-          <Column field="invoice_no" header="Invoice #">
+          <Column field="invoice_no" header="Invoice #" bodyClass="py-4">
             <template #body="slotProps">
               <span class="font-medium">#{{ slotProps.data.invoice_no }}</span>
             </template>
           </Column>
 
-          <Column field="timestamp" header="Date/Time">
+          <Column field="timestamp" header="Date/Time" bodyClass="py-4">
             <template #body="slotProps">
               {{
                 new Date(slotProps.data.timestamp).toLocaleString("en-US", {
@@ -686,11 +688,24 @@ function onAmenityRentalRowClick(event) {
             </template>
           </Column>
 
-          <Column field="total" header="Total (₱)">
+          <Column field="total" header="Total (₱)" bodyClass="py-4">
             <template #body="slotProps">₱{{ Number(slotProps.data.total).toFixed(2) }}</template>
           </Column>
 
-          <Column header="Details">
+          <Column header="Created By" bodyClass="py-4">
+            <template #body="slotProps">
+              <div class="flex flex-col">
+                <span class="font-medium text-sm text-gray-900 dark:text-gray-100">
+                  {{ slotProps.data.user_name || 'Unknown User' }}
+                </span>
+                <span class="text-xs text-gray-600 dark:text-gray-400 capitalize">
+                  {{ slotProps.data.user_role || 'Unknown Role' }}
+                </span>
+              </div>
+            </template>
+          </Column>
+
+          <Column header="Details" bodyClass="py-4">
             <template #body="slotProps">
               <Button
                 icon="pi pi-info-circle"
@@ -705,10 +720,10 @@ function onAmenityRentalRowClick(event) {
       </div>
 
       <!-- Amenity Rental History -->
-      <div class="border border-gray-200 dark:border-gray-600 rounded-lg shadow-md p-4 bg-white dark:bg-gray-800">
-        <h2 class="text-xl font-bold mb-3 text-gray-900 dark:text-gray-100">Amenity Rental History</h2>
+      <div class="border border-gray-200 dark:border-gray-600 rounded-lg shadow-md p-6 bg-white dark:bg-gray-800 mt-6">
+        <h2 class="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">Amenity Rental History</h2>
 
-        <div class="mb-3">
+        <div class="mb-4">
           <InputText
             v-model="amenityRentalQuery"
             placeholder="Search by guest, room, amenities or date/time"
@@ -738,7 +753,7 @@ function onAmenityRentalRowClick(event) {
         <DataTable
           v-else
           :value="displayedAmenityRentals"
-          class="p-datatable-sm shadow-md"
+          class="p-datatable-sm shadow-md mt-4"
           responsiveLayout="scroll"
           style="max-height: 400px; overflow-y: auto"
           :paginator="true"
@@ -747,33 +762,26 @@ function onAmenityRentalRowClick(event) {
           @row-click="onAmenityRentalRowClick"
           dataKey="id"
         >
-          <Column field="guest_name" header="Guest" style="min-width: 120px">
+          <Column field="guest_name" header="Guest" style="min-width: 120px" bodyClass="py-4">
             <template #body="slotProps">
               <span class="font-medium">{{ slotProps.data.guest_name }}</span>
             </template>
           </Column>
 
-          <Column field="room_number" header="Room" style="min-width: 80px">
+          <Column field="room_number" header="Room" style="min-width: 80px" bodyClass="py-4">
             <template #body="slotProps">
               {{ slotProps.data.room_number }}
             </template>
           </Column>
 
-          <Column field="amenities_rented" header="Amenities (Qty)" style="min-width: 200px">
-            <template #body="slotProps">
-              <div class="text-sm">
-                {{ slotProps.data.amenities_rented }}
-              </div>
-            </template>
-          </Column>
 
-          <Column field="total_items" header="Items" style="min-width: 60px">
+          <Column field="total_items" header="Items" style="min-width: 60px" bodyClass="py-4">
             <template #body="slotProps">
               {{ slotProps.data.total_items }}
             </template>
           </Column>
 
-          <Column field="latest_date" header="Date" style="min-width: 140px">
+          <Column field="latest_date" header="Date" style="min-width: 140px" bodyClass="py-4">
             <template #body="slotProps">
               {{
                 new Date(slotProps.data.latest_date).toLocaleString("en-US", {
@@ -788,11 +796,11 @@ function onAmenityRentalRowClick(event) {
             </template>
           </Column>
 
-          <Column field="total_amount" header="Total" style="min-width: 100px" headerClass="text-right" bodyClass="text-right">
+          <Column field="total_amount" header="Total" style="min-width: 100px" headerClass="text-right" bodyClass="text-right py-4">
             <template #body="slotProps">₱{{ Number(slotProps.data.total_amount).toFixed(2) }}</template>
           </Column>
 
-          <Column header="Details" style="min-width: 80px" headerClass="text-center" bodyClass="text-center">
+          <Column header="Details" style="min-width: 80px" headerClass="text-center" bodyClass="text-center py-4">
             <template #body="slotProps">
               <Button
                 icon="pi pi-info-circle"
@@ -827,14 +835,19 @@ function onAmenityRentalRowClick(event) {
             })
           }}
         </div>
+        <div class="mb-2">
+          <strong>Created By:</strong> 
+          <span class="font-medium">{{ selectedHistory.user_name || 'Unknown User' }}</span>
+          <span class="text-sm text-gray-600 dark:text-gray-400 ml-2 capitalize">
+            ({{ selectedHistory.user_role || 'Unknown Role' }})
+          </span>
+        </div>
 
         <DataTable :value="safeSelectedItems" class="w-full mt-4" :showGridlines="true" scrollable scrollHeight="240px">
           <Column field="name" header="Product Name" sortable />
           <!-- We only know brands reliably from current products list; history items may not carry brand.
                If your history items include product_id or brand, add a Brand column similar to the cart/bill. -->
           <Column field="quantity" header="Quantity" sortable />
-
-
 
            <Column header="Unit Price">
     <template #body="slotProps">
@@ -935,12 +948,52 @@ function onAmenityRentalRowClick(event) {
         </DataTable>
 
         <hr class="my-4 border-gray-300 dark:border-gray-600" />
-        <div class="flex justify-between font-bold text-lg text-gray-900 dark:text-gray-100">
+        
+
+        <!-- Payment Section -->
+        <div class="mt-4 space-y-3">
+
+          <div class="flex justify-between font-bold text-lg text-gray-900 dark:text-gray-100">
           <span>Total</span>
           <span>₱{{ uiTotal.toFixed(2) }}</span>
+          </div>
+
+          <div class="flex justify-between items-center">
+            <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Amount Received:</label>
+            <InputNumber 
+              v-model="amountReceived" 
+              mode="currency" 
+              currency="PHP" 
+              locale="en-PH"
+              :minFractionDigits="2"
+              :maxFractionDigits="2"
+              class=""
+              inputClass="text-right text-sm"
+              placeholder="0.00"
+            />
+          </div>
+          
+          <div class="flex justify-between items-center font-bold bg-gray-100 dark:bg-gray-800 p-3 rounded-lg border-2"
+               :class="{ 'border-green-400 bg-green-50 dark:bg-green-900': changeAmount > 0, 'border-red-400 bg-red-50 dark:bg-red-900': !isPaymentValid && amountReceived > 0, 'border-gray-300 dark:border-gray-600': amountReceived === 0 }">
+            <span class="text-lg text-gray-800 dark:text-gray-200">Change:</span>
+            <span class="text-xl font-bold"
+                  :class="{ 'text-green-700 dark:text-green-300': changeAmount > 0, 'text-red-700 dark:text-red-300': !isPaymentValid && amountReceived > 0, 'text-gray-700 dark:text-gray-300': amountReceived === 0 }">
+              ₱{{ changeAmount.toFixed(2) }}
+            </span>
+          </div>
+
+          <div v-if="!isPaymentValid && amountReceived > 0" class="text-red-600 text-sm text-right">
+            Insufficient amount. Need ₱{{ (uiTotal - amountReceived).toFixed(2) }} more.
+          </div>
         </div>
-        <div class="flex justify-end mt-4">
-          <Button label="Confirm" class="p-button-primary mr-2" @click="confirmCheckout" />
+
+        <div class="flex justify-end mt-6">
+          <Button 
+            label="Confirm" 
+            class="p-button-success mr-2" 
+            :disabled="!isPaymentValid"
+            @click="confirmCheckout" 
+          />
           <Button label="Cancel" class="p-button-secondary" @click="cancelCheckout" />
         </div>
       </div>

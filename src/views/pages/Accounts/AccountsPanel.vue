@@ -61,11 +61,20 @@ const totalPages = computed(() => {
   return Math.ceil(filteredAccounts.value.length / itemsPerPage.value);
 });
 
+// Get current user ID for permission checks
+const currentUserId = computed(() => {
+  return Number(localStorage.getItem("userId") || 0);
+});
+
+// Check if account belongs to current user
+const isCurrentUserAccount = (accountId) => {
+  return Number(accountId) === currentUserId.value;
+};
+
 const showPassword = ref(false);
 
 const emailError = ref(""); // for Add
 const editEmailError = ref(""); // for Edit
-
 
 const nameError = ref("");         // for Add
 const editNameError = ref("");
@@ -114,9 +123,6 @@ function goToPage(page) {
   }
 }
 
-
-
-
 // Options for roles/statuses
 const roles = [
     { label: "Front Desk", value: "Front Desk" },
@@ -124,7 +130,6 @@ const roles = [
     { label: "System Admin", value: "System Admin" },
     { label: "Inventory", value: "Inventory" },
 ];
-
 
 const statuses = [
     { label: "Active", value: "Active" },
@@ -175,11 +180,6 @@ async function loadAccounts(useCache = true) {
   loading.value = false;
 }
 
-
-
-
-
-
 // Dialog states, form state, etc (your original logic retained)
 const isEditDialogVisible = ref(false);
 const isEditing = ref(false);
@@ -190,9 +190,10 @@ const isDeleteDialogVisible = ref(false);
 const accountToDelete = ref(null);
 const selectedAccount = ref(null);
 const isResetPasswordDialogVisible = ref(false);
-const currentPassword = ref("");
 const newPassword = ref("");
-const passwordInputRef = ref(null);
+const confirmPassword = ref("");
+const newPasswordInputRef = ref(null);
+const confirmPasswordInputRef = ref(null);
 const isCalendarDialogVisible = ref(false);
 const userLogs = ref([]);
 const selectedFilter = ref(null);
@@ -254,11 +255,11 @@ async function addAccount() {
     }
 }
 
-
 function openResetPasswordDialog(account) {
   selectedAccount.value = account;
   isResetPasswordDialogVisible.value = true;
   newPassword.value = "";
+  confirmPassword.value = "";
   nextTick(() => setTimeout(() => {
     // Check if any element already has focus before trying to focus
     if (!document.activeElement || document.activeElement === document.body) {
@@ -272,15 +273,30 @@ async function confirmResetPassword() {
     toast.add({ severity: "warn", summary: "Missing", detail: "Enter new password", life: 3000 });
     return;
   }
+  
+  if (!confirmPassword.value) {
+    toast.add({ severity: "warn", summary: "Missing", detail: "Confirm new password", life: 3000 });
+    return;
+  }
+  
+  if (newPassword.value !== confirmPassword.value) {
+    toast.add({ severity: "warn", summary: "Mismatch", detail: "Passwords do not match", life: 3000 });
+    return;
+  }
+  
   try {
-    await adminResetUserPassword(selectedAccount.value.id, { new_password: newPassword.value });
-    toast.add({ severity: "success", summary: "Success", detail: "Password reset.", life: 3000 });
+    // Always use admin reset for password reset functionality
+    await adminResetUserPassword(selectedAccount.value.id, { 
+      new_password: newPassword.value 
+    });
+    
+    toast.add({ severity: "success", summary: "Success", detail: "Password reset successfully.", life: 3000 });
     isResetPasswordDialogVisible.value = false;
   } catch (err) {
-    toast.add({ severity: "error", summary: "Error", detail: err.response?.data?.message || "Failed", life: 3000 });
+    const errorMessage = err.response?.data?.message || err.response?.data?.error || "Failed to reset password";
+    toast.add({ severity: "error", summary: "Error", detail: errorMessage, life: 3000 });
   }
 }
-
 
 // Edit user
 function openEditDialog(account) {
@@ -371,7 +387,6 @@ async function saveAccount() {
   }
 }
 
-
 // Delete user
 function openDeleteDialog(account) {
     accountToDelete.value = account;
@@ -404,8 +419,6 @@ function openAddUserDialog() {
     previewImageUrl.value = null;
 }
 
-
-
 // Details dialog
 function openDetailsDialog(account) {
     selectedAccount.value = account;
@@ -437,7 +450,6 @@ function getAccountStatusSeverity(statusValue) {
     }
 }
 
-
 function isValidEmail(email) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
@@ -451,7 +463,6 @@ function validateEmailInput() {
     }
 }
 
-
 function validateEditEmailInput() {
     if (!accountForm.value.email) {
         editEmailError.value = "Email is required.";
@@ -461,7 +472,6 @@ function validateEditEmailInput() {
         editEmailError.value = "";
     }
 }
-
 
 // Log filtering (if using logs API, adapt for actual log shape)
 const filteredLogs = computed(() => {
@@ -487,18 +497,22 @@ const formatTime = (timestamp) => new Date(timestamp).toLocaleTimeString("en-US"
 // Dialog closes
 function closeAddDialog() { isAddDialogVisible.value = false; }
 function closeEditDialog() { isEditDialogVisible.value = false; }
-function closeResetPasswordDialog() { isResetPasswordDialogVisible.value = false; }
+function closeResetPasswordDialog() { 
+  isResetPasswordDialogVisible.value = false; 
+  newPassword.value = "";
+  confirmPassword.value = "";
+}
 function closeDeleteDialog() { isDeleteDialogVisible.value = false; accountToDelete.value = null; }
 
 // On mount, fetch accounts
 onMounted(loadAccounts);
 </script>
 <template>
-    <div class="card">
-        <div class="font-semibold text-xl mb-4 text-gray-900 dark:text-gray-100">Accounts Management</div>
+    <div class="card flex flex-col max-h-[calc(100vh-8rem)]">
+        <div class="font-semibold text-xl mb-4 text-gray-900 dark:text-gray-100 flex-shrink-0">Accounts Management</div>
 
         <!-- Controls Section -->
-        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 flex-shrink-0">
             <!-- Search Bar -->
             <div class="flex-1 max-w-md">
                 <div class="relative">
@@ -520,26 +534,28 @@ onMounted(loadAccounts);
             />
         </div>
         
-        <!-- Loading State -->
-        <div v-if="loading" class="text-center py-8">
-            <i class="pi pi-spin pi-spinner text-2xl text-blue-500"></i>
-            <p class="mt-2 text-gray-600 dark:text-gray-300">Loading accounts...</p>
-        </div>
-        
-        <!-- Results Info -->
-        <div v-else class="mb-4 text-sm text-gray-600 dark:text-gray-300">
-            Showing {{ paginatedAccounts.length }} of {{ filteredAccounts.length }} accounts
-            <span v-if="searchQuery">(filtered from {{ totalAccounts }} total)</span>
-        </div>
-        
-        <div v-if="!loading">
-            <!-- Responsive Grid -->
-            <div
-                class="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2"
-            >
+        <!-- Scrollable Content Area -->
+        <div class="overflow-y-auto flex-1 pr-2">
+            <!-- Loading State -->
+            <div v-if="loading" class="text-center py-8">
+                <i class="pi pi-spin pi-spinner text-2xl text-blue-500"></i>
+                <p class="mt-2 text-gray-600 dark:text-gray-300">Loading accounts...</p>
+            </div>
+            
+            <!-- Results Info -->
+            <div v-else class="mb-4 text-sm text-gray-600 dark:text-gray-300">
+                Showing {{ filteredAccounts.length }} accounts
+                <span v-if="searchQuery">(filtered from {{ totalAccounts }} total)</span>
+            </div>
+            
+            <div v-if="!loading">
+                <!-- Responsive Grid -->
                 <div
-                    v-for="(account, index) in paginatedAccounts"
-                    :key="account.id"
+                    class="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2"
+                >
+                    <div
+                        v-for="(account, index) in filteredAccounts"
+                        :key="account.id"
                     class="relative shadow-md border border-gray-200 dark:border-gray-600 rounded-xl p-4 bg-white dark:bg-gray-800"
                 >
                     <!-- Profile Image -->
@@ -585,6 +601,7 @@ onMounted(loadAccounts);
                             label="Reset Password"
                             icon="pi pi-key"
                             class="p-button-warning text-xs"
+                            :disabled="!isCurrentUserAccount(account.id)"
                             @click="openResetPasswordDialog(account)"
                         />
                         <Button
@@ -600,32 +617,11 @@ onMounted(loadAccounts);
                             @click="openDeleteDialog(account)"
                         ></Button>
                     </div>
+                    </div>
                 </div>
-            </div>
             
-            <!-- Pagination Controls -->
-            <div v-if="totalPages > 1" class="flex justify-center items-center mt-8 gap-2">
-                <Button
-                    icon="pi pi-angle-left"
-                    class="p-button-outlined p-button-sm"
-                    @click="prevPage"
-                    :disabled="currentPage === 1"
-                />
-                
-                <span class="mx-4 text-sm text-gray-600 dark:text-gray-300">
-                    Page {{ currentPage }} of {{ totalPages }}
-                </span>
-                
-                <Button
-                    icon="pi pi-angle-right"
-                    class="p-button-outlined p-button-sm"
-                    @click="nextPage"
-                    :disabled="currentPage === totalPages"
-                />
-            </div>
-            
-            <!-- No Results -->
-            <div v-if="filteredAccounts.length === 0 && searchQuery" class="text-center py-8">
+                <!-- No Results -->
+                <div v-if="filteredAccounts.length === 0 && searchQuery" class="text-center py-8">
                 <i class="pi pi-search text-4xl text-gray-300 dark:text-gray-600 mb-4"></i>
                 <p class="text-gray-500 dark:text-gray-400">No accounts found matching "{{ searchQuery }}"</p>
                 <Button
@@ -634,6 +630,7 @@ onMounted(loadAccounts);
                     class="p-button-text mt-2"
                     @click="searchQuery = ''"
                 />
+                </div>
             </div>
         </div>
     </div>
@@ -650,10 +647,16 @@ onMounted(loadAccounts);
 >
     <div v-if="selectedAccount" class="text-gray-800 dark:text-gray-200">
         <p class="text-sm mb-4">
-            You are resetting the password for
-            <strong>{{ selectedAccount.name }}</strong>.
+            <template v-if="isCurrentUserAccount(selectedAccount.id)">
+                You are resetting your own password.
+            </template>
+            <template v-else>
+                You are resetting the password for
+                <strong>{{ selectedAccount.name }}</strong>.
+            </template>
         </p>
-        <!-- New Password Only -->
+        
+        <!-- New Password -->
         <div class="mb-4">
             <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
                 New Password
@@ -663,9 +666,31 @@ onMounted(loadAccounts);
                 type="password"
                 placeholder="Enter new password"
                 class="w-full"
-                ref="passwordInputRef"
+                ref="newPasswordInputRef"
                 @keyup.enter="confirmResetPassword"
             />
+        </div>
+        
+        <!-- Confirm New Password -->
+        <div class="mb-4">
+            <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
+                Confirm New Password
+            </label>
+            <InputText
+                v-model="confirmPassword"
+                type="password"
+                placeholder="Confirm new password"
+                class="w-full"
+                ref="confirmPasswordInputRef"
+                @keyup.enter="confirmResetPassword"
+            />
+            <!-- Password mismatch error message -->
+            <div 
+                v-if="confirmPassword && newPassword && confirmPassword !== newPassword" 
+                class="text-red-500 text-sm mt-1"
+            >
+                Passwords do not match
+            </div>
         </div>
         <div class="flex justify-end gap-2">
             <Button
@@ -679,7 +704,7 @@ onMounted(loadAccounts);
                 label="Confirm Reset"
                 icon="pi pi-key"
                 class="p-button-warning"
-                :disabled="!newPassword"
+                :disabled="!newPassword || !confirmPassword"
                 @click="confirmResetPassword"
             />
         </div>
@@ -840,7 +865,6 @@ onMounted(loadAccounts);
     <span v-if="emailError" class="text-xs text-red-500 mt-1 block">{{ emailError }}</span>
 </div>
 
-
             <!-- Password -->
             <div class="mb-4">
     <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Password</label>
@@ -901,7 +925,6 @@ onMounted(loadAccounts);
                 />
             </div>
 
-
             <!-- Dialog Actions -->
             <div class="flex justify-end gap-2">
                 <Button
@@ -920,7 +943,6 @@ onMounted(loadAccounts);
         </div>
     </Dialog>
 
-
     <!-- Edit Account Dialog -->
 <Dialog
     :dismissable-mask="true"
@@ -938,6 +960,7 @@ onMounted(loadAccounts);
         v-model="accountForm.name"
         placeholder="Enter name"
         class="w-full"
+        disabled
         @blur="validateEditNameInput"
         @input="validateEditNameInput"
     />
@@ -952,12 +975,12 @@ onMounted(loadAccounts);
         class="w-full"
         placeholder="Enter Email"
         type="email"
+        disabled
         @blur="validateEditEmailInput"
         @input="validateEditEmailInput"
     />
     <span v-if="editEmailError" class="text-xs text-red-500 mt-1 block">{{ editEmailError }}</span>
 </div>
-
 
        <!-- Primary Role (read-only) -->
 <div class="mb-4">
@@ -986,7 +1009,6 @@ onMounted(loadAccounts);
   />
 </div>
 
-
          <!-- Image Upload -->
         <div class="mb-4">
             <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Profile Picture</label>
@@ -1012,7 +1034,6 @@ onMounted(loadAccounts);
                 />
             </div>
         </div>
-
 
         <!-- Status -->
         <div class="mb-4">
@@ -1042,7 +1063,6 @@ onMounted(loadAccounts);
         </div>
     </div>
 </Dialog>
-
 
     <!-- Delete Confirmation Dialog -->
     <Dialog
@@ -1075,5 +1095,4 @@ onMounted(loadAccounts);
             </div>
         </div>
     </Dialog>
-    <Toast />
 </template>

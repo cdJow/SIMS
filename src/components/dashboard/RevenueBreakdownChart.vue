@@ -51,11 +51,15 @@ const isNextRevenueDisabled = computed(() => {
     switch (period) {
         case "week":
             return revenueOffset.value >= 0;
-        case "month":
+        case "month": {
+            // Calculate target month/year with offset
+            const targetDate = new Date(currentDate.value);
+            targetDate.setMonth(targetDate.getMonth() + revenueOffset.value);
             return (
-                now.getMonth() ===
-                currentDate.value.getMonth() + revenueOffset.value
+                now.getFullYear() === targetDate.getFullYear() &&
+                now.getMonth() === targetDate.getMonth()
             );
+        }
         case "year":
             return (
                 now.getFullYear() ===
@@ -88,20 +92,40 @@ const chartData = ref({
     datasets: []
 });
 
+const totalRevenue = ref(0);
+
 async function loadRevenueData() {
     try {
         const params = {
             period: selectedRevenuePeriod.value.value,
             offset: revenueOffset.value,
         };
+        
+        // Add debug info for date calculation
+        const debugDate = new Date(currentDate.value);
+        debugDate.setMonth(debugDate.getMonth() + revenueOffset.value);
         console.log("📊 Loading revenue data with:", params);
+        console.log("📅 Target date:", debugDate.toLocaleDateString(), `(${debugDate.toLocaleString("default", { month: "long", year: "numeric" })})`);
         
         const response = await getRevenueBreakdown(params.period, params.offset);
         chartData.value = response.data;
         
+        // Calculate total revenue from all datasets
+        if (response.data && response.data.datasets) {
+            let total = 0;
+            response.data.datasets.forEach(dataset => {
+                if (dataset.data && Array.isArray(dataset.data)) {
+                    total += dataset.data.reduce((sum, value) => sum + (value || 0), 0);
+                }
+            });
+            totalRevenue.value = total;
+        }
+        
         console.log("✅ Revenue data loaded:", response.data);
+        console.log("💰 Total Revenue:", totalRevenue.value.toLocaleString());
     } catch (error) {
         console.error("❌ Failed to load revenue data:", error);
+        totalRevenue.value = 0;
     }
 }
 
@@ -125,6 +149,20 @@ onUnmounted(() => {
 const revenueChartOptions = ref({
     responsive: true,
     maintainAspectRatio: false,
+    plugins: {
+        tooltip: {
+            callbacks: {
+                afterBody: function(tooltipItems) {
+                    // Calculate total for this data point across all datasets
+                    let total = 0;
+                    tooltipItems.forEach(item => {
+                        total += item.parsed.y;
+                    });
+                    return `Total: ₱${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                }
+            }
+        }
+    },
     scales: {
         y: {
             beginAtZero: true,
@@ -147,7 +185,12 @@ const revenueChartOptions = ref({
         <div class="p-4 card rounded-lg shadow-sm flex flex-col">
             <!-- Step 2 -->
             <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-semibold">Revenue Breakdown</h3>
+                <div>
+                    <h3 class="text-lg font-semibold">Revenue Breakdown</h3>
+                    <p class="text-sm text-gray-600 mt-1">
+                        Total Revenue: <span class="font-semibold text-green-600">₱{{ totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span>
+                    </p>
+                </div>
                 <div class="flex gap-2 items-center">
                     <Select
                         v-model="selectedRevenuePeriod"
@@ -185,6 +228,29 @@ const revenueChartOptions = ref({
                     :options="revenueChartOptions"
                     class="min-h-[400px]"
                 />
+            </div>
+
+            <!-- Revenue Summary -->
+            <div class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4" v-if="chartData.datasets && chartData.datasets.length > 0">
+                <div 
+                    v-for="(dataset, index) in chartData.datasets" 
+                    :key="index" 
+                    class="text-center p-3 border rounded-lg"
+                >
+                    <div class="flex items-center justify-center mb-2">
+                        <div 
+                            class="w-4 h-4 rounded mr-2" 
+                            :style="{ backgroundColor: dataset.backgroundColor }"
+                        ></div>
+                        <span class="text-sm font-medium">{{ dataset.label }}</span>
+                    </div>
+                    <div class="text-lg font-semibold text-gray-800">
+                        ₱{{ (dataset.data?.reduce((sum, value) => sum + (value || 0), 0) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
+                    </div>
+                    <div class="text-xs text-gray-500">
+                        {{ totalRevenue > 0 ? ((dataset.data?.reduce((sum, value) => sum + (value || 0), 0) || 0) / totalRevenue * 100).toFixed(1) : 0 }}%
+                    </div>
+                </div>
             </div>
         </div>
     </div>

@@ -159,11 +159,11 @@ const filteredPromos = computed(() => {
 </script>
 
 <template>
-  <div class="card">
-    <h1 class="text-2xl font-bold mb-4">Discounts & Promos</h1>
+  <div class="card flex flex-col max-h-[calc(100vh-8rem)]">
+    <h1 class="text-2xl font-bold mb-4 flex-shrink-0">Discounts & Promos</h1>
 
     <!-- Toolbar -->
-    <div class="flex flex-col md:flex-row gap-3 md:items-center md:justify-between mb-6">
+    <div class="flex flex-col md:flex-row gap-3 md:items-center md:justify-between mb-6 flex-shrink-0">
       <div class="flex gap-2 items-center">
         <InputText v-model="search" placeholder="Search promo name…" class="w-72" />
         <Button icon="pi pi-times" outlined @click="search = ''" label="Clear" />
@@ -174,7 +174,8 @@ const filteredPromos = computed(() => {
     </div>
 
     <!-- Grid of promo cards -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-fr">
+    <div class="overflow-y-auto flex-1 pr-2">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-fr">
       <div
         v-for="p in filteredPromos"
         :key="p.id"
@@ -203,6 +204,7 @@ const filteredPromos = computed(() => {
           <Button label="Edit" icon="pi pi-pencil" class="p-button-primary flex-1" @click="openEditDialog(p)" />
           <Button label="Delete" icon="pi pi-trash" class="p-button-danger flex-1" @click="removePromo(p)" />
         </div>
+      </div>
       </div>
     </div>
 
@@ -276,9 +278,7 @@ const filteredPromos = computed(() => {
       </div>
     </Dialog>
 
-    <ConfirmDialog />
-    <Toast />
-  </div>
+    <ConfirmDialog /></div>
 </template>
 
 <style scoped>

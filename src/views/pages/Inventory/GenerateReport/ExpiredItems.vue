@@ -11,6 +11,8 @@ const isExporting = ref(false); // Export loading state
 const errorMessage = ref(""); // Error state for API call
 const nearExpireSearchQuery = ref(""); // Search input for near expire items
 const expiredSearchQuery = ref(""); // Search input for expired items
+const nearExpireDateSearch = ref(null); // Date search for near expire items
+const expiredDateSearch = ref(null); // Date search for expired items
 
 // Fetch expired items
 onMounted(() => {
@@ -71,6 +73,16 @@ const filteredExpiredItems = computed(() => {
         );
     }
     
+    // Apply date filter if date exists
+    if (expiredDateSearch.value) {
+        const searchDateStr = new Date(expiredDateSearch.value).toDateString();
+        items = items.filter((item) => {
+            if (!item.expirationDate) return false;
+            const itemDateStr = new Date(item.expirationDate).toDateString();
+            return itemDateStr === searchDateStr;
+        });
+    }
+    
     // Sort by expiration date (oldest first)
     return items.sort((a, b) => new Date(a.expirationDate) - new Date(b.expirationDate));
 });
@@ -91,24 +103,32 @@ const filteredNearExpireItems = computed(() => {
         );
     }
     
+    // Apply date filter if date exists
+    if (nearExpireDateSearch.value) {
+        const searchDateStr = new Date(nearExpireDateSearch.value).toDateString();
+        items = items.filter((item) => {
+            if (!item.expirationDate) return false;
+            const itemDateStr = new Date(item.expirationDate).toDateString();
+            return itemDateStr === searchDateStr;
+        });
+    }
+    
     // Sort by expiration date (soonest first)
     return items.sort((a, b) => new Date(a.expirationDate) - new Date(b.expirationDate));
 });
 
 // Function to clear both search inputs
-function clearAllSearch() {
-    nearExpireSearchQuery.value = "";
-    expiredSearchQuery.value = "";
-}
 
 // Function to clear near expire search
 function clearNearExpireSearch() {
     nearExpireSearchQuery.value = "";
+    nearExpireDateSearch.value = null;
 }
 
 // Function to clear expired search
 function clearExpiredSearch() {
     expiredSearchQuery.value = "";
+    expiredDateSearch.value = null;
 }
 
 // Calculate days expired
@@ -267,24 +287,10 @@ function formatDateForExport(date) {
         </div>
 
         <div class="flex flex-wrap items-center gap-4 mb-3">
-            <!-- Clear All Button -->
-            <div class="flex items-center">
-                <Button
-                    type="button"
-                    icon="pi pi-filter-slash"
-                    label="Clear All Searches"
-                    outlined
-                    @click="clearAllSearch"
-                    class="mr-2"
-                />
-            </div>
+           
 
-            <!-- Global Search Info -->
-            <div class="flex items-center">
-                <span class="text-sm text-gray-600 dark:text-gray-400">
-                    Use separate search boxes in each section below
-                </span>
-            </div>
+             
+           
         </div>
 
         <!-- Loading & Error State -->
@@ -297,47 +303,56 @@ function formatDateForExport(date) {
 
         <!-- Near Expire Items Section (1 month before expiry) -->
         <div v-if="!isLoading && !errorMessage" class="mb-6">
-            <div class="bg-orange-50 dark:bg-orange-900/20 border-l-4 border-orange-400 p-4 mb-4 rounded-r-lg">
+            <div class="bg-orange-50 dark:bg-orange-900/20 border-l-4 border-orange-400 p-4 mb-4 rounded-lg">
                 <div class="flex items-center">
-                    <i class="pi pi-exclamation-triangle text-orange-500 mr-2"></i>
-                    <h4 class="text-lg font-semibold text-orange-800 dark:text-orange-200">
-                        Near Expire Items (Expiring within 1 month)
+                    <i class="pi pi-exclamation-triangle text-orange-500 mr-3 text-xl"></i>
+                    <h4 class="text-xl font-bold text-orange-800 dark:text-orange-200">
+                        Near Expire Items
                     </h4>
-                    <span class="ml-auto bg-orange-500 text-white px-2 py-1 rounded-full text-sm font-bold">
+                    <span class="ml-auto bg-orange-500 text-white px-3 py-1.5 rounded-full text-sm font-bold">
                         {{ filteredNearExpireItems.length }} / {{ nearExpireItems.length }}
                     </span>
                 </div>
+                <p class="text-sm text-orange-700 dark:text-orange-300 mt-2 ml-8">
+                    Items expiring within 1 month
+                </p>
             </div>
 
             <!-- Near Expire Items Search - Always Show -->
             <div class="flex flex-wrap items-center gap-4 mb-4">
                 <!-- Clear Button for Near Expire -->
-                <div class="flex items-center">
-                    <Button
-                        type="button"
-                        icon="pi pi-filter-slash"
-                        label="Clear"
-                        outlined
-                        @click="clearNearExpireSearch"
-                        class="mr-2"
-                        size="small"
-                    />
-                </div>
+                <Button
+                    type="button"
+                    icon="pi pi-filter-slash"
+                    label="Clear"
+                    outlined
+                    @click="clearNearExpireSearch"
+                    size="small"
+                />
 
                 <!-- Near Expire Search -->
-                <div class="flex items-center">
-                    <IconField>
-                        <InputIcon>
-                            <i class="pi pi-search" />
-                        </InputIcon>
-                        <InputText
-                            id="nearExpireSearch"
-                            placeholder="Search Near Expire Items..."
-                            class="w-60"
-                            v-model="nearExpireSearchQuery"
-                        />
-                    </IconField>
-                </div>
+                <IconField>
+                    <InputIcon>
+                        <i class="pi pi-search" />
+                    </InputIcon>
+                    <InputText
+                        id="nearExpireSearch"
+                        placeholder="Search Near Expire Items..."
+                        class="w-64"
+                        v-model="nearExpireSearchQuery"
+                    />
+                </IconField>
+                
+                <!-- Date Search for Near Expire -->
+                <DatePicker
+                    v-model="nearExpireDateSearch"
+                    :manualInput="false"
+                    dateFormat="mm/dd/yy"
+                    placeholder="Search by Expiration Date"
+                    :showIcon="true"
+                    iconDisplay="input"
+                    class="w-64"
+                />
             </div>
 
             <!-- Near Expire Items Data Table -->
@@ -348,26 +363,27 @@ function formatDateForExport(date) {
                 :rows="5"
                 responsiveLayout="scroll"
                 class="p-datatable-lg mb-6"
+                stripedRows 
             >
                 <!-- Item Name -->
-                <Column field="itemName" header="Item Name" sortable>
+                <Column field="itemName" header="Item Name" sortable :bodyStyle="{ padding: '1.5rem 1rem', textAlign: 'left' }">
                     <template #body="slotProps">
-                        <span class="font-semibold text-orange-700 dark:text-orange-300">
+                        <span class="text-gray-900 dark:text-gray-100">
                             {{ slotProps.data.itemName }}
                         </span>
                     </template>
                 </Column>
 
-                <Column field="batchNumber" header="Batch Number" sortable>
+                <Column field="batchNumber" header="Batch Number" sortable :bodyStyle="{ padding: '1.5rem 1rem', textAlign: 'left' }">
                     <template #body="slotProps">
-                        <span class="font-semibold">
+                        <span class="text-gray-900 dark:text-gray-100">
                             {{ slotProps.data.batchNumber }}
                         </span>
                     </template>
                 </Column>
 
                 <!-- Current Stock -->
-                <Column field="quantity" header="Quantity" sortable>
+                <Column field="quantity" header="Quantity" sortable :bodyStyle="{ padding: '1.5rem 1rem', textAlign: 'center' }">
                     <template #body="slotProps">
                         <span class="text-gray-700 dark:text-gray-300 font-medium">
                             {{ slotProps.data.quantity }}
@@ -376,7 +392,7 @@ function formatDateForExport(date) {
                 </Column>
 
                 <!-- Retail Price -->
-                <Column field="retailPrice" header="Retail Price" sortable>
+                <Column field="retailPrice" header="Retail Price" sortable :bodyStyle="{ padding: '1.5rem 1rem', textAlign: 'right' }">
                     <template #body="slotProps">
                         <span class="text-green-600 dark:text-green-400 font-semibold">
                             ₱{{ slotProps.data.retailPrice ? slotProps.data.retailPrice.toFixed(2) : 'N/A' }}
@@ -385,7 +401,7 @@ function formatDateForExport(date) {
                 </Column>
 
                 <!-- Expiration Date -->
-                <Column field="expirationDate" header="Expiration Date" sortable>
+                <Column field="expirationDate" header="Expiration Date" sortable :bodyStyle="{ padding: '1.5rem 1rem', textAlign: 'center' }">
                     <template #body="slotProps">
                         <span class="font-medium text-orange-600 dark:text-orange-400">
                             {{ new Date(slotProps.data.expirationDate).toLocaleDateString() }}
@@ -394,7 +410,7 @@ function formatDateForExport(date) {
                 </Column>
 
                 <!-- Days Until Expiry -->
-                <Column field="daysUntilExpiry" header="Days Until Expiry" sortable>
+                <Column field="daysUntilExpiry" header="Days Until Expiry" sortable :bodyStyle="{ padding: '1.5rem 1rem', textAlign: 'center' }">
                     <template #body="slotProps">
                         <span class="text-orange-700 dark:text-orange-300 font-bold">
                             {{ calculateDaysUntilExpiration(slotProps.data.expirationDate) }} days
@@ -403,7 +419,7 @@ function formatDateForExport(date) {
                 </Column>
 
                 <!-- Supplier -->
-                <Column field="supplier" header="Supplier" sortable>
+                <Column field="supplier" header="Supplier" sortable :bodyStyle="{ padding: '1.5rem 1rem', textAlign: 'left' }">
                     <template #body="slotProps">
                         <span class="text-gray-600 dark:text-gray-400">
                             {{ slotProps.data.supplier }}
@@ -436,48 +452,57 @@ function formatDateForExport(date) {
 
         <!-- Expired Items Section Header -->
         <div class="mb-4">
-            <div class="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 rounded-r-lg">
+            <div class="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 rounded-lg">
                 <div class="flex items-center">
-                    <i class="pi pi-times-circle text-red-500 mr-2"></i>
-                    <h4 class="text-lg font-semibold text-red-800 dark:text-red-200">
+                    <i class="pi pi-times-circle text-red-500 mr-3 text-xl"></i>
+                    <h4 class="text-xl font-bold text-red-700 dark:text-red-200">
                         Expired Items
                     </h4>
-                    <span class="ml-auto bg-red-500 text-white px-2 py-1 rounded-full text-sm font-bold">
+                    <span class="ml-auto bg-red-500 text-white px-3 py-1.5 rounded-full text-sm font-bold">
                         {{ filteredExpiredItems.length }} / {{ expiredItems.length }}
                     </span>
                 </div>
+                <p class="text-sm text-red-700 dark:text-red-300 mt-2 ml-8">
+                    Items that have already expired
+                </p>
             </div>
         </div>
 
         <!-- Expired Items Search - Always Show -->
         <div v-if="!isLoading && !errorMessage" class="flex flex-wrap items-center gap-4 mb-4">
             <!-- Clear Button for Expired -->
-            <div class="flex items-center">
-                <Button
-                    type="button"
-                    icon="pi pi-filter-slash"
-                    label="Clear"
-                    outlined
-                    @click="clearExpiredSearch"
-                    class="mr-2"
-                    size="small"
-                />
-            </div>
+            <Button
+                type="button"
+                icon="pi pi-filter-slash"
+                label="Clear"
+                outlined
+                @click="clearExpiredSearch"
+                size="small"
+            />
 
             <!-- Expired Items Search -->
-            <div class="flex items-center">
-                <IconField>
-                    <InputIcon>
-                        <i class="pi pi-search" />
-                    </InputIcon>
-                    <InputText
-                        id="expiredSearch"
-                        placeholder="Search Expired Items..."
-                        class="w-60"
-                        v-model="expiredSearchQuery"
-                    />
-                </IconField>
-            </div>
+            <IconField>
+                <InputIcon>
+                    <i class="pi pi-search" />
+                </InputIcon>
+                <InputText
+                    id="expiredSearch"
+                    placeholder="Search Expired Items..."
+                    class="w-64"
+                    v-model="expiredSearchQuery"
+                />
+            </IconField>
+            
+            <!-- Date Search for Expired -->
+            <DatePicker
+                v-model="expiredDateSearch"
+                :manualInput="false"
+                dateFormat="mm/dd/yy"
+                placeholder="Search by Expiration Date"
+                :showIcon="true"
+                iconDisplay="input"
+                class="w-64"
+            />
         </div>
 
         <!-- Expired Items Data Table -->
@@ -485,38 +510,39 @@ function formatDateForExport(date) {
             v-if="!isLoading && !errorMessage && filteredExpiredItems.length > 0"
             :value="filteredExpiredItems"
             :paginator="true"
-            :rows="10"
+            :rows="5"
             responsiveLayout="scroll"
             class="p-datatable-lg"
+            stripedRows 
         >
             <!-- Item Name -->
-            <Column field="itemName" header="Item Name" sortable>
+            <Column field="itemName" header="Item Name" sortable :bodyStyle="{ padding: '1.5rem 1rem', textAlign: 'left' }">
                 <template #body="slotProps">
-                    <span class="font-semibold">{{
+                    <span class="text-gray-900 dark:text-gray-100">{{
                         slotProps.data.itemName
                     }}</span>
                 </template>
             </Column>
 
-            <Column field="batchNumber" header="Batch Number" sortable>
+            <Column field="batchNumber" header="Batch Number" sortable :bodyStyle="{ padding: '1.5rem 1rem', textAlign: 'left' }">
                 <template #body="slotProps">
-                    <span class="font-semibold">{{
+                    <span class="text-gray-900 dark:text-gray-100">{{
                         slotProps.data.batchNumber
                     }}</span>
                 </template>
             </Column>
 
             <!-- Current Stock -->
-            <Column field="quantity" header="Quantity" sortable>
+            <Column field="quantity" header="Quantity" sortable :bodyStyle="{ padding: '1.5rem 1rem', textAlign: 'center' }">
                 <template #body="slotProps">
-                    <span class="text-gray-700 font-medium">
+                    <span class="text-gray-700 dark:text-gray-300 font-medium">
                         {{ slotProps.data.quantity }}
                     </span>
                 </template>
             </Column>
 
             <!-- Retail Price -->
-            <Column field="retailPrice" header="Retail Price" sortable>
+            <Column field="retailPrice" header="Retail Price" sortable :bodyStyle="{ padding: '1.5rem 1rem', textAlign: 'right' }">
                 <template #body="slotProps">
                     <span class="text-green-600 dark:text-green-400 font-semibold">
                         ₱{{ slotProps.data.retailPrice ? slotProps.data.retailPrice.toFixed(2) : 'N/A' }}
@@ -525,7 +551,7 @@ function formatDateForExport(date) {
             </Column>
 
             <!-- Expiration Date -->
-            <Column field="expirationDate" header="Expiration Date" sortable>
+            <Column field="expirationDate" header="Expiration Date" sortable :bodyStyle="{ padding: '1.5rem 1rem', textAlign: 'center' }">
                 <template #body="slotProps">
                     <span class="font-medium text-red-500">
                         {{
@@ -538,9 +564,9 @@ function formatDateForExport(date) {
             </Column>
 
             <!-- Days Expired -->
-            <Column field="daysExpired" header="Days Expired" sortable>
+            <Column field="daysExpired" header="Days Expired" sortable :bodyStyle="{ padding: '1.5rem 1rem', textAlign: 'center' }">
                 <template #body="slotProps">
-                    <span class="text-gray-700">
+                    <span class="text-gray-700 dark:text-gray-300">
                         {{
                             calculateDaysExpired(slotProps.data.expirationDate)
                         }}
@@ -549,9 +575,9 @@ function formatDateForExport(date) {
             </Column>
 
             <!-- Supplier -->
-            <Column field="supplier" header="Supplier" sortable>
+            <Column field="supplier" header="Supplier" sortable :bodyStyle="{ padding: '1.5rem 1rem', textAlign: 'left' }">
                 <template #body="slotProps">
-                    <span class="text-gray-600">{{
+                    <span class="text-gray-600 dark:text-gray-400">{{
                         slotProps.data.supplier
                     }}</span>
                 </template>

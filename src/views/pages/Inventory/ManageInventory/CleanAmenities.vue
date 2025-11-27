@@ -92,7 +92,7 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="card">
+    <div class="card bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 space-y-6">
         <!-- Header -->
         <div class="flex justify-between items-center mb-6">
             <div>
@@ -129,11 +129,11 @@ onMounted(() => {
                 </h3>
                 <div class="flex gap-3">
                     <div class="p-input-icon-left">
-                        <i class="pi pi-search"></i>
+                        <i class="pi pi-search dark:text-gray-400"></i>
                         <InputText 
                             v-model="searchTerm"
                             placeholder="Search by product name..."
-                            class="w-64"
+                            class="w-64 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
                         />
                     </div>
                 </div>
@@ -144,15 +144,17 @@ onMounted(() => {
                 :paginator="true"
                 :responsiveLayout="'scroll'"
                 class="p-datatable-sm spaced-rows"
-                :rowHover="true"
+                stripedRows
+                :pt="{ bodyRow: { style: 'height: 3.5rem;' } }"
+                :rowHover="false"
             >
-                <Column field="product_name" header="Product Name" sortable>
+                <Column field="product_name" header="Product Name" sortable headerClass="text-center" bodyClass="text-center">
                     <template #body="slotProps">
-                        <span class="font-medium">{{ slotProps.data.product_name }}</span>
+                        <span class="font-medium text-gray-900 dark:text-gray-100">{{ slotProps.data.product_name }}</span>
                     </template>
                 </Column>
                 
-                <Column field="product_type" header="Type" sortable>
+                <Column field="product_type" header="Type" sortable headerClass="text-center" bodyClass="text-center">
                     <template #body="slotProps">
                         <span 
                             class="px-2 py-1 rounded-full text-xs font-medium"
@@ -166,7 +168,7 @@ onMounted(() => {
                     </template>
                 </Column>
                 
-                <Column field="status" header="Current Status" sortable>
+                <Column field="status" header="Current Status" sortable headerClass="text-center" bodyClass="text-center">
                     <template #body="slotProps">
                         <span class="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
                             {{ slotProps.data.status }}
@@ -174,7 +176,7 @@ onMounted(() => {
                     </template>
                 </Column>
 
-                <Column header="Action" style="width: 120px">
+                <Column header="Action" headerClass="text-center" bodyClass="text-center" style="width: 120px">
                     <template #body="slotProps">
                         <Button
                             icon="pi pi-check"
@@ -196,11 +198,11 @@ onMounted(() => {
                 </h3>
                 <div class="flex gap-3">
                     <div class="p-input-icon-left">
-                        <i class="pi pi-search"></i>
+                        <i class="pi pi-search dark:text-gray-400"></i>
                         <InputText 
                             v-model="searchTerm"
                             placeholder="Search by product name or serial number..."
-                            class="w-80"
+                            class="w-80 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
                         />
                     </div>
                 </div>
@@ -211,21 +213,23 @@ onMounted(() => {
                 :paginator="true"
                 :responsiveLayout="'scroll'"
                 class="p-datatable-sm spaced-rows"
-                :rowHover="true"
+                stripedRows
+                :pt="{ bodyRow: { style: 'height: 3.5rem;' } }"
+                :rowHover="false"
             >
-                <Column field="product_name" header="Product Name" sortable>
+                <Column field="product_name" header="Product Name" sortable headerClass="text-center" bodyClass="text-center">
                     <template #body="slotProps">
-                        <span class="font-medium">{{ slotProps.data.product_name }}</span>
+                        <span class="font-medium text-gray-900 dark:text-gray-100">{{ slotProps.data.product_name }}</span>
                     </template>
                 </Column>
                 
-                <Column field="serial_number" header="Serial Number" sortable>
+                <Column field="serial_number" header="Serial Number" sortable headerClass="text-center" bodyClass="text-center">
                     <template #body="slotProps">
-                        <span class="font-mono text-sm">{{ slotProps.data.serial_number }}</span>
+                        <span class="font-mono text-sm text-gray-700 dark:text-gray-300">{{ slotProps.data.serial_number }}</span>
                     </template>
                 </Column>
                 
-                <Column field="product_type" header="Type" sortable>
+                <Column field="product_type" header="Type" sortable headerClass="text-center" bodyClass="text-center">
                     <template #body="slotProps">
                         <span 
                             class="px-2 py-1 rounded-full text-xs font-medium"
@@ -239,7 +243,7 @@ onMounted(() => {
                     </template>
                 </Column>
                 
-                <Column field="status" header="Current Status" sortable>
+                <Column field="status" header="Current Status" sortable headerClass="text-center" bodyClass="text-center">
                     <template #body="slotProps">
                         <span class="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
                             {{ slotProps.data.status }}
@@ -247,7 +251,7 @@ onMounted(() => {
                     </template>
                 </Column>
 
-                <Column header="Action" style="width: 120px">
+                <Column header="Action" headerClass="text-center" bodyClass="text-center" style="width: 120px">
                     <template #body="slotProps">
                         <Button
                             icon="pi pi-check"
@@ -262,38 +266,30 @@ onMounted(() => {
 
         <!-- No Items Message -->
         <div v-if="!isLoading && cleaningItems.length === 0 && cleaningSerials.length === 0" class="text-center py-12">
-            <i class="pi pi-check-circle text-6xl text-green-500 mb-4 block"></i>
-            <h3 class="text-lg font-semibold text-gray-600 dark:text-gray-400 mb-2">All Clean!</h3>
-            <p class="text-gray-500 dark:text-gray-500">
+            <i class="pi pi-check-circle text-6xl text-green-500 dark:text-green-400 mb-4 block"></i>
+            <h3 class="text-lg font-semibold text-gray-600 dark:text-gray-300 mb-2">All Clean!</h3>
+            <p class="text-gray-500 dark:text-gray-400">
                 No Bath & Bed linens need cleaning right now.
             </p>
         </div>
 
         <!-- No Search Results Message -->
         <div v-if="!isLoading && (cleaningItems.length > 0 || cleaningSerials.length > 0) && filteredCleaningItems.length === 0 && filteredCleaningSerials.length === 0" class="text-center py-12">
-            <i class="pi pi-search text-6xl text-gray-400 mb-4 block"></i>
-            <h3 class="text-lg font-semibold text-gray-600 dark:text-gray-400 mb-2">No Results Found</h3>
-            <p class="text-gray-500 dark:text-gray-500">
+            <i class="pi pi-search text-6xl text-gray-400 dark:text-gray-500 mb-4 block"></i>
+            <h3 class="text-lg font-semibold text-gray-600 dark:text-gray-300 mb-2">No Results Found</h3>
+            <p class="text-gray-500 dark:text-gray-400">
                 No items match your search criteria. Try adjusting your search terms.
             </p>
         </div>
 
-        <!-- Toast for notifications -->
-        <Toast position="top-right" />
-    </div>
+        <!-- Toast for notifications --></div>
 </template>
 
 <style scoped>
 .card {
-    background: white;
     border-radius: 8px;
     padding: 1.5rem;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-}
-
-.dark .card {
-    background: #1f2937;
-    color: #f9fafb;
 }
 
 .p-button-lg {
@@ -303,7 +299,7 @@ onMounted(() => {
 
 /* Add spacing between table rows */
 .spaced-rows :deep(.p-datatable-tbody > tr > td) {
-    padding: 1rem 0.75rem;
+    padding: 1.25rem 1.5rem;
     border-bottom: 8px solid transparent;
 }
 
@@ -311,11 +307,33 @@ onMounted(() => {
     margin-bottom: 8px;
 }
 
-.spaced-rows :deep(.p-datatable-tbody > tr:hover > td) {
-    background-color: #f8fafc !important;
+/* Center align table headers */
+.spaced-rows :deep(.p-datatable-thead > tr > th) {
+    padding: 1rem 1.5rem;
+    font-weight: 600;
 }
 
-.dark .spaced-rows :deep(.p-datatable-tbody > tr:hover > td) {
-    background-color: #374151 !important;
+/* Dark mode striped rows */
+.dark .spaced-rows :deep(.p-datatable-tbody > tr.p-row-odd > td) {
+    background-color: #1f2937 !important;
+}
+
+.dark .spaced-rows :deep(.p-datatable-tbody > tr.p-row-even > td) {
+    background-color: #111827 !important;
+}
+
+/* Ensure rows have consistent padding and separation */
+.spaced-rows :deep(.p-datatable-tbody > tr > td) {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+}
+
+/* Override PrimeVue striped rows in dark mode */
+.dark :deep(.p-datatable.p-datatable-striped .p-datatable-tbody > tr.p-row-odd) {
+    background-color: #1f2937 !important;
+}
+
+.dark :deep(.p-datatable.p-datatable-striped .p-datatable-tbody > tr.p-row-even) {
+    background-color: #111827 !important;
 }
 </style>

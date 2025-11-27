@@ -65,6 +65,19 @@ const fullMenuModel = [
                         to: "/Rooms/RoomControl",
                         requiredRoles: ["System Admin"],
                     },
+
+                    {
+                label: "Room Invoices",
+                icon: "pi pi-fw pi-file",
+                to: "/POS/RoomInvoiceAdmin",
+                requiredRoles: ["System Admin"],
+                     },
+                     {
+                label: "Canceled Bookings",
+                icon: "pi pi-fw pi-file",
+                to: "/Rooms/CanceledBookingAdmin",
+                requiredRoles: ["System Admin"],
+                    },
                 ],
             },
             {
@@ -74,23 +87,12 @@ const fullMenuModel = [
                 requiredRoles: ["System Admin"],
             },
             {
-                label: "Canceled Bookings",
-                icon: "pi pi-fw pi-file",
-                to: "/Rooms/CanceledBookingAdmin",
-                requiredRoles: ["System Admin"],
-            },
-            {
                 label: "POS Invoice",
                 icon: "pi pi-fw pi-file",
                 to: "/POS/InvoiceAdmin",
                 requiredRoles: ["System Admin"],
             },
-            {
-                label: "Room Invoices",
-                icon: "pi pi-fw pi-file",
-                to: "/POS/RoomInvoiceAdmin",
-                requiredRoles: ["System Admin"],
-            },
+            
         ],
     },
     {
@@ -103,30 +105,48 @@ const fullMenuModel = [
                 to: "/Dashboard",
                 requiredRoles: ["Manager", "System Admin", "Front Desk"]
             },
-            {
+
+             {
+                label: "Inventory",
+                icon: "pi pi-fw pi-file-pdf",
+                requiredRoles: ["Manager", "System Admin"],
+                items: [
+                      {
                 label: "Inventory Summary",
                 icon: "pi pi-fw pi-file-pdf",
                 to: "/Inventory/GenerateReport/InventorySummary",
                 requiredRoles: ["Manager", "System Admin"],
             },
-            {
+                    {
                 label: "View Inventory",
                 icon: "pi pi-fw pi-eye",
                 to: "/Inventory/ViewInventory/ViewItems",
                 requiredRoles: ["Manager", "System Admin", "Inventory"],
             },
-            {
+                ],
+            },
+
+           
+             {
+                label: "Invoices",
+                icon: "pi pi-fw pi-file",
+                requiredRoles: ["Manager", "System Admin"],
+                items: [
+                    {
                 label: "POS Invoices",
                 icon: "pi pi-fw pi-file",
                 to: "/POS/Invoice",
                 requiredRoles: ["Manager", "System Admin", "Front Desk"],
             },
-            {
+                    {
                 label: "Room Invoices",
                 icon: "pi pi-fw pi-file",
                 to: "/POS/RoomInvoice",
                 requiredRoles: ["Manager", "System Admin", "Front Desk"],
             },
+                ],
+            },
+            
         ],
     },
     {
@@ -139,17 +159,44 @@ const fullMenuModel = [
                 to: "/Rooms/RoomList",
                 requiredRoles: ["Front Desk", "Manager", "System Admin"],
             },
-            {
+
+             {
+                label: "Check-In/Out List",
+                icon: "pi pi-fw pi-file",
+                requiredRoles: ["Front Desk", "Manager", "System Admin"],
+                items: [
+                  {
                 label: "Check-In List",
                 icon: "pi pi-fw pi-sign-in",
                 to: "/Rooms/CheckInList",
                 requiredRoles: ["Front Desk", "Manager", "System Admin"],
             },
-            {
+                    {
                 label: "Check-Out List",
                 icon: "pi pi-fw pi-sign-out",
                 to: "/Rooms/CheckoutList",
                 requiredRoles: ["Front Desk", "Manager", "System Admin"],
+            },
+                ],
+            },
+            {
+                label: "Invoices",
+                icon: "pi pi-fw pi-file",
+                requiredRoles: ["Front Desk", "Manager", "System Admin"],
+                items: [
+                   {
+                label: "POS Invoices",
+                icon: "pi pi-fw pi-file",
+                to: "/POS/Invoice",
+                requiredRoles: ["Front Desk", "Manager", "System Admin"],
+            },
+                   {
+                label: "Room Invoices",
+                icon: "pi pi-fw pi-file",
+                to: "/POS/RoomInvoice",
+                requiredRoles: ["Front Desk", "Manager", "System Admin"],
+            },
+                ],
             },
             {
                 label: "Canceled Booking",
@@ -163,22 +210,11 @@ const fullMenuModel = [
                 to: "/Rooms/DamageReport",
                 requiredRoles: ["Front Desk", "Manager", "System Admin", "Inventory"],
             },
+             
             {
                 label: "POS ",
                 icon: "pi pi-fw pi-shopping-cart",
                 to: "/POS/POS",
-                requiredRoles: ["Front Desk", "Manager", "System Admin"],
-            },
-            {
-                label: "POS Invoices",
-                icon: "pi pi-fw pi-file",
-                to: "/POS/Invoice",
-                requiredRoles: ["Front Desk", "Manager", "System Admin"],
-            },
-            {
-                label: "Room Invoices",
-                icon: "pi pi-fw pi-file",
-                to: "/POS/RoomInvoice",
                 requiredRoles: ["Front Desk", "Manager", "System Admin"],
             },
         ],
@@ -187,6 +223,12 @@ const fullMenuModel = [
         label: "Inventory",
         requiredRoles: ["Inventory"],
         items: [
+            {
+                label: "Stock Movement",
+                icon: "pi pi-fw pi-calendar",
+                to: "/Inventory/GenerateReport/StockHistory",
+                requiredRoles: ["Inventory", "System Admin", "Manager"],
+            },
             {
                 label: "Products/Items",
                 icon: "pi pi-fw pi-plus",
@@ -207,41 +249,60 @@ const fullMenuModel = [
                 ],
             },
             {
+                label: "Inventory Control",
+                icon: "pi pi-fw pi-cog",
+                requiredRoles:  ["Inventory", "System Admin"],
+                items: [
+
+                {
                 label: "Item Control",
                 icon: "pi pi-fw pi-cog",
                 to: "/Inventory/ManageInventory/ManageItems",
                 requiredRoles: ["Inventory", "System Admin", "Manager"],
             },
             {
-                label: "Amenities Control",
+                label: "Clean Control",
                 icon: "pi pi-fw pi-cog",
                 to: "/Inventory/ManageInventory/CleanAmenities",
                 requiredRoles: ["Inventory", "System Admin", "Manager"],
             },
-            {
-                label: "Stock History",
-                icon: "pi pi-fw pi-calendar",
-                to: "/Inventory/GenerateReport/StockHistory",
-                requiredRoles: ["Inventory", "System Admin", "Manager"],
+                   
+                ],
             },
-            {
+
+             {
+                label: "Item Reports",
+                icon: "pi pi-fw pi-exclamation-circle",
+                requiredRoles:  ["Inventory", "System Admin"],
+                items: [
+
+               {
                 label: "Low Stock Report",
                 icon: "pi pi-fw pi-exclamation-circle",
                 to: "/Inventory/GenerateReport/LowstockReport",
                 requiredRoles: ["Inventory", "System Admin", "Manager"],
             },
-            {
+             {
                 label: "Expired Items Report",
                 icon: "pi pi-fw pi-times-circle",
                 to: "/Inventory/GenerateReport/ExpiredItems",
                 requiredRoles: ["Inventory", "System Admin", "Manager"],
             },
-            {
+             {
                 label: "Damaged Report",
                 icon: "pi pi-fw pi-minus-circle",
                 to: "/Rooms/DamageReport",
                 requiredRoles: ["Inventory", "System Admin", "Manager", "Front Desk"],
             },
+                   
+                ],
+            },
+
+
+           
+            
+            
+           
         ],
     },
 ];

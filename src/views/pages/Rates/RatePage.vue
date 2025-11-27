@@ -290,10 +290,10 @@ const filteredRoomTypes = computed(() => {
 </script>
 
 <template>
-  <div class="card">
-    <h1 class="text-2xl font-bold mb-4">Room Rate Configuration</h1>
+  <div class="card flex flex-col max-h-[calc(100vh-8rem)]">
+    <h1 class="text-2xl font-bold mb-4 flex-shrink-0">Room Rate Configuration</h1>
 
-    <div class="flex gap-4 mb-6">
+    <div class="flex gap-4 mb-6 flex-shrink-0">
       <Button
         type="button"
         icon="pi pi-filter-slash"
@@ -370,6 +370,17 @@ const filteredRoomTypes = computed(() => {
       :modal="true"
       style="width: 40vw"
     >
+
+     <div class="mb-4">
+        <label for="type" class="block mb-1">Type Name</label>
+        <InputText
+          v-model="newType.name"
+          id="type"
+          class="w-full px-4 py-2 border rounded-lg"
+          placeholder="Enter Type "
+        />
+      </div>
+      
       <div class="mb-4">
         <label for="category" class="block mb-1">Category</label>
         <Select
@@ -378,16 +389,6 @@ const filteredRoomTypes = computed(() => {
           optionLabel="category"
           placeholder="Select a category"
           class="w-full"
-        />
-      </div>
-
-      <div class="mb-4">
-        <label for="type" class="block mb-1">Type Name</label>
-        <InputText
-          v-model="newType.name"
-          id="type"
-          class="w-full px-4 py-2 border rounded-lg"
-          placeholder="Enter Type "
         />
       </div>
 
@@ -438,9 +439,10 @@ const filteredRoomTypes = computed(() => {
     </Dialog>
 
     <!-- Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-2 gap-4">
-      <div v-for="type in filteredRoomTypes" :key="type.id">
-        <div class="card shadow-md p-4 flex flex-col h-[290px] border border-white rounded-xl relative">
+    <div class="overflow-y-auto flex-1 pr-2">
+      <div class="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-2 gap-4">
+        <div v-for="type in filteredRoomTypes" :key="type.id">
+          <div class="card shadow-md p-4 flex flex-col h-[290px] border border-white rounded-xl relative">
           <h3 class="text-xl font-bold">{{ type.name }}</h3>
           <p class="text-sm mb-2">
             {{
@@ -484,6 +486,7 @@ const filteredRoomTypes = computed(() => {
             />
           </div>
         </div>
+      </div>
       </div>
     </div>
 
@@ -550,5 +553,6 @@ const filteredRoomTypes = computed(() => {
     </Dialog>
   </div>
 
-  <div><Toast /></div>
+  <div>
+</div>
 </template>

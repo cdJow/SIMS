@@ -185,8 +185,8 @@ onMounted(() => {
                 </div>
             </div>
             <div class="text-sm">
-                <span class="text-purple-600 font-semibold">Total value</span>
-                <span class="text-gray-500 ml-1">of rental inventory</span>
+                <span class="text-purple-600 font-semibold">Total Rental</span>
+                <span class="text-gray-500 ml-1">Revenue</span>
             </div>
         </div>
 
@@ -350,7 +350,4 @@ onMounted(() => {
                 </template>
             </Column>
         </DataTable>
-    </Dialog>
-
-    <Toast />
-</template>
+    </Dialog></template>

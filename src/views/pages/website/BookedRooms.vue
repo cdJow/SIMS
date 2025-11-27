@@ -933,11 +933,13 @@ const bookingCheckOutTime = computed(() => {
 })
 
 // Fetch user bookings from database (real-time)
-const fetchBookings = async () => {
+const fetchBookings = async (showLoading = true) => {
     if (!isAuthenticated.value || !currentUser.value) return
     
     try {
-        loadingBookings.value = true
+        if (showLoading) {
+            loadingBookings.value = true
+        }
         bookingError.value = null
         
         // Fetch real-time bookings from database
@@ -946,10 +948,17 @@ const fetchBookings = async () => {
         
     } catch (err) {
         console.error('Error loading bookings from database:', err)
-        bookingError.value = 'Failed to load your bookings from server.'
-        userBookings.value = []
+        if (showLoading) {
+            bookingError.value = 'Failed to load your bookings from server.'
+        }
+        // Don't clear userBookings on silent refresh error
+        if (showLoading) {
+            userBookings.value = []
+        }
     } finally {
-        loadingBookings.value = false
+        if (showLoading) {
+            loadingBookings.value = false
+        }
     }
 }
 
@@ -1469,8 +1478,32 @@ const getTimeRemaining = (booking) => {
     } else if (booking.status === 'Occupied') {
         // For occupied rooms, calculate time remaining from check-in time + booked duration
         const checkInTime = booking.check_in_datetime ? new Date(booking.check_in_datetime) : new Date(booking.created_at)
-        const durationMs = booking.selected_hours * 60 * 60 * 1000 // Convert hours to milliseconds
-        const checkOutTime = new Date(checkInTime.getTime() + durationMs)
+        
+        // Handle extended stays - check for extended checkout time or updated hours
+        let checkOutTime
+        
+        // Debug: Log booking data to understand the structure
+        console.log('Booking data for time calculation:', {
+            id: booking.id,
+            status: booking.status,
+            selected_hours: booking.selected_hours,
+            extend_hours: booking.extend_hours,
+            extend_amount: booking.extend_amount,
+            check_in_datetime: booking.check_in_datetime
+        })
+        
+        // Calculate total hours including extensions from backend
+        const originalHours = booking.selected_hours || 3 // Default 3 hours
+        const extendHours = booking.extend_hours || 0 // Extended hours from checkin_payments
+        const totalHours = originalHours + extendHours
+        
+        console.log('Time calculation - Original hours:', originalHours, 'Extended hours:', extendHours, 'Total hours:', totalHours)
+        
+        // Calculate checkout time based on check-in + total hours
+        const durationMs = totalHours * 60 * 60 * 1000 // Convert hours to milliseconds
+        checkOutTime = new Date(checkInTime.getTime() + durationMs)
+        
+        console.log('Calculated checkout time:', checkOutTime)
         
         if (now >= checkOutTime) {
             return { expired: true, text: 'Stay Expired', color: 'red' }
@@ -1478,7 +1511,8 @@ const getTimeRemaining = (booking) => {
         
         const timeLeft = checkOutTime.getTime() - now.getTime()
         const totalSeconds = Math.floor(timeLeft / 1000)
-        const hoursLeft = Math.floor(totalSeconds / 3600)
+        const daysLeft = Math.floor(totalSeconds / (24 * 3600))
+        const hoursLeft = Math.floor((totalSeconds % (24 * 3600)) / 3600)
         const minutesLeft = Math.floor((totalSeconds % 3600) / 60)
         const secondsLeft = totalSeconds % 60
         
@@ -1487,7 +1521,14 @@ const getTimeRemaining = (booking) => {
             return { expired: true, text: 'Stay Expired', color: 'red' }
         }
         
-        if (hoursLeft > 0) {
+        if (daysLeft > 0) {
+            return { 
+                expired: false, 
+                text: `${daysLeft}d ${hoursLeft}h ${minutesLeft}m ${secondsLeft}s left`,
+                urgent: false,
+                color: 'green'
+            }
+        } else if (hoursLeft > 0) {
             return { 
                 expired: false, 
                 text: `${hoursLeft}h ${minutesLeft}m ${secondsLeft}s left`,
@@ -1595,6 +1636,11 @@ onMounted(async () => {
             const secondsElapsed = Math.floor(Date.now() / 1000)
             if (secondsElapsed % 30 === 0) {
                 await cleanupExpiredBookings()
+            }
+            
+            // Refresh booking data every 10 seconds to pick up changes from RoomList.vue
+            if (secondsElapsed % 10 === 0) {
+                await fetchBookings(false) // Refresh from server without showing loading
             }
             
             // Force reactive update by triggering a re-render
