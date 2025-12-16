@@ -175,6 +175,11 @@ const handlePrint = (invoice) => {
                     .total-row { font-weight: bold; background-color: #f8f9fa; }
                     .footer { margin-top: 30px; text-align: center; color: #666; }
                     .section-title { font-weight: bold; margin: 15px 0 10px; color: #2c3e50; }
+                    .charges-section { margin: 20px 0; }
+                    .charge-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
+                    .charge-desc { flex: 1; }
+                    .charge-amount { text-align: right; min-width: 100px; font-weight: 500; }
+                    .total-due { border-bottom: 2px solid #000; border-top: 2px solid #000; font-weight: bold; font-size: 16px; padding: 12px 0; margin-top: 10px; }
                 </style>
             </head>
             <body>
@@ -229,29 +234,54 @@ const handlePrint = (invoice) => {
                         : ""
                 }
 
-                <!-- Charges Table -->
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Description</th>
-                            <th>Rate</th>
-                            <th>Hours</th>
-                            <th>Amount</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>Room Accommodation</td>
-                            <td>${formatCurrency(invoice.hourlyRate || invoice.selectedRate)}/hr</td>
-                            <td>${
-                                invoice.checkOut 
-                                    ? calculateHours(invoice.checkIn, invoice.checkOut)
-                                    : invoice.selectedHours
-                            }</td>
-                            <td>${formatCurrency(invoice.paymentData?.totalDue || invoice.totalAmount)}</td>
-                        </tr>
-                    </tbody>
-                </table>
+                <!-- Charges Breakdown -->
+                <div class="section-title">Charges Breakdown</div>
+                <div class="charges-section">
+                    <div class="charge-item">
+                        <span class="charge-desc">Room Rate - ${invoice.selectedHours} hrs</span>
+                        <span class="charge-amount">${formatCurrency(invoice.paymentData?.roomRate || 0)}</span>
+                    </div>
+                    ${invoice.paymentData?.extendHours > 0 ? `
+                    <div class="charge-item">
+                        <span class="charge-desc">Extend Charges - ${invoice.paymentData?.extendHours} hrs</span>
+                        <span class="charge-amount">${formatCurrency(invoice.paymentData?.extendAmount || 0)}</span>
+                    </div>
+                    ` : ''}
+                    ${invoice.paymentData?.additionalPersonTotal > 0 ? `
+                    <div class="charge-item">
+                        <span class="charge-desc">Additional Person(s) (${invoice.paymentData?.additionalPersonCount} person(s))</span>
+                        <span class="charge-amount">${formatCurrency(invoice.paymentData?.additionalPersonTotal || 0)}</span>
+                    </div>
+                    ` : ''}
+                    ${invoice.paymentData?.amenitiesTotal > 0 ? `
+                    <div class="charge-item">
+                        <span class="charge-desc">Amenities Rental</span>
+                        <span class="charge-amount">${formatCurrency(invoice.paymentData?.amenitiesTotal || 0)}</span>
+                    </div>
+                    ` : ''}
+                    ${invoice.paymentData?.extrasTotal > 0 ? `
+                    <div class="charge-item">
+                        <span class="charge-desc">Consumables</span>
+                        <span class="charge-amount">${formatCurrency(invoice.paymentData?.extrasTotal || 0)}</span>
+                    </div>
+                    ` : ''}
+                    ${invoice.paymentData?.damageCharges > 0 ? `
+                    <div class="charge-item" style="color: red;">
+                        <span class="charge-desc">Damage Charges</span>
+                        <span class="charge-amount">${formatCurrency(invoice.paymentData?.damageCharges || 0)}</span>
+                    </div>
+                    ` : ''}
+                    ${invoice.discount?.amount > 0 ? `
+                    <div class="charge-item" style="color: green;">
+                        <span class="charge-desc">Discount (${invoice.discount?.name})</span>
+                        <span class="charge-amount">-${formatCurrency(invoice.discount?.amount || 0)}</span>
+                    </div>
+                    ` : ''}
+                    <div class="charge-item total-due">
+                        <span class="charge-desc">TOTAL DUE</span>
+                        <span class="charge-amount">${formatCurrency(invoice.paymentData?.totalDue || invoice.totalAmount)}</span>
+                    </div>
+                </div>
 
                 <div class="footer">
                     <p>Thank you for choosing Woodland Suite!</p>

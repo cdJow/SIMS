@@ -16,13 +16,61 @@ export default {
       isLoading: false,
       showTermsDialog: false,
       showPrivacyDialog: false,
+      passwordStrength: null,
     };
+  },
+  computed: {
+    isSignUpDisabled() {
+      const hasRequiredFields = this.name && this.email && this.password && this.confirmPassword;
+      const passwordsMatch = this.password === this.confirmPassword;
+      const passwordIsNotWeak = this.passwordStrength !== 'Weak';
+      return !hasRequiredFields || !passwordsMatch || !passwordIsNotWeak || this.isLoading;
+    },
   },
   setup() {
     const router = useRouter();
     return { router };
   },
   methods: {
+    evaluatePasswordStrength(password) {
+      // PrimeVue Password strength evaluation logic
+      if (!password) {
+        return null;
+      }
+      
+      // Minimum 8 characters required
+      if (password.length < 8) {
+        return 'Weak';
+      }
+      
+      // Count character types
+      const hasLowercase = /[a-z]/.test(password);
+      const hasUppercase = /[A-Z]/.test(password);
+      const hasNumbers = /[0-9]/.test(password);
+      const hasSpecial = /[^a-zA-Z0-9]/.test(password);
+      
+      const characterTypeCount = [hasLowercase, hasUppercase, hasNumbers, hasSpecial].filter(Boolean).length;
+      
+      // Require at least 2 different character types for Medium strength
+      if (characterTypeCount < 2) {
+        return 'Weak';
+      }
+      
+      let strength = 0;
+      
+      // Length check
+      if (password.length >= 8) strength += 1;
+      if (password.length >= 12) strength += 1;
+      
+      // Character type checks
+      if (hasLowercase) strength += 1;
+      if (hasUppercase) strength += 1;
+      if (hasNumbers) strength += 1;
+      if (hasSpecial) strength += 1;
+      
+      if (strength <= 3) return 'Medium';
+      return 'Strong';
+    },
     async handleSignUp() {
       this.errorMessage = "";
       this.successMessage = "";
@@ -116,6 +164,7 @@ export default {
                         <Password
                             id="password"
                             v-model="password"
+                            @input="passwordStrength = evaluatePasswordStrength(password)"
                             placeholder="Create a password"
                             :toggleMask="true"
                             class="w-full password-field"
@@ -126,9 +175,14 @@ export default {
                             :strongLabel="'Strong'"
                             fluid
                         />
-                        <small class="text-gray-500 dark:text-gray-400">
-                            Password must be at least 6 characters long
-                        </small>
+                        <div class="flex items-center justify-between mt-2">
+                            <small class="text-gray-500 dark:text-gray-400">
+                                Password must be at least 8 characters with letters and numbers for Medium strength
+                            </small>
+                            <small :class="password.length >= 8 ? 'text-green-500' : 'text-red-500'" class="font-medium">
+                                {{ password.length }}/8
+                            </small>
+                        </div>
                     </div>
 
                     <!-- Confirm Password Field -->
@@ -176,6 +230,7 @@ export default {
                         size="large"
                         @click="handleSignUp"
                         :loading="isLoading"
+                        :disabled="isSignUpDisabled"
                     />
                 </form>
 

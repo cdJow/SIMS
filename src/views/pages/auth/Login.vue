@@ -3,9 +3,6 @@ import { login } from "@/api/auth";
 import { useRouter } from "vue-router";
 import { useToast } from "primevue/usetoast";
 
-
-
-
 export default {
   data() {
     return {
@@ -219,44 +216,52 @@ export default {
 
                             <!-- Password Input -->
                             <div>
-  <label
-    for="password"
-    class="block text-sm sm:text-base font-medium text-gray-700 mt-5 mb-2"
-  >
-    Password
-  </label>
-  <Password
-    id="password"
-    v-model="form.password"
-    toggleMask
-    placeholder="Enter your password"
-    class="w-full text-sm sm:text-base mb-10"
-    inputClass="w-full"
-    :class="{ 'p-invalid': errors.password }"
-    @keyup.enter="handleLogin"
-  />
-  <small
-    v-if="errors.password"
-    class="p-error mt-1 block text-xs sm:text-sm mt-10"
-  >
-    {{ errors.password }}
-  </small>
-  <!-- Login Result Messages -->
-  <small
-    v-if="errors.form"
-    class="text-red-500 mt-1 block text-xs sm:text-sm font-medium"
-  >
-    <i class="pi pi-times-circle mr-1"></i>
-    {{ errors.form }}
-  </small>
-  <small
-    v-if="success.form"
-    class="text-green-500 mt-1 block text-xs sm:text-sm font-medium"
-  >
-    <i class="pi pi-check-circle mr-1"></i>
-    {{ success.form }}
-  </small>
-</div>
+                                <div class="flex justify-between items-center mb-2">
+                                    <label
+                                        for="password"
+                                        class="block text-sm sm:text-base font-medium text-gray-700"
+                                    >
+                                        Password
+                                    </label>
+                                    <router-link
+                                        to="/pages/auth/forgot-password"
+                                        class="text-primary text-xs sm:text-sm font-medium hover:underline"
+                                    >
+                                        Forgot Password?
+                                    </router-link>
+                                </div>
+                                <Password
+                                    id="password"
+                                    v-model="form.password"
+                                    toggleMask
+                                    placeholder="Enter your password"
+                                    class="w-full text-sm sm:text-base mb-10"
+                                    inputClass="w-full"
+                                    :class="{ 'p-invalid': errors.password }"
+                                    @keyup.enter="handleLogin"
+                                />
+                                <small
+                                    v-if="errors.password"
+                                    class="p-error mt-1 block text-xs sm:text-sm mt-10"
+                                >
+                                    {{ errors.password }}
+                                </small>
+                                <!-- Login Result Messages -->
+                                <small
+                                    v-if="errors.form"
+                                    class="text-red-500 mt-1 block text-xs sm:text-sm font-medium"
+                                >
+                                    <i class="pi pi-times-circle mr-1"></i>
+                                    {{ errors.form }}
+                                </small>
+                                <small
+                                    v-if="success.form"
+                                    class="text-green-500 mt-1 block text-xs sm:text-sm font-medium"
+                                >
+                                    <i class="pi pi-check-circle mr-1"></i>
+                                    {{ success.form }}
+                                </small>
+                            </div>
                         </div>
 
                         <!-- Submit Button -->

@@ -5929,7 +5929,12 @@ if (idx !== -1) {
                                 </template>
                             </Column>
                             <Column field="hours_selected" header="Hours" sortable>
-                                <template #body="{ data }">{{ data.hours_selected }}h</template>
+                                <template #body="{ data }">
+                                    <div class="flex flex-col items-start">
+                                        <span>{{ data.hours_selected }}h</span>
+                                        <span v-if="data.extend_hours > 0" class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">+{{ data.extend_hours }}h</span>
+                                    </div>
+                                </template>
                             </Column>
                             <Column field="amount" header="Total Due" sortable>
                                 <template #body="{ data }">
@@ -5937,6 +5942,7 @@ if (idx !== -1) {
                                         <span class="font-semibold">₱{{ data.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span>
                                         <div class="text-xs text-gray-500">
                                             <div v-if="data.room_rate">Room: ₱{{ data.room_rate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
+                                            <div v-if="data.extend_amount > 0" class="text-blue-600 font-medium">Extend: ₱{{ data.extend_amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
                                             <div v-if="data.extras_total > 0">Extras: ₱{{ data.extras_total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
                                             <div v-if="data.amenities_total > 0">Amenities: ₱{{ data.amenities_total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
                                             <div v-if="data.additional_person_total > 0">Add'l Person: ₱{{ data.additional_person_total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>

@@ -271,7 +271,7 @@ function getActionTypeColor(actionType) {
         case 'Inventory Addition':
         case 'Stock In': return 'text-green-600 dark:text-green-400';
         case 'Sale':
-        case 'Stock Out': return 'text-red-600 dark:text-red-400';
+        case 'Sold': return 'text-red-600 dark:text-red-400';
         case 'Resolve': return 'text-emerald-600 dark:text-emerald-400';
         case 'Damage': return 'text-orange-600 dark:text-orange-400';
         case 'Rental Charge': return 'text-purple-600 dark:text-purple-400';
@@ -344,7 +344,7 @@ function getActionTypeColor(actionType) {
             <div class="bg-gradient-to-r from-red-50 to-red-100 dark:from-red-900/30 dark:to-red-800/20 rounded-lg p-4">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-red-600 dark:text-red-400 text-sm font-medium">Stock Out</p>
+                        <p class="text-red-600 dark:text-red-400 text-sm font-medium">Sold</p>
                         <p class="text-2xl font-bold text-red-800 dark:text-red-200">{{ stockMovements.filter(m => ['Sale', 'Stock Out'].includes(m.actionType)).length }}</p>
                     </div>
                     <i class="pi pi-arrow-down text-red-500 text-2xl"></i>
