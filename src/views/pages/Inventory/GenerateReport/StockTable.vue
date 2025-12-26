@@ -344,7 +344,7 @@ function getActionTypeColor(actionType) {
             <div class="bg-gradient-to-r from-red-50 to-red-100 dark:from-red-900/30 dark:to-red-800/20 rounded-lg p-4">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-red-600 dark:text-red-400 text-sm font-medium">Sold</p>
+                        <p class="text-red-600 dark:text-red-400 text-sm font-medium">Sold Stock Out</p>
                         <p class="text-2xl font-bold text-red-800 dark:text-red-200">{{ stockMovements.filter(m => ['Sale', 'Stock Out'].includes(m.actionType)).length }}</p>
                     </div>
                     <i class="pi pi-arrow-down text-red-500 text-2xl"></i>
