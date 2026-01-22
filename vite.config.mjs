@@ -22,4 +22,22 @@ export default defineConfig({
             "@": fileURLToPath(new URL("./src", import.meta.url)),
         },
     },
+    build: {
+        outDir: 'dist',
+        sourcemap: false,
+        minify: 'terser',
+        chunkSizeWarningLimit: 1000,
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    'primevue': ['primevue'],
+                    'chart': ['chart.js'],
+                },
+            },
+        },
+    },
+    server: {
+        port: 5173,
+        strictPort: false,
+    },
 });
