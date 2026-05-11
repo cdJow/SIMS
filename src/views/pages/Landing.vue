@@ -435,37 +435,37 @@ onUnmounted(() => {
             <!-- Mobile Menu Dropdown -->
             <div
                 v-if="showMobileMenu"
-                class="md:hidden absolute w-full bg-white shadow-lg"
+                class="md:hidden absolute w-full bg-white shadow-lg z-40"
             >
-                <div class="px-6 py-4 space-y-4">
-                    <a href="#rooms" class="block hover:text-accent">Rooms</a>
-                    <a href="#rates" class="block hover:text-accent">Rates</a>
-                    <a href="#reviews" class="block hover:text-accent">Reviews</a>
-                    <a href="#location" class="block hover:text-accent"
+                <div class="px-4 sm:px-6 py-4 space-y-3">
+                    <a href="#rooms" class="block text-gray-900 hover:text-red-600 text-sm" @click="showMobileMenu = false">Rooms</a>
+                    <a href="#rates" class="block text-gray-900 hover:text-red-600 text-sm" @click="showMobileMenu = false">Rates</a>
+                    <a href="#reviews" class="block text-gray-900 hover:text-red-600 text-sm" @click="showMobileMenu = false">Reviews</a>
+                    <a href="#location" class="block text-gray-900 hover:text-red-600 text-sm" @click="showMobileMenu = false"
                         >Location</a
                     >
 
                     <!-- Mobile Auth Options -->
-                    <div class="pt-4 border-t">
+                    <div class="pt-3 border-t">
                         <template v-if="isLoggedIn">
                             <a
                                 href="#profile"
-                                class="block hover:text-accent p-2"
-                                @click="router.push('/profile')"
+                                class="block text-gray-900 hover:text-red-600 p-2 text-sm"
+                                @click="router.push('/profile'); showMobileMenu = false"
                             >
                                 Profile
                             </a>
                             <Button
                                 label="Logout"
-                                class="w-full p-button-outlined p-button-danger mt-2"
+                                class="w-full p-button-outlined p-button-danger mt-2 text-sm"
                                 @click="handleLogout"
                             />
                         </template>
                         <template v-else>
                             <Button
                                 label="Login"
-                                class="w-full p-button-outlined p-button-secondary"
-                                @click="router.push('/pages/auth/login')"
+                                class="w-full p-button-outlined p-button-secondary text-sm"
+                                @click="router.push('/pages/auth/login'); showMobileMenu = false"
                             />
                         </template>
                     </div>
@@ -474,14 +474,14 @@ onUnmounted(() => {
         </nav>
         <!-- Hero Section -->
         <section
-            class="relative min-h-screen flex items-center overflow-hidden"
+            class="relative h-auto flex items-center overflow-hidden py-12 sm:py-16 lg:py-20"
         >
-            <div class="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-                <div class="grid lg:grid-cols-2 gap-12 items-center">
+            <div class="container mx-auto px-3 sm:px-6 lg:px-8 relative z-10">
+                <div class="grid lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-12 items-center">
                     <!-- Text Content -->
-                    <div class="text-center lg:text-left space-y-8 relative">
+                    <div class="text-center lg:text-left space-y-4 sm:space-y-6 lg:space-y-8 relative">
                         <h1
-                            class="text-5xl sm:text-5xl md:text-5xl lg:text-6xl font-bold mb-6"
+                            class="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 sm:mb-6"
                         >
                             <span
                                 class="bg-gradient-to-r from-red-600 to-orange-500 bg-clip-text text-transparent"
@@ -496,18 +496,18 @@ onUnmounted(() => {
                         </h1>
 
                         <p
-                            class="text-xl md:text-2xl text-orange-600 font-light max-w-lg mx-auto lg:mx-0"
+                            class="text-base sm:text-lg md:text-xl lg:text-2xl text-orange-600 font-light max-w-lg mx-auto lg:mx-0"
                         >
                             Experience luxury redefined in the heart of the city.
                         </p>
 
                         <!-- Action Buttons -->
                         <div
-                            class="flex flex-col sm:flex-row gap-4 items-center justify-center lg:justify-start mt-10"
+                            class="flex flex-col sm:flex-row gap-3 sm:gap-4 items-center justify-center lg:justify-start mt-6 sm:mt-8 lg:mt-10"
                         >
                             <Button
                                 label="Book Your Stay"
-                                class="p-button-lg bg-red hover:bg-red border-0 text-white px-10 py-5 shadow-lg"
+                                class="p-button-md sm:p-button-lg bg-red hover:bg-red border-0 text-white px-6 sm:px-10 py-3 sm:py-5 shadow-lg w-full sm:w-auto"
                                 icon="pi pi-calendar"
                                 iconPos="right"
                                 @click="handleBookNow"
@@ -522,7 +522,7 @@ onUnmounted(() => {
                         >
                             <img
                                 src="@/assets/images/main.jpg"
-                                class="w-full h-[300px] sm:h-[400px] md:h-[500px] lg:h-[600px] object-cover"
+                                class="w-full h-[250px] sm:h-[350px] md:h-[450px] lg:h-[550px] object-cover"
                                 alt="Luxury Suite Interior"
                             />
                             <!-- Image Overlay -->
@@ -532,15 +532,15 @@ onUnmounted(() => {
 
                             <!-- Feature Card -->
                             <div
-                                class="absolute bottom-0 left-0 right-0 bg-black/40 backdrop-blur-sm p-4 md:p-6 lg:p-8"
+                                class="absolute bottom-0 left-0 right-0 bg-black/50 backdrop-blur-sm p-2 sm:p-4 md:p-6 lg:p-8"
                             >
                                 <h3
-                                    class="text-lg sm:text-xl lg:text-2xl font-semibold text-amber-400 mb-2 sm:mb-3 lg:mb-4"
+                                    class="text-sm sm:text-lg lg:text-xl font-semibold text-amber-400 mb-2 sm:mb-3"
                                 >
-                                    Signature Features
+                                    Features
                                 </h3>
                                 <div
-                                    class="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 lg:gap-4"
+                                    class="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-2 lg:gap-3"
                                 >
                                     <div
                                         class="flex items-center space-x-1 sm:space-x-2"
@@ -632,9 +632,9 @@ onUnmounted(() => {
         </section>
 
         <!-- Rooms Section -->
-        <section id="rooms" class="py-12 px-4 sm:px-6 lg:px-8">
-            <div class="mx-auto max-w-9xl">
-                <h2 class="text-3xl md:text-4xl font-bold mb-10 text-center">
+        <section id="rooms" class="py-8 sm:py-12 lg:py-16 px-4 sm:px-6 lg:px-8">
+            <div class="mx-auto max-w-7xl">
+                <h2 class="text-2xl sm:text-3xl md:text-4xl font-bold mb-6 sm:mb-8 text-center">
                     <span class="bg-gradient-to-r from-red-500 to-orange-500 bg-clip-text text-transparent">
                         Our Accommodations
 
@@ -649,11 +649,11 @@ onUnmounted(() => {
                         Loading...
                     </span>
                 </h2>
-                <p class="text-center text-gray-600 mb-8 max-w-2xl mx-auto">
+                <p class="text-center text-gray-600 mb-6 sm:mb-8 max-w-2xl mx-auto text-sm sm:text-base">
                     Discover our most popular rooms
                 </p>
 
-                <div class="p-6 md:p-8" v-if="!loading && rooms.length > 0">
+                <div class="p-2 sm:p-4 md:p-6" v-if="!loading && rooms.length > 0">
                     <Carousel
                         :value="rooms"
                         :numVisible="2"
@@ -837,12 +837,12 @@ onUnmounted(() => {
         <!-- Rates Section -->
         <section
             id="rates"
-            class="py-16 md:py-24 bg-gradient-to-b from-gray-50 to-white px-4 sm:px-6"
+            class="py-12 sm:py-16 md:py-24 bg-gradient-to-b from-gray-50 to-white px-4 sm:px-6"
         >
             <div class="container mx-auto max-w-7xl">
-                <div class="text-center mb-12 md:mb-16">
+                <div class="text-center mb-8 sm:mb-12 md:mb-16">
                     <h2
-                        class="text-3xl md:text-4xl font-bold text-gray-900 mb-4"
+                        class="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-3 sm:mb-4"
                     >
                         <span
                             class="bg-gradient-to-r from-red-500 to-orange-500 bg-clip-text text-transparent"
@@ -851,7 +851,7 @@ onUnmounted(() => {
                         </span>
                     </h2>
                     <p
-                        class="text-lg md:text-xl text-gray-600 max-w-2xl mx-auto"
+                        class="text-base sm:text-lg md:text-xl text-gray-600 max-w-2xl mx-auto"
                     >
                         Flexible options for every need, featuring premium
                         amenities and exceptional comfort
@@ -971,12 +971,12 @@ onUnmounted(() => {
         <!-- Google Reviews Section -->
         <section 
             id="reviews" 
-            class="py-16 md:py-24 bg-white px-4 sm:px-6"
+            class="py-12 sm:py-16 md:py-24 bg-white px-4 sm:px-6"
         >
             <div class="container mx-auto max-w-7xl">
-                <div class="text-center mb-12 md:mb-16">
+                <div class="text-center mb-8 sm:mb-12 md:mb-16">
                     <h2 
-                        class="text-3xl md:text-4xl font-bold text-gray-900 mb-4"
+                        class="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-3 sm:mb-4"
                     >
                         <span 
                             class="bg-gradient-to-r from-red-500 to-orange-500 bg-clip-text text-transparent"
@@ -985,7 +985,7 @@ onUnmounted(() => {
                         </span>
                     </h2>
                     <p 
-                        class="text-lg md:text-xl text-gray-600 max-w-2xl mx-auto mb-6"
+                        class="text-base sm:text-lg md:text-xl text-gray-600 max-w-2xl mx-auto mb-4 sm:mb-6"
                     >
                         See what our guests are saying about their experience
                     </p>
@@ -1106,26 +1106,26 @@ onUnmounted(() => {
                 </div>
 
                 <!-- Call to Action -->
-                <div class="bg-gradient-to-r from-red-50 to-orange-50 rounded-2xl p-8 text-center mt-12">
+                <div class="bg-gradient-to-r from-red-50 to-orange-50 rounded-2xl p-4 sm:p-6 md:p-8 text-center mt-8 sm:mt-10 md:mt-12">
                     <div class="max-w-2xl mx-auto">
-                        <div class="flex items-center justify-center mb-4">
-                            <i class="pi pi-google text-red-500 text-3xl mr-3"></i>
-                            <h3 class="text-2xl font-semibold text-gray-900">
+                        <div class="flex items-center justify-center mb-3 sm:mb-4">
+                            <i class="pi pi-google text-red-500 text-2xl sm:text-3xl mr-2 sm:mr-3"></i>
+                            <h3 class="text-lg sm:text-xl md:text-2xl font-semibold text-gray-900">
                                 Share Your Experience
                             </h3>
                         </div>
-                        <p class="text-gray-600 mb-6 leading-relaxed">
+                        <p class="text-gray-600 mb-4 sm:mb-6 leading-relaxed text-sm sm:text-base">
                             Your feedback helps us improve and assists other travelers in making their choice. 
                             Share your stay experience on Google Maps.
                         </p>
-                        <div class="flex flex-col sm:flex-row gap-4 items-center justify-center">
+                        <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 items-center justify-center">
                             <Button 
                                 label="Write a Google Review"
                                 icon="pi pi-external-link"
-                                class="bg-red-500 hover:bg-red-600 border-0 text-white px-8 py-3 shadow-lg"
+                                class="bg-red-500 hover:bg-red-600 border-0 text-white px-6 sm:px-8 py-2 sm:py-3 shadow-lg w-full sm:w-auto"
                                 @click="openGoogleReviews"
                             />
-                            <div class="flex items-center text-gray-600 text-sm">
+                            <div class="flex items-center text-gray-600 text-xs sm:text-sm">
                                 <i class="pi pi-star-fill text-yellow-400 mr-1"></i>
                                 <span>Join happy guests</span>
                             </div>
@@ -1138,12 +1138,12 @@ onUnmounted(() => {
         <!-- Location Section -->
         <section
             id="location"
-            class="relative py-16 md:py-24 bg-gradient-to-b from-gray-50 to-white px-4 sm:px-6"
+            class="relative py-12 sm:py-16 md:py-24 bg-gradient-to-b from-gray-50 to-white px-4 sm:px-6"
         >
-            <div class="container mx-auto max-w-8xl">
-                <div class="text-center mb-12 md:mb-16">
+            <div class="container mx-auto max-w-6xl">
+                <div class="text-center mb-8 sm:mb-12 md:mb-16">
                     <h2
-                        class="text-3xl md:text-4xl font-bold text-gray-900 mb-4"
+                        class="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-3 sm:mb-4"
                     >
                         <span
                             class="bg-gradient-to-r from-red-500 to-orange-500 bg-clip-text text-transparent"
@@ -1152,19 +1152,19 @@ onUnmounted(() => {
                         </span>
                     </h2>
                     <p
-                        class="text-lg md:text-xl text-gray-600 max-w-2xl mx-auto"
+                        class="text-base sm:text-lg md:text-xl text-gray-600 max-w-2xl mx-auto"
                     >
                         Nestled in the heart of the city, experience luxury
                         convenience
                     </p>
                 </div>
 
-                <div class="grid md:grid-cols-2 gap-8 lg:gap-12 items-center">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-12 items-center">
                     <!-- Map Container -->
                     <div
-                        class="relative group h-full rounded-3xl overflow-hidden shadow-xl hover:shadow-2xl transition-shadow duration-300"
+                        class="relative group h-full rounded-2xl sm:rounded-3xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300"
                     >
-                        <div class="aspect-video w-full h-full">
+                        <div class="aspect-video w-full h-full min-h-[250px] sm:min-h-[350px]">
                             <iframe
                                 src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d698.042618689094!2d124.24055174107627!3d8.23034940442809!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3255758d3ab4ab77%3A0xf498dd27637f6b05!2sWoodland%20Suites!5e0!3m2!1sen!2sph!4v1734363968355!5m2!1sen!2sph"
                                 class="w-full h-full filter grayscale group-hover:grayscale-0 transition-all duration-500"
@@ -1221,22 +1221,22 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Contact Info -->
-                    <div class="space-y-8 lg:space-y-10">
+                    <div class="space-y-4 sm:space-y-5 md:space-y-6 lg:space-y-8">
                         <div
-                            class="flex items-start bg-white p-6 rounded-xl shadow-md hover:shadow-lg transition-shadow"
+                            class="flex items-start bg-white p-4 md:p-5 lg:p-6 rounded-lg md:rounded-lg lg:rounded-xl shadow-md hover:shadow-lg transition-shadow"
                         >
-                            <div class="bg-red-500 p-3 rounded-lg mr-4">
+                            <div class="bg-red-500 p-2 md:p-2 lg:p-3 rounded-lg mr-3 md:mr-3 lg:mr-4 flex-shrink-0">
                                 <i
-                                    class="pi pi-map-marker text-2xl text-white"
+                                    class="pi pi-map-marker text-lg md:text-xl lg:text-2xl text-white"
                                 ></i>
                             </div>
                             <div>
                                 <h3
-                                    class="text-xl font-bold text-gray-900 mb-2"
+                                    class="text-base md:text-lg lg:text-xl font-bold text-gray-900 mb-1 md:mb-1 lg:mb-2"
                                 >
                                     Address
                                 </h3>
-                                <p class="text-gray-600 leading-relaxed">
+                                <p class="text-gray-600 leading-relaxed text-xs md:text-sm lg:text-base">
                                     Roxas Ave<br />
                                     Iligan City, Lanao del Norte<br />
                                     Philippines
@@ -1245,27 +1245,27 @@ onUnmounted(() => {
                         </div>
 
                         <div
-                            class="flex items-start bg-white p-6 rounded-xl shadow-md hover:shadow-lg transition-shadow"
+                            class="flex items-start bg-white p-4 md:p-5 lg:p-6 rounded-lg md:rounded-lg lg:rounded-xl shadow-md hover:shadow-lg transition-shadow"
                         >
-                            <div class="bg-red-500 p-3 rounded-lg mr-4">
-                                <i class="pi pi-phone text-2xl text-white"></i>
+                            <div class="bg-red-500 p-2 md:p-2 lg:p-3 rounded-lg mr-3 md:mr-3 lg:mr-4 flex-shrink-0">
+                                <i class="pi pi-phone text-lg md:text-xl lg:text-2xl text-white"></i>
                             </div>
                             <div>
                                 <h3
-                                    class="text-xl font-bold text-gray-900 mb-2"
+                                    class="text-base md:text-lg lg:text-xl font-bold text-gray-900 mb-1 md:mb-1 lg:mb-2"
                                 >
                                     Contact
                                 </h3>
-                                <p class="text-gray-600">
+                                <p class="text-gray-600 text-sm sm:text-base">
                                     <a
                                         href="tel:+631234567890"
-                                        class="hover:text-red-500 transition-colors"
+                                        class="hover:text-red-500 transition-colors break-words"
                                     >
                                        0956 680 1497 / 0945 492 5609</a
                                     ><br />
                                     <a
                                         href="mailto:woodlandsuites@gmail.com"
-                                        class="hover:text-red-500 transition-colors"
+                                        class="hover:text-red-500 transition-colors break-all"
                                     >
                                         info@woodlandsuites.com
                                     </a>
@@ -1285,28 +1285,28 @@ onUnmounted(() => {
             </div>
         </section>
         <!-- Footer -->
-        <footer class="text-white py-12 px-4 sm:px-6" style="background-color: #1C1C1D;">
-            <div class="container mx-auto grid gap-8 md:grid-cols-4">
-                <div>
-                    <div class="text-2xl font-bold mb-4">
-                        Woodland Suite Hotel
+        <footer class="text-white py-8 sm:py-10 md:py-12 px-4 sm:px-6" style="background-color: #1C1C1D;">
+            <div class="container mx-auto grid gap-6 sm:gap-8 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+                <div class="sm:col-span-2 lg:col-span-1">
+                    <div class="text-xl sm:text-2xl font-bold mb-3 sm:mb-4">
+                        Woodland Suite
                     </div>
-                    <p class="text-gray-300">
+                    <p class="text-gray-300 text-sm sm:text-base">
                         Experience luxury redefined in the heart of the city.
                     </p>
                 </div>
 
-                <div>
-                    <h3 class="font-semibold mb-4 text-white">Contact</h3>
-                    <p class="text-gray-300">
+                <div class="sm:col-span-2 lg:col-span-1">
+                    <h3 class="font-semibold mb-3 sm:mb-4 text-white text-sm sm:text-base">Contact</h3>
+                    <p class="text-gray-300 text-xs sm:text-sm">
                          Roxas Ave <br />Iligan City<br /> Lanao del Norte <br/>Phone: 0956 680 1497 / 0945 492 5609
                         <br />Email: woodlandsuite@gmail.com
                     </p>
                 </div>
-                <div>
-                    <h3 class="font-semibold mb-4 text-white">Follow Us</h3>
+                <div class="sm:col-span-2 lg:col-span-1">
+                    <h3 class="font-semibold mb-3 sm:mb-4 text-white text-sm sm:text-base">Follow Us</h3>
                     <div class="flex space-x-4">
-                        <a href="https://www.facebook.com/profile.php?id=61562524193132" class="hover:text-accent transition-colors"
+                        <a href="https://www.facebook.com/profile.php?id=61584081513943" class="hover:text-accent transition-colors"
                             ><i class="pi pi-facebook"></i
                         ></a>
                         <a href="#" class="hover:text-accent transition-colors"
@@ -1321,10 +1321,10 @@ onUnmounted(() => {
         </footer>
 
         <!-- Floating Review Button -->
-        <div class="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-50">
+        <div class="fixed bottom-3 right-3 sm:bottom-4 sm:right-4 md:bottom-6 md:right-6 z-50">
             <Button 
                 icon="pi pi-star"
-                class="p-button-rounded p-button-lg bg-red-500 hover:bg-red-600 border-0 text-white shadow-lg md:shadow-2xl hover:shadow-xl md:hover:shadow-3xl transition-all duration-300 animate-float animate-pulse-glow scale-75 md:scale-100"
+                class="p-button-rounded p-button-md sm:p-button-lg bg-red-500 hover:bg-red-600 border-0 text-white shadow-lg md:shadow-2xl hover:shadow-xl md:hover:shadow-3xl transition-all duration-300 animate-float animate-pulse-glow scale-100"
                 @click="openGoogleReviews"
                 v-tooltip.left="'Write a Google Review'"
             />
@@ -1334,30 +1334,30 @@ onUnmounted(() => {
         <Transition name="slide-up">
             <div
                 v-if="showReviewReminder"
-                class="fixed bottom-20 right-6 z-50 animate-float-smooth"
+                class="fixed bottom-16 sm:bottom-20 right-3 sm:right-6 z-50 animate-float-smooth mx-2 sm:mx-0"
             >
                 <!-- Thinking Cloud Bubble -->
-                <div class="relative max-w-xs bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-5 thought-bubble">
+                <div class="relative max-w-xs bg-white dark:bg-gray-800 rounded-2xl sm:rounded-3xl shadow-lg md:shadow-2xl p-4 sm:p-5 thought-bubble">
                     <!-- Close Button -->
                     <button
                         @click="closeReviewReminder"
-                        class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors z-10"
+                        class="absolute top-1 right-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors z-10"
                     >
-                        <i class="pi pi-times text-sm"></i>
+                        <i class="pi pi-times text-xs"></i>
                     </button>
 
                     <!-- Content -->
                     <div class="pr-4">
                         <!-- Title with Icon -->
                         <div class="flex items-center gap-2 mb-2">
-                            <i class="pi pi-star-fill text-red-500 text-lg"></i>
-                            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                            <i class="pi pi-star-fill text-red-500 text-base sm:text-lg"></i>
+                            <h3 class="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white">
                                 Rate Your Experience
                             </h3>
                         </div>
 
                         <!-- Message -->
-                        <p class="text-gray-600 dark:text-gray-300 text-xs mb-3">
+                        <p class="text-gray-600 dark:text-gray-300 text-xs mb-2">
                             Share your feedback on Google!
                         </p>
 
