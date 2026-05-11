@@ -181,6 +181,7 @@ export default {
                             </small>
                             <small :class="password.length >= 8 ? 'text-green-500' : 'text-red-500'" class="font-medium">
                                 {{ password.length }}/8
+
                             </small>
                         </div>
                     </div>
@@ -286,7 +287,7 @@ export default {
             v-model:visible="showTermsDialog" 
             modal 
             header="Terms of Service" 
-            :style="{ width: '50rem', maxHeight: '80vh' }"
+            :style="{ width: '50rem', maxHeight: 'auto' }"
             :breakpoints="{ '1199px': '75vw', '575px': '90vw' }"
             :dismissableMask="true"
         >
@@ -351,7 +352,7 @@ export default {
             v-model:visible="showPrivacyDialog" 
             modal 
             header="Privacy Policy" 
-            :style="{ width: '50rem', maxHeight: '80vh' }"
+            :style="{ width: '50rem', maxHeight: 'auto' }"
             :breakpoints="{ '1199px': '75vw', '575px': '90vw' }"
             :dismissableMask="true"
         >

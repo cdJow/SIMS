@@ -66,31 +66,31 @@ const loadStaticReviews = () => {
             author_name: 'Riezl Joy Gutierrez',
             rating: 5,
             text: 'A good place to stay after a long city ride right in the corner of the city proper where you can easily access other establishments around the perimeter and other local prides. Cozy space and accommodating staff. Highly recommended!',
-            time: '2 years ago'
+            
         },
         {
             author_name: 'Gerard June Fuentes',
             rating: 5,
             text: 'This is where we stayed overnight during Hazels cash for work with PWDs in Iligan City. The accomodations is fairly clean and it looks modern inside the rooms. I can only say the wifi is bad and the smart tv did not work because there is no cable and it only works with internet servers.',
-            time: '2 years ago'
+            
         },
         {
             author_name: 'Quirk Enoch Quilinguen',
             rating: 4,
             text: 'We stayed at New Woodland Suites and really liked the Queen Size bed room, especially the view of the road and Gaisano Mall. The room was clean, and the location is convenient. My girlfriend and I felt very comfortable during our stay. However, the TV didn’t work, and the internet was very slow, which is a big downside for those with online jobs or businesses.',
-            time: '8 months ago '
+            
         },
         {
             author_name: 'Biplab Roy',
             rating: 4,
             text: 'Hotel was good Staff co-operative Location is nice - middle of the city, accessible in terms of basic amenities - literally near the city proper. Charges can be made more flexible - especially if you are staying on monthly basis, paying 18k is  too costly. New monthly pricing plans should be rolled out. Comparatively, other than pricing, all were good. Hoping they read this and roll out the new pricing options for long stays Also, they should roll out online reservation model such as website or Facebook page (active).',
-            time: 'a year ago'
+            
         },
         {
             author_name: 'Sai Abbu',
             rating: 5,
             text: 'Cheapest in town very good rooms',
-            time: 'Edited 7 months ago'
+            
         }
     ];
     
@@ -474,7 +474,7 @@ onUnmounted(() => {
         </nav>
         <!-- Hero Section -->
         <section
-            class="relative h-auto flex items-center overflow-hidden py-12 sm:py-16 lg:py-20"
+            class="relative h-auto flex items-center overflow-hidden py-12 sm:py-16 md:py-20"
         >
             <div class="container mx-auto px-3 sm:px-6 lg:px-8 relative z-10">
                 <div class="grid lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-12 items-center">
@@ -504,7 +504,7 @@ onUnmounted(() => {
                         <!-- Action Buttons -->
                         <div
                             class="flex flex-col sm:flex-row gap-3 sm:gap-4 items-center justify-center lg:justify-start mt-6 sm:mt-8 lg:mt-10"
-                        >
+                        >   
                             <Button
                                 label="Book Your Stay"
                                 class="p-button-md sm:p-button-lg bg-red hover:bg-red border-0 text-white px-6 sm:px-10 py-3 sm:py-5 shadow-lg w-full sm:w-auto"
@@ -632,8 +632,8 @@ onUnmounted(() => {
         </section>
 
         <!-- Rooms Section -->
-        <section id="rooms" class="py-8 sm:py-12 lg:py-16 px-4 sm:px-6 lg:px-8">
-            <div class="mx-auto max-w-7xl">
+        <section id="rooms" class="py-12 sm:py-16 md:py-20 px-3 sm:px-6 lg:px-8">
+            <div class="container mx-auto">
                 <h2 class="text-2xl sm:text-3xl md:text-4xl font-bold mb-6 sm:mb-8 text-center">
                     <span class="bg-gradient-to-r from-red-500 to-orange-500 bg-clip-text text-transparent">
                         Our Accommodations
@@ -700,16 +700,9 @@ onUnmounted(() => {
                                             
                                             <!-- Status Badge -->
                                             <div 
-                                                v-if="slotProps.data.status"
-                                                class="absolute top-2 right-2 sm:top-4 sm:right-4 px-2 py-1 sm:px-3 rounded-full text-xs font-bold shadow-lg"
-                                                :class="{
-                                                    'bg-green-500 text-white': slotProps.data.status.toLowerCase() === 'available',
-                                                    'bg-red-500 text-white': slotProps.data.status.toLowerCase() === 'occupied',
-                                                    'bg-yellow-500 text-black': slotProps.data.status.toLowerCase() === 'maintenance',
-                                                    'bg-blue-500 text-white': slotProps.data.status.toLowerCase() === 'reserved'
-                                                }"
+                                                class="absolute top-2 right-2 sm:top-4 sm:right-4 px-2 py-1 sm:px-3 rounded-full text-xs font-bold shadow-lg bg-green-500 text-white"
                                             >
-                                                {{ slotProps.data.status.toUpperCase() }}
+                                                AVAILABLE
                                             </div>
                                         </div>
                                     </div>
@@ -837,9 +830,9 @@ onUnmounted(() => {
         <!-- Rates Section -->
         <section
             id="rates"
-            class="py-12 sm:py-16 md:py-24 bg-gradient-to-b from-gray-50 to-white px-4 sm:px-6"
+            class="py-12 sm:py-16 md:py-20 bg-gradient-to-b from-gray-50 to-white px-3 sm:px-6 lg:px-8"
         >
-            <div class="container mx-auto max-w-7xl">
+            <div class="container mx-auto">
                 <div class="text-center mb-8 sm:mb-12 md:mb-16">
                     <h2
                         class="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-3 sm:mb-4"
@@ -971,9 +964,9 @@ onUnmounted(() => {
         <!-- Google Reviews Section -->
         <section 
             id="reviews" 
-            class="py-12 sm:py-16 md:py-24 bg-white px-4 sm:px-6"
+            class="py-12 sm:py-16 md:py-20 bg-white px-3 sm:px-6 lg:px-8"
         >
-            <div class="container mx-auto max-w-7xl">
+            <div class="container mx-auto">
                 <div class="text-center mb-8 sm:mb-12 md:mb-16">
                     <h2 
                         class="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-3 sm:mb-4"
@@ -1049,7 +1042,7 @@ onUnmounted(() => {
                                                 {{ slotProps.data.author_name }}
                                             </h4>
                                             <div class="flex items-center mt-1">
-                                                <div class="flex items-center mr-2">
+                                                <div class="flex items-center mr-2 gap-1">
                                                     <i 
                                                         v-for="star in 5" 
                                                         :key="star"
